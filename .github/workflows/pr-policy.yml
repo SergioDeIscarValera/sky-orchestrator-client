@@ -1,0 +1,108 @@
+name: PR policy
+
+# Properties of the pull request itself: which branch may target which, how the
+# branch is named, how its title and commits are written, whether its description
+# carries the reasoning. Content checks live in ci.yml. One job: a second one
+# would bill a second minute for seconds of work (docs/ci-cd.md).
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Labelling only. The checkout below does not persist the token, so the
+  # repository scripts the policy runs never see it.
+  pull-requests: write
+
+jobs:
+  policy:
+    name: Pull request policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The release notes group pull requests by label (.github/release.yml); the
+      # type in the title already carries the category. Advisory, so it cannot
+      # block a merge. `safety` is never inferred: it is a judgement.
+      - name: Apply the changelog label from the title
+        if: github.event.action != 'synchronize'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if printf '%s' "$PR_TITLE" | grep -Eq '^[a-z]+\([a-z-]+\)!:'; then
+            label=breaking
+          else
+            case "$PR_TITLE" in
+              feat*)                                label=enhancement ;;
+              fix*)                                 label=bug ;;
+              docs*)                                label=documentation ;;
+              ci*|build*)                           label=ci ;;
+              perf*|refactor*|test*|chore*|revert*) label=tooling ;;
+              release*)                             label=no-changelog ;;
+              *)                                    label="" ;;
+            esac
+          fi
+          if [ -z "$label" ]; then
+            echo "No label maps to '$PR_TITLE'."
+            exit 0
+          fi
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "$label"
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # Branch names reach the scripts through the environment, never inlined into
+      # the shell: whoever opens the pull request chooses them.
+      - name: Branch name and Git Flow direction
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 tools/check_branch.py --branch "$HEAD_REF" --base "$BASE_REF"
+
+      - name: Release branch declares an admissible version
+        if: startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: python3 tools/next_version.py --branch "$HEAD_REF"
+
+      - name: Title follows the commit convention
+        if: github.base_ref == 'develop'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 tools/lint_commits.py --message "$PR_TITLE"
+
+      - name: Commits follow the commit convention
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 tools/lint_commits.py --range "origin/$BASE_REF..$HEAD_SHA"
+
+      # Commits are one line, so the description is where the requirements, the
+      # evidence and the failure modes live. An empty one is a real gap.
+      - name: Description carries the reasoning
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          stripped="$(printf '%s' "$PR_BODY" | sed 's/<!--[^>]*-->//g' | tr -d '[:space:]')"
+          if [ "${#stripped}" -lt 40 ]; then
+            echo "::error::The pull request description is empty or near empty." >&2
+            exit 1
+          fi
+          echo "Description present."
