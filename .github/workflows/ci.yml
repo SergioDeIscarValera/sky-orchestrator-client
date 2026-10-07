@@ -1,0 +1,69 @@
+name: CI
+
+# The gate lane: deterministic, offline, fast (NFR-TEST-01). One job, every check
+# a step: GitHub bills each job rounded up to a whole minute, and the minutes are
+# shared with Sky Orchestrator and Virtual Origen (CON-09). See docs/ci-cd.md.
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    # The rulesets require this exact name; renaming it drops the requirement.
+    name: Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - id: checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - id: python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # Every check runs even when an earlier one failed, so one red run shows
+      # every problem. A check is skipped only when its prerequisite failed.
+
+      - name: Relative Markdown links resolve
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        run: python3 tools/check_links.py .
+
+      - name: No file over 512 KB
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          oversized=$(git ls-files -z | xargs -0 -I{} find {} -size +512k -print 2>/dev/null || true)
+          if [ -n "$oversized" ]; then
+            echo "Files over 512 KB are not allowed in git (NFR-MNT-04):" >&2
+            echo "$oversized" >&2
+            exit 1
+          fi
+
+      - name: Tooling gate tests
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        run: python3 -m unittest discover -s tools/tests -v
+
+      # The binary, not the action: the action needs a licence on organization
+      # accounts, and a scan that stops the day the repository moves is no gate.
+      - name: Secret scan (gitleaks)
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks detect --source . --redact --no-banner --exit-code 1
