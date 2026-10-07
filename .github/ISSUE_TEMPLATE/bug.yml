@@ -1,0 +1,67 @@
+name: Bug
+description: Something behaves differently from its requirement
+labels: [bug]
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - S1 - could contribute to losing an aircraft or hurting someone
+        - S2 - blocks the project or damages a neighbouring project
+        - S3 - costs time
+    validations:
+      required: true
+
+  - type: input
+    id: unit
+    attributes:
+      label: Unit
+      placeholder: soc-web | soc-cloud | soc-operations | database | libs | contracts | infra
+    validations:
+      required: true
+
+  - type: input
+    id: requirement
+    attributes:
+      label: Requirement violated
+      placeholder: FR-TEL-02
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: Quote the requirement's acceptance criteria where one applies.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Exact steps. Name the operation, the flight and the time where one exists.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Flight mode when observed
+      options:
+        - Simulated flight
+        - Real flight
+        - No flight involved
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
