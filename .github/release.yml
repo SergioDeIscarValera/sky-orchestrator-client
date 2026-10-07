@@ -1,0 +1,21 @@
+# Categories for the notes GitHub generates on each release. The pull request
+# policy labels each pull request from the type in its title.
+changelog:
+  exclude:
+    labels:
+      - no-changelog
+  categories:
+    - title: Breaking changes
+      labels: [breaking]
+    - title: Features
+      labels: [enhancement]
+    - title: Fixes
+      labels: [bug]
+    - title: Safety
+      labels: [safety]
+    - title: Documentation and decisions
+      labels: [documentation]
+    - title: Build, tooling and pipelines
+      labels: [tooling, ci, dependencies]
+    - title: Everything else
+      labels: ["*"]
