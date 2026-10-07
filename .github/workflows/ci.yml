@@ -40,6 +40,10 @@ jobs:
         if: ${{ !cancelled() && steps.python.outcome == 'success' }}
         run: python3 tools/check_links.py .
 
+      - name: Traceability matrix equals the requirements
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        run: python3 tools/check_traceability.py .
+
       - name: No file over 512 KB
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: |

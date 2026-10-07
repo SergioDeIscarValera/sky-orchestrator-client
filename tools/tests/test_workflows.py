@@ -107,7 +107,14 @@ class ContinuousIntegration(unittest.TestCase):
         self.assertEqual(child_keys(block(self.text, "on"), 2), ["pull_request", "workflow_dispatch"])
 
     def test_every_check_is_present(self) -> None:
-        for check in ("tools/check_links.py", "-size +512k", "unittest discover -s tools/tests", "gitleaks detect"):
+        checks = (
+            "tools/check_links.py",
+            "tools/check_traceability.py",
+            "-size +512k",
+            "unittest discover -s tools/tests",
+            "gitleaks detect",
+        )
+        for check in checks:
             with self.subTest(check=check):
                 self.assertIn(check, self.text)
 
