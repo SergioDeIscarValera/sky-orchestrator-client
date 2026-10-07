@@ -1,0 +1,114 @@
+name: Release
+
+# Tags and publishes a release when a release or hotfix pull request merges into
+# main. The version is the one the branch declared, verified again here before
+# the tag exists. Then it opens the back-merge into develop. Service images join
+# this workflow when the services exist (M1). See docs/github-governance.md.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  tag:
+    name: Tag and publish release
+    if: >-
+      github.event.pull_request.merged == true &&
+      (startsWith(github.event.pull_request.head.ref, 'release/') ||
+       startsWith(github.event.pull_request.head.ref, 'hotfix/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Resolve the version from the branch name
+        id: version
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          version="$(python3 tools/next_version.py --branch "$HEAD_REF")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to overwrite an existing tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "::error::Tag $VERSION already exists. Tags are never moved." >&2
+            exit 1
+          fi
+
+      - name: Create the annotated tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "$VERSION (#$PR_NUMBER)"
+          git push origin "$VERSION"
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: gh release create "$VERSION" --repo "$REPO" --title "$VERSION" --generate-notes --verify-tag
+
+  back_merge:
+    name: Open the back-merge into develop
+    needs: tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Never from main itself: automatic head-branch deletion would delete main
+      # on merge. A throwaway backmerge/vX.Y.Z cut from main is deleted instead.
+      - name: Open the back-merge pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.tag.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$(gh api "repos/$REPO/compare/develop...main" --jq '.ahead_by')" = "0" ]; then
+            echo "develop already contains everything on main."
+            exit 0
+          fi
+
+          source="backmerge/$VERSION"
+          main_sha="$(gh api "repos/$REPO/git/ref/heads/main" --jq '.object.sha')"
+          if gh api "repos/$REPO/git/ref/heads/$source" >/dev/null 2>&1; then
+            echo "$source exists, reusing it."
+          else
+            gh api -X POST "repos/$REPO/git/refs" -f ref="refs/heads/$source" -f sha="$main_sha" >/dev/null
+          fi
+
+          existing="$(gh pr list --repo "$REPO" --base develop --head "$source" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "Back-merge pull request #$existing already open."
+            exit 0
+          fi
+
+          gh pr create \
+            --repo "$REPO" \
+            --base develop \
+            --head "$source" \
+            --title "chore(repo): back-merge $VERSION into develop" \
+            --body "Automatic back-merge so develop carries everything released in \`$VERSION\`, including its merge commit. Cut from main as a throwaway branch, deleted on merge. Merge with a merge commit (ADR-0003)."
