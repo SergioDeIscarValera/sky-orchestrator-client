@@ -7,6 +7,7 @@
 # Never bypass with --no-verify. A failing hook is a real problem.
 
 default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
