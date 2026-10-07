@@ -82,8 +82,17 @@ commit forever.
 | Local copies of deleted branches removed | `tools/prune_branches.py`, run by hand |
 | Version tagged on release | `release.yml`, from the branch name |
 | GitHub release with notes | `release.yml`, notes grouped by label |
-| Back-merge pull request opened | `release.yml`, from a throwaway `backmerge/vX.Y.Z` |
+| Back-merge pull request opened | `release.yml`, from a throwaway `backmerge/vX.Y.Z`; needs workflows allowed to open pull requests, set by `tools/setup_github.sh` |
 | Changelog label from the title | `pr-policy.yml`, advisory |
+
+### The back-merge's checks
+
+GitHub starts no workflow for an event caused by a workflow's own token, so the
+back-merge pull request opens with no `Gate` and no `Pull request policy`
+(found releasing v0.1.0). Closing and reopening it as a person starts both. The
+alternative, a personal token or an app in the release workflow, would put a
+long-lived credential in the repository's secrets for a step that happens once
+per release.
 
 ## Approvals with one maintainer
 

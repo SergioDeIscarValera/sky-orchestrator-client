@@ -111,4 +111,4 @@ jobs:
             --base develop \
             --head "$source" \
             --title "chore(repo): back-merge $VERSION into develop" \
-            --body "Automatic back-merge so develop carries everything released in \`$VERSION\`, including its merge commit. Cut from main as a throwaway branch, deleted on merge. Merge with a merge commit (ADR-0003)."
+            --body "Automatic back-merge so develop carries everything released in \`$VERSION\`, including its merge commit. Cut from main as a throwaway branch, deleted on merge. GitHub starts no workflow for a pull request a workflow opens: close and reopen this one to run its checks, then merge it with a merge commit (ADR-0003)."
