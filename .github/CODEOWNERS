@@ -1,0 +1,16 @@
+# Every path has an owner. With one maintainer this routes reviews today and
+# becomes a real boundary the moment a second person joins.
+
+*                       @SergioDeIscarValera
+
+# Changes here alter what every other change is held to.
+/.github/               @SergioDeIscarValera
+/tools/                 @SergioDeIscarValera
+/contracts/             @SergioDeIscarValera
+/database/              @SergioDeIscarValera
+/docs/architecture/     @SergioDeIscarValera
+/docs/requirements/     @SergioDeIscarValera
+
+# Anything that can command an aircraft.
+/services/soc-cloud/      @SergioDeIscarValera
+/services/soc-operations/ @SergioDeIscarValera
