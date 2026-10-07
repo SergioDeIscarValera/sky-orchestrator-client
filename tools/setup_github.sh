@@ -69,6 +69,13 @@ attempt "merge commits only, merged branches deleted automatically" \
     -F has_projects=false \
     --silent
 
+say "Workflow permissions"
+attempt "workflows read by default and may open pull requests (the release back-merge)" \
+  gh api -X PUT "repos/$REPO/actions/permissions/workflow" \
+    -f default_workflow_permissions=read \
+    -F can_approve_pull_request_reviews=true \
+    --silent
+
 say "Default branch"
 if git ls-remote --exit-code --heads origin develop >/dev/null 2>&1; then
   attempt "default branch is develop" gh api -X PATCH "repos/$REPO" -f default_branch=develop --silent
