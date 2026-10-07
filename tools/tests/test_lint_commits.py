@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
@@ -167,6 +169,11 @@ class Dependabot(unittest.TestCase):
 
 
 class CommandLine(unittest.TestCase):
+    def setUp(self) -> None:
+        silenced = redirect_stderr(io.StringIO())
+        silenced.__enter__()
+        self.addCleanup(silenced.__exit__, None, None, None)
+
     def test_a_valid_message_exits_zero(self) -> None:
         self.assertEqual(lint_commits.main(["--message", "feat(web): add the fleet panel"]), 0)
 
