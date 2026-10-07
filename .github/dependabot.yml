@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # "ci" is a type and the workflows belong to the repository (ADR-0003).
+  # tools/tests/test_lint_commits.py holds every prefix here to the linter.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci(repo)"
+    open-pull-requests-limit: 5
+
+  # Each unit's ecosystem joins this file with its manifest. Versions are pinned
+  # on purpose (NFR-PORT-02): Dependabot proposes, review decides.

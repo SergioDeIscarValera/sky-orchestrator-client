@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import lint_commits  # noqa: E402
 from lint_commits import Commit  # noqa: E402
+
+REPOSITORY = Path(__file__).resolve().parents[2]
 
 
 def rules(message: str) -> set[str]:
@@ -166,6 +169,14 @@ class Dependabot(unittest.TestCase):
         self.assertEqual(
             [problem.rule for problem in lint_commits.lint_commit(commit)], ["single-line"]
         )
+
+    def test_every_configured_prefix_is_a_valid_header(self) -> None:
+        configuration = REPOSITORY / ".github" / "dependabot.yml"
+        prefixes = re.findall(r'prefix: "([^"]+)"', configuration.read_text(encoding="utf-8"))
+        self.assertTrue(prefixes)
+        for prefix in prefixes:
+            with self.subTest(prefix=prefix):
+                self.assertEqual(rules(f"{prefix}: bump a dependency to its next version"), set())
 
 
 class CommandLine(unittest.TestCase):
