@@ -1,0 +1,85 @@
+# ---------------------------------------------------------------------------
+# Secrets and local configuration
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.keystore
+*.jks
+secrets/
+# A service configuration holds the served organization and the broker
+# credentials; a site model holds a location.
+infra/config/*.json
+!infra/config/*.example.json
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.pyright/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# ---------------------------------------------------------------------------
+# Node, pnpm, Vite
+# ---------------------------------------------------------------------------
+node_modules/
+.pnpm-store/
+*.tsbuildinfo
+.vite/
+.eslintcache
+playwright-report/
+test-results/
+stats.html
+
+# ---------------------------------------------------------------------------
+# Flight data, captures, media and site models (never in git)
+# ---------------------------------------------------------------------------
+data/
+captures/
+flight-logs/
+*.kmz
+!**/fixtures/**/*.kmz
+*.mp4
+*.dng
+*.tif
+*.tiff
+*.glb
+!**/fixtures/**/*.glb
+
+# ---------------------------------------------------------------------------
+# Docker / infrastructure runtime state
+# ---------------------------------------------------------------------------
+infra/**/volumes/
+docker-compose.override.yml
+compose.override.yaml
+
+# ---------------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------------
+.idea/
+*.iml
+.vscode/
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.swp
+*~

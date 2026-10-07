@@ -1,0 +1,21 @@
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.sql  text eol=lf
+
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.ico   binary
+*.glb   binary
+*.kmz   binary
+*.woff  binary
+*.woff2 binary
+
+# Lockfiles are generated: reviewed by their source manifest, not line by line.
+pnpm-lock.yaml linguist-generated=true -diff
+uv.lock        linguist-generated=true -diff
+
+# Generated contract artefacts stay out of language statistics.
+contracts/**/generated/** linguist-generated=true
