@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
+RULESETS = WORKFLOWS.parent / "rulesets"
 
 
 def read(name: str) -> str:
@@ -133,6 +135,34 @@ class PullRequestPolicy(unittest.TestCase):
             for script in run_scripts(workflow.read_text(encoding="utf-8")):
                 with self.subTest(workflow=workflow.name, script=script[:60]):
                     self.assertNotIn("${{", script)
+
+
+class Rulesets(unittest.TestCase):
+    def setUp(self) -> None:
+        self.branch_rulesets = [
+            json.loads((RULESETS / name).read_text(encoding="utf-8")) for name in ("main.json", "develop.json")
+        ]
+
+    def rule(self, ruleset: dict, kind: str) -> dict:
+        return next(rule for rule in ruleset["rules"] if rule["type"] == kind)["parameters"]
+
+    def test_required_checks_are_job_names_that_exist(self) -> None:
+        job_names = set(re.findall(r"^    name: (.+)$", read("ci.yml") + read("pr-policy.yml"), re.MULTILINE))
+        for ruleset in self.branch_rulesets:
+            contexts = {check["context"] for check in self.rule(ruleset, "required_status_checks")["required_status_checks"]}
+            with self.subTest(ruleset=ruleset["name"]):
+                self.assertEqual(contexts, {"Gate", "Pull request policy"})
+                self.assertLessEqual(contexts, job_names)
+
+    def test_merge_commits_only(self) -> None:
+        for ruleset in self.branch_rulesets:
+            with self.subTest(ruleset=ruleset["name"]):
+                self.assertEqual(self.rule(ruleset, "pull_request")["allowed_merge_methods"], ["merge"])
+
+    def test_nobody_bypasses(self) -> None:
+        for path in sorted(RULESETS.glob("*.json")):
+            with self.subTest(ruleset=path.name):
+                self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["bypass_actors"], [])
 
 
 class Release(unittest.TestCase):
