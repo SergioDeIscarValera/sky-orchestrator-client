@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -77,9 +79,10 @@ class Resolution(unittest.TestCase):
 
     def test_exit_status_follows_the_result(self) -> None:
         self.write("README.md", "see [gone](missing.md)")
-        self.assertEqual(check_links.main([str(self.root)]), 1)
-        self.write("missing.md", "# here")
-        self.assertEqual(check_links.main([str(self.root)]), 0)
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(check_links.main([str(self.root)]), 1)
+            self.write("missing.md", "# here")
+            self.assertEqual(check_links.main([str(self.root)]), 0)
 
 
 if __name__ == "__main__":
