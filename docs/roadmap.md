@@ -25,7 +25,7 @@ The MVP is M5: **a first real flight commanded from SOC**
 
 ---
 
-## M0 — Foundations · v0.1.0
+## M0 — Foundations · *closed 2026-10-07, v0.1.0*
 
 | Step | Pull request |
 | --- | --- |
@@ -41,15 +41,15 @@ The MVP is M5: **a first real flight commanded from SOC**
 
 **Exit criteria**
 
-- [ ] FR, NFR and IR documented, each requirement with acceptance criteria
-- [ ] A decision record for every architectural choice made so far
-- [ ] Risk register with a trigger per risk
-- [ ] Dependencies on Sky Orchestrator and Virtual Origen recorded with their identifiers
-- [ ] Git Flow branches, merge-commit-only merging and automatic deletion of merged branches
-- [ ] Commit, branch and version rules enforced locally and in CI, with their own tests
-- [ ] Repository hygiene: ignore rules, attributes, editor configuration, templates
-- [ ] Branch protection configured, or its absence recorded with its cost (`CON-09`)
-- [ ] Every dependency version chosen in a decision record (`NFR-PORT-02`)
+- [x] FR, NFR and IR documented, each requirement with acceptance criteria: 157 FR and NFR, 17 IR entities
+- [x] A decision record for every architectural choice made so far: ADR-0001 to ADR-0018
+- [x] Risk register with a trigger per risk: 16 risks
+- [x] Dependencies on Sky Orchestrator and Virtual Origen recorded with their identifiers: DEP-01 to DEP-25, three already delivered by SO
+- [x] Git Flow branches, merge-commit-only merging and automatic deletion of merged branches, plus `tools/prune_branches.py` for local copies
+- [x] Commit, branch and version rules enforced locally and in CI, with their own tests: 113 tooling tests
+- [x] Repository hygiene: ignore rules, attributes, editor configuration, templates
+- [x] Branch protection configured, or its absence recorded with its cost (`CON-09`): rulesets written and refused by the free plan, recorded in the governance document and `RISK-13`
+- [x] Every dependency version chosen in a decision record (`NFR-PORT-02`): ADR-0016 and ADR-0017, smoke-built before being written
 
 ---
 
