@@ -10,7 +10,9 @@ from typing import Any
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 RULESETS = WORKFLOWS.parent / "rulesets"
 REPOSITORY = WORKFLOWS.parents[1]
-LANE_UNITS = ("database",)
+LANE_ONLY_UNITS = ("database",)
+SPLIT_BY_MARKER_UNITS = ("libs/soc-db",)
+NOT_IN_THE_LANE = '-m "not database"'
 
 
 def read(name: str) -> str:
@@ -178,13 +180,34 @@ class PythonUnits(unittest.TestCase):
                 self.assertIn(f"uv run --frozen mypy {unit}\n", self.ci)
                 self.assertRegex(self.hooks, rf"uv run --frozen mypy {re.escape(unit)}['\n &]")
 
-    def test_every_unit_outside_a_lane_runs_its_gate_tests(self) -> None:
+    def test_every_unit_outside_the_lane_runs_its_gate_tests(self) -> None:
         for unit in self.units:
-            if unit in LANE_UNITS:
+            if unit in LANE_ONLY_UNITS:
                 continue
+            gate = f"uv run --frozen pytest {unit}/tests"
+            if unit in SPLIT_BY_MARKER_UNITS:
+                gate += f" {NOT_IN_THE_LANE}"
             with self.subTest(unit=unit):
-                self.assertIn(f"uv run --frozen pytest {unit}/tests\n", self.ci)
-                self.assertIn(f"uv run --frozen pytest {unit}/tests'", self.hooks)
+                self.assertIn(f"{gate}\n", self.ci)
+                self.assertIn(f"{gate}'", self.hooks)
+
+    def test_every_unit_with_database_tests_runs_them_in_the_lane(self) -> None:
+        marked = {
+            unit
+            for unit in self.units
+            if any(
+                "pytest.mark.database" in path.read_text(encoding="utf-8")
+                for path in (REPOSITORY / unit).rglob("test_*.py")
+            )
+        }
+        self.assertEqual(marked, set(SPLIT_BY_MARKER_UNITS))
+        lane = self.ci[self.ci.index("- name: Database tests against an ephemeral Postgres") :]
+        detection = self.ci[self.ci.index("- id: database-changes") :]
+        for unit in (*LANE_ONLY_UNITS, *SPLIT_BY_MARKER_UNITS):
+            selection = "" if unit in LANE_ONLY_UNITS else " -m database"
+            with self.subTest(unit=unit):
+                self.assertIn(f"uv run --frozen pytest {unit}/tests{selection}\n", lane)
+                self.assertIn(f"{unit}/", detection.split("\n\n")[0])
 
 
 class Rulesets(unittest.TestCase):
