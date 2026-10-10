@@ -8,8 +8,7 @@ from typing import Any, cast
 import asyncpg
 import pytest
 
-from soc_db import Backoff, Database, DatabaseUnavailableError, Target
-from soc_db.backoff import CAP_S
+from soc_db import Database, DatabaseUnavailableError, Target
 
 Until = Callable[..., Awaitable[None]]
 Running = Callable[[Database], AbstractAsyncContextManager[asyncio.Task[None]]]
@@ -84,13 +83,6 @@ class FakeServer:
 
 def database_on(server: FakeServer, **options: Any) -> Database:
     return Database(TARGET, connector=server.connect, sleep=server.sleep, **options)
-
-
-def test_the_backoff_doubles_up_to_ten_seconds_and_resets() -> None:
-    backoff = Backoff()
-    assert [backoff.next() for _ in range(7)] == [0.5, 1, 2, 4, 8, CAP_S, CAP_S]
-    backoff.reset()
-    assert backoff.next() == 0.5
 
 
 def test_the_password_never_shows() -> None:

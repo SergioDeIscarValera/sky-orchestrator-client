@@ -395,6 +395,7 @@ source = { editable = "libs/soc-db" }
 dependencies = [
     { name = "asyncpg" },
     { name = "soc-log" },
+    { name = "soc-supervision" },
 ]
 
 [package.dev-dependencies]
@@ -407,6 +408,7 @@ test = [
 requires-dist = [
     { name = "asyncpg", specifier = "==0.32.0" },
     { name = "soc-log", editable = "libs/soc-log" },
+    { name = "soc-supervision", editable = "libs/soc-supervision" },
 ]
 
 [package.metadata.requires-dev]

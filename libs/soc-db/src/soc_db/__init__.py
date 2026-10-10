@@ -15,20 +15,6 @@ Statements share the connection one at a time.
 
 from __future__ import annotations
 
-from soc_db.backoff import Backoff
-from soc_db.database import (
-    Database,
-    DatabaseUnavailableError,
-    Health,
-    NotificationHandler,
-    Target,
-)
+from soc_db.database import Database, DatabaseUnavailableError, NotificationHandler, Target
 
-__all__ = [
-    "Backoff",
-    "Database",
-    "DatabaseUnavailableError",
-    "Health",
-    "NotificationHandler",
-    "Target",
-]
+__all__ = ["Database", "DatabaseUnavailableError", "NotificationHandler", "Target"]
