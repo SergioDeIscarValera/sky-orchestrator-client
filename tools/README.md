@@ -18,6 +18,10 @@ answer, so it is a script with tests rather than a judgement made each time
 The commit linter, the branch checker and the link checker run identically in
 the pre-commit hooks and in CI.
 
+The tools run on the system `python3`, 3.12 or newer, with nothing installed:
+ruff and mypy hold them to Python 3.12 while the workspace targets 3.14, and CI
+runs their tests on 3.12.
+
 ```bash
 python3 -m unittest discover -s tools/tests -v
 python3 tools/lint_commits.py --message "feat(tools): add the link checker"
