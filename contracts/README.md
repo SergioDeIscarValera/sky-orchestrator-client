@@ -6,7 +6,7 @@ both sides updated in the same pull request (`NFR-MNT-02`).
 
 | Path | Contract | Arrives |
 | --- | --- | --- |
-| `config/` | Every configuration key: type, unit, range, default, the units that read it | M1 |
+| [`config/`](config/soc-config.schema.json) | Every configuration key and environment variable: type, unit, range, default, the units that read it (ADR-0019) | M1, here, 1.0.0 |
 | `broadcast/` | The payloads on the private Realtime topics `org:<id>:soc:telemetry` and `org:<id>:soc:state` | M1 |
 | `sky-orchestrator/` | Sky Orchestrator's DJI schemas and examples, vendored at a pinned SO version with their hashes | M1 |
 | `results/` | The meaning shown to the operator for every DJI result code SO can return | M1 |
