@@ -100,7 +100,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-DEP-03 | MUST | contracts, soc-config | M1 | `libs/soc-config/tests/test_contract.py`, `libs/soc-config/tests/test_configuration.py`, `services/soc-cloud/tests/test_settings.py`, `services/soc-operations/tests/test_settings.py` | Partial: every key and variable declared once with unit, range and default, validated at start (ADR-0019); `soc-cloud` and `soc-operations` read exactly their keys; `soc-web` arrives next |
 | FR-DEP-04 | MUST | infra | M1 | — | Planned |
 | FR-DEP-05 | MUST | infra | M2 | — | Planned |
-| FR-DEP-06 | MUST | infra, repository | M1 | — | Planned |
+| FR-DEP-06 | MUST | infra, repository | M1 | `tools/tests/test_workflows.py::Release` | Partial: each release publishes `soc-cloud`, `soc-operations` and `soc-migrate` to GHCR at its tag, never moving one; the deploy command and its flight guard arrive with the flights (M4) |
 
 ## Non-functional
 
