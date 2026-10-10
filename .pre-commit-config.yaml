@@ -67,6 +67,27 @@ repos:
         pass_filenames: false
         files: ^docs/requirements/
 
+      - id: python-lint
+        name: python lint and format
+        entry: bash -c 'uv run --frozen ruff check database infra/migrate && uv run --frozen ruff format --check database infra/migrate'
+        language: system
+        pass_filenames: false
+        files: ^(database/|infra/migrate/|pyproject\.toml$)
+
+      - id: python-types
+        name: python types
+        entry: uv run --frozen mypy database/src database/tests infra/migrate/src infra/migrate/tests
+        language: system
+        pass_filenames: false
+        files: ^(database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+
+      - id: migrate-gate-tests
+        name: migration runner gate tests
+        entry: uv run --frozen pytest infra/migrate/tests
+        language: system
+        pass_filenames: false
+        files: ^(infra/migrate/|pyproject\.toml$|uv\.lock$)
+
       - id: tools-gate-tests
         name: tools gate tests
         entry: python3 -m unittest discover -s tools/tests
