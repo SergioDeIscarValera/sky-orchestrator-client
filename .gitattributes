@@ -19,3 +19,6 @@ uv.lock        linguist-generated=true -diff
 
 # Generated contract artefacts stay out of language statistics.
 contracts/**/generated/** linguist-generated=true
+
+# Sky Orchestrator's contracts, copied byte for byte at a pinned commit.
+contracts/sky-orchestrator/** linguist-vendored=true

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/property/set.schema.json",
+  "title": "property/set",
+  "description": "Cloud to dock on thing/product/{gateway_sn}/property/set: properties to change, by name. From mqtt/property/TopicPropertySetRequest.",
+  "x-version": "1.0.0",
+  "x-topic": "thing/product/{gateway_sn}/property/set",
+  "x-direction": "cloud_to_dock",
+  "type": "object",
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/tid"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/bid"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "data": {
+      "type": "object",
+      "minProperties": 1
+    }
+  }
+}
