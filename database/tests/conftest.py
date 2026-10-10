@@ -53,3 +53,17 @@ async def session(migrated: EphemeralPostgres) -> AsyncIterator[asyncpg.Connecti
 @pytest.fixture
 def tenancy(admin: asyncpg.Connection) -> Tenancy:
     return Tenancy(admin)
+
+
+@pytest.fixture(scope="session")
+async def todays_partition(migrated: EphemeralPostgres) -> AsyncIterator[None]:
+    connection = await migrated.connect("supabase_admin")
+    try:
+        await connection.execute(
+            "create table if not exists realtime.messages_soc_tests "
+            "partition of realtime.messages "
+            "for values from (now() - interval '2 days') to (now() + interval '2 days')"
+        )
+        yield
+    finally:
+        await connection.close()
