@@ -1,0 +1,8 @@
+# GitGuardian (GitHub App) configuration. One file holds credentials on purpose:
+# the SCRAM-SHA-256 test vector Postgres computed for a known password, and the
+# synthetic passwords that exercise the migration runner's password policy.
+# Every other path is scanned, and gitleaks scans this one too.
+version: 2
+secret:
+  ignored-paths:
+    - "infra/migrate/tests/test_roles.py"
