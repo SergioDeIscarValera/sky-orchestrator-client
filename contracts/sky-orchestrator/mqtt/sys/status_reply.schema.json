@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/sys/status_reply.schema.json",
   "title": "status_reply",
-  "description": "Cloud to dock on sys/product/{gateway_sn}/status_reply: the cloud has the topology. The tid is the update_topo's; until it arrives so-gateway announces again. From mqtt/status/TopicStatusResponse with an MqttReply.",
+  "description": "Cloud to dock on sys/product/{gateway_sn}/status_reply: the cloud has the topology. The tid is the update_topo's. so-gateway records it, and its status says acknowledged; it does not wait for it. The topology is announced on every change, and once more a second after a client connects (ADR-0026). From mqtt/status/TopicStatusResponse with an MqttReply.",
   "x-version": "1.0.0",
   "x-topic": "sys/product/{gateway_sn}/status_reply",
   "x-direction": "cloud_to_dock",
