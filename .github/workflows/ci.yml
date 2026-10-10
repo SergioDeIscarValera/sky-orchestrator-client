@@ -73,12 +73,14 @@ jobs:
       - name: Python lint and format
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
         run: |
-          uv run --frozen ruff check database infra/migrate
-          uv run --frozen ruff format --check database infra/migrate
+          uv run --frozen ruff check
+          uv run --frozen ruff format --check
 
       - name: Python types
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
-        run: uv run --frozen mypy database/src database/tests infra/migrate/src infra/migrate/tests
+        run: |
+          uv run --frozen mypy
+          uv run --frozen mypy --python-version 3.12 tools
 
       - name: Migration runner gate tests
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}

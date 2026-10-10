@@ -69,17 +69,17 @@ repos:
 
       - id: python-lint
         name: python lint and format
-        entry: bash -c 'uv run --frozen ruff check database infra/migrate && uv run --frozen ruff format --check database infra/migrate'
+        entry: bash -c 'uv run --frozen ruff check && uv run --frozen ruff format --check'
         language: system
         pass_filenames: false
-        files: ^(database/|infra/migrate/|pyproject\.toml$)
+        files: (\.py|^pyproject\.toml)$
 
       - id: python-types
         name: python types
-        entry: uv run --frozen mypy database/src database/tests infra/migrate/src infra/migrate/tests
+        entry: bash -c 'uv run --frozen mypy && uv run --frozen mypy --python-version 3.12 tools'
         language: system
         pass_filenames: false
-        files: ^(database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+        files: (\.py|^pyproject\.toml|^uv\.lock)$
 
       - id: migrate-gate-tests
         name: migration runner gate tests

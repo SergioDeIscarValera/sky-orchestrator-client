@@ -32,6 +32,7 @@ ignore = ["S101"]
 known-first-party = ["soc_*"]
 
 [tool.mypy]
+files = ["database/src", "database/tests", "infra/migrate/src", "infra/migrate/tests"]
 python_version = "3.14"
 strict = true
 warn_unreachable = true
