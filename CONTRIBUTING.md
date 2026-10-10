@@ -171,6 +171,11 @@ Merge commits only: squash and rebase are disabled, so the small commits stay in
 history. A pull request built on another one says so in its description and
 merges after it.
 
+Merge with `python3 tools/merge_when_green.py <number>`: it waits for the checks
+and merges only when every check passed and every check the rulesets require
+reported. The free private plan does not enforce the rulesets, so nothing else
+stops a red pull request from merging.
+
 The template asks for the requirements, the evidence and the failure modes.
 Since commits are one line, the description is where the reasoning lives.
 
