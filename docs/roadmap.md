@@ -65,8 +65,10 @@ The MVP is M5: **a first real flight commanded from SOC**
 | Sky Orchestrator's wire contracts vendored at a pinned commit, held to their checksums | `feature/contracts/sky-orchestrator-wire`, merged (#22) |
 | `soc-cloud` skeleton: settings, the wire contract, database and Realtime links, health, the process | `feature/cloud/service-skeleton`, merged (#23) |
 | `soc-cloud` stack links: one MQTT link per stack, topology and presence, OSD ingest, `status_reply` | `feature/cloud/stack-links`, merged (#24) |
-| `soc-cloud` flight files: the dock's `flighttask_resource_get` answered from memory, the file server | `feature/cloud/flight-files` |
-| `soc-operations` skeleton: configuration, health, the intent sweep | `feature/operations/skeleton` |
+| `soc-cloud` flight files: the dock's `flighttask_resource_get` answered from memory, the file server | `feature/cloud/flight-files`, merged (#25) |
+| `soc-cloud` command path: command intents in the database, announced, claimed once, put on the wire | `feature/database/command-intents`, merged (#26); `feature/cloud/commands`, merged (#27) |
+| Sky Orchestrator's contracts pinned to its v0.4.1 release | `feature/contracts/sky-orchestrator-v0.4.1`, merged (#28) |
+| `soc-operations` skeleton: configuration, health, the database link; its transition intents arrive with the operations in M4 | `feature/operations/skeleton` |
 | `soc-web` skeleton: tokens, sign-in, organization first, the persistent scene, panels, runtime configuration | `feature/web/shell` |
 | Compose stack for the mini-PC, the stack check in CI, the deploy command with its flight guard | `feature/infra/stack-and-check` |
 | Viability session on the mini-PC, measured | `feature/infra/viability-session` |
@@ -131,7 +133,7 @@ dependency register of the requirements.
 
 | Step | Pull request |
 | --- | --- |
-| Operations, flights, files, commands, events and telemetry history in the database | `feature/database/operations` |
+| Operations, flights, files, events, telemetry history, and the operation transition requests `soc-operations` executes (ADR-0006) in the database | `feature/database/operations` |
 | `soc-operations`: the lifecycle, the checks, the simulated pass, launch and completion | `feature/operations/lifecycle` |
 | `soc-cloud`: commands on the wire, progress, the cloud geofence, telemetry history | `feature/cloud/flights` |
 | Operation wizard and preparation console | `feature/web/operation-preparation` |
