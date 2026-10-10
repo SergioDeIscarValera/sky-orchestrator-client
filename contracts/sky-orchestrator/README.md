@@ -10,10 +10,12 @@ repository at one commit, and held there:
 | `vendored.json` | Where the files came from: the repository, the commit, its `git describe` and date |
 | `vendored.sha256` | The SHA-256 of every file, in `sha256sum`'s format: `sha256sum -c vendored.sha256` checks them |
 
-Pinned at `v0.4.0-27-gd76dc14` (2026-10-10), after v0.4.0, because SOC builds on
-what landed since: `simulate_mission` (`DEP-02`), the stack's status, envelope
-and validations (`DEP-01`, `DEP-03`, `DEP-04`), the break reason (`DEP-05`). The
-next pin is Sky Orchestrator's v0.4.1 tag.
+Pinned at Sky Orchestrator's **v0.4.1** (2026-10-10), the release that publishes
+what SOC builds on: `simulate_mission` (`DEP-02`), the stack's status, envelope
+and validations (`DEP-01`, `DEP-03`, `DEP-04`), the break reason (`DEP-05`), the
+fake bridge image (`DEP-06`). From the previous pin, `flighttask_prepare` and
+`flighttask_progress` moved to 1.1.0 and `status_reply`'s description was
+corrected; no shape SOC uses changed.
 
 ## Rules
 
