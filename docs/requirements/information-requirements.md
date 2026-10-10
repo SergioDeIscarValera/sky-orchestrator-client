@@ -385,6 +385,13 @@ Owner: the baking tool (`FR-DEP-05`). Retention: until re-baked.
 | `sources` | jsonb | Datasets, dates and licences |
 | `baked_at` | timestamptz | |
 
+## IR-TRQ — Operation transition request · open
+
+The intent `soc-operations` executes (ADR-0006): a member asking an operation to
+move (prepare checks, simulate, launch, finish), with its author, its outcome and
+its refusal reason. Specified with the operations data model in M4; until then
+the state machine of `FR-OPS-02` has no requests to execute.
+
 ## IR-INC — Incident · reserved
 
 Reserved for `FR-FLE-07`: automatic incidents derived from `safety` events and
@@ -458,3 +465,4 @@ this document updated first.
 | 2026-10-07 | Initial set, MVP scope. |
 | 2026-10-10 | IR-CFG: the environment is declared in the contract, files hold every key, IR-CFG-02 and IR-CFG-03 (ADR-0019). |
 | 2026-10-10 | IR-CMD-01 covers what was asked; IR-CMD-02, `soc-cloud`'s four verbs (migration 0004). |
+| 2026-10-10 | IR-TRQ opened: the operation transition request ADR-0006 names had no entity. |
