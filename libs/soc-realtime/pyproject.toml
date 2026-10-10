@@ -11,6 +11,9 @@ dependencies = [
   "websockets==17.2",
 ]
 
+[dependency-groups]
+test = ["soc-database", "soc-migrate"]
+
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]
 build-backend = "uv_build"
@@ -18,3 +21,5 @@ build-backend = "uv_build"
 [tool.uv.sources]
 soc-log = { workspace = true }
 soc-supervision = { workspace = true }
+soc-database = { workspace = true }
+soc-migrate = { workspace = true }
