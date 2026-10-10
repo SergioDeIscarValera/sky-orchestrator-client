@@ -32,8 +32,8 @@ await database.copy_records("telemetry_samples", rows, COLUMNS)
 - **One statement at a time.** `session()` and `transaction()` take turns on the
   connection, waiting up to 5 s for one to exist, then raise
   `DatabaseUnavailableError`.
-- **Supervised.** A refused connection is retried after 0.5, 1, 2, 4, 8, then
-  every 10 s (`NFR-REL-03`); a connection the server closes, or that fails its
+- **Supervised** by [`soc-supervision`](../soc-supervision/README.md). A refused
+  connection is retried after 0.5, 1, 2, 4, 8, then every 10 s (`NFR-REL-03`); a connection the server closes, or that fails its
   ping every 15 s, is replaced. `health` says whether it is up, since when, and
   the last error.
 - **Kept honest on the server.** The connection names itself
