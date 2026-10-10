@@ -21,6 +21,7 @@ The skeleton every later part plugs into:
 | Each aircraft OSD as one sample at its own time, a missing field unavailable (`FR-LNK-03`) | `link/telemetry.py` |
 | `update_topo` acknowledged with `status_reply` (`FR-LNK-11`); `flighttask_resource_get` answered on `requests_reply` (`FR-LNK-04`) | `link/stack.py` |
 | Flight files kept as exact bytes in memory, offered with their MD5, served at `/files/<128-bit token>.kmz` on `SOC_FLIGHT_FILES_PORT`, retired `flight_file_grace_s` after the flight ends (`FR-LNK-05`, `NFR-SEC-06`, [ADR-0008](../../docs/architecture/decisions/0008-flight-files-served-on-sky-orchestrators-network.md)) | `files.py` |
+| Command intents put on the wire: announced by `pg_notify`, swept on every reconnection, checked against their schema, claimed or expired, published with tid = intent and bid = flight, settled by their `services_reply` or timed out (`FR-LNK-06`, ADR-0006) | `commands.py` |
 | `/health` and `/ready` on `SOC_HEALTH_PORT`, one entry per part: `database`, `realtime`, `flight_files`, `stack:<name>` (`NFR-OBS-02`) | `service.py`, through `soc-supervision` |
 | The process: JSON logs, SIGTERM and SIGINT stop it cleanly | `__main__.py` |
 
@@ -71,10 +72,20 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
   the same bytes kept twice changing nothing, other bytes for the same flight
   refused, the grace after the flight, the exact bytes downloaded, every other
   path the same 404.
+- The commands, driven through a real stack link on the fake client: published
+  with tid and bid, an intent announced three times run once, replies settling
+  and stopping the clock, a timeout, an expiry, a schema refusal, a command
+  waiting for its dock and running when the dock is announced, one expiring when
+  it never is, a publish lost after the claim timing out, the sweep running
+  what was missed and settling what was left sent.
 - On the container lane, the service starts from a written file and environment
   against Postgres and Realtime v2.102.3 with SOC's migrations and the broker,
   and answers `/ready` with every part up; then the dock asks for a flight's
   file over MQTT and downloads it, its MD5 equal to the fingerprint offered.
+  100 commands committed by `soc_operations` reach the wire with **p95 under
+  50 ms from commit to claim**, each published once and accepted; a command
+  committed while `soc-cloud` was away runs once when it returns, and a stale one
+  expires.
 
 ## Failure modes
 
@@ -91,5 +102,9 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
 | A request for any path but a live file's | The same 404, whether the token is unknown, malformed, retired or the path is a directory |
 | Other bytes kept for a flight that already has a file | Refused with `FlightFileConflictError`: what flies is what was kept (`IR-FIL-01`) |
 | The flight file port cannot be bound | The process ends with status 1 and `service_failed` |
+| A command for a dock no connected stack has announced | It waits; it runs when a stack announces the dock, or expires once `command_intent_ttl_s` has passed |
+| A command claimed but not published (the broker dropped) | It stays `sent` and times out after `command_reply_timeout_s`: nothing claims it twice |
+| A command its schema refuses | `failed` before anything is sent, with every problem logged |
+| `soc-cloud` restarts with commands in flight | The sweep runs what is pending, times out what was sent too long ago, and waits for the replies of the rest |
 | A bug in a supervised part | The process ends with status 1 and a `service_failed` line, and the container restarts |
 | SIGTERM | Every link closes and the process exits with status 0 |
