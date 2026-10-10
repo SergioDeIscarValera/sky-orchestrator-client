@@ -63,8 +63,8 @@ The MVP is M5: **a first real flight commanded from SOC**
 | Shared Python: the Realtime Broadcast client, with its HTTP fallback, and the supervision every link shares | `feature/libs/realtime-client`, merged (#20) |
 | The real Realtime in the database lane: private channel joins held to SOC's policies, the client end to end | `feature/database/realtime-lane`, merged (#21) |
 | Sky Orchestrator's wire contracts vendored at a pinned commit, held to their checksums | `feature/contracts/sky-orchestrator-wire`, merged (#22) |
-| `soc-cloud` skeleton: settings, the wire contract, database and Realtime links, health, the process | `feature/cloud/service-skeleton` |
-| `soc-cloud` stack links: one MQTT link per stack, topology and presence, OSD ingest, `status_reply` | `feature/cloud/stack-links` |
+| `soc-cloud` skeleton: settings, the wire contract, database and Realtime links, health, the process | `feature/cloud/service-skeleton`, merged (#23) |
+| `soc-cloud` stack links: one MQTT link per stack, topology and presence, OSD ingest, `status_reply` | `feature/cloud/stack-links`, merged (#24) |
 | `soc-cloud` flight files: the dock's `flighttask_resource_get` answered from memory, the file server | `feature/cloud/flight-files` |
 | `soc-operations` skeleton: configuration, health, the intent sweep | `feature/operations/skeleton` |
 | `soc-web` skeleton: tokens, sign-in, organization first, the persistent scene, panels, runtime configuration | `feature/web/shell` |
