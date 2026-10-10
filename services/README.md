@@ -2,7 +2,7 @@
 
 | Service | Owns | Arrives |
 | --- | --- | --- |
-| `soc-cloud` | The DJI cloud party: one MQTT connection per Sky Orchestrator stack, topology and presence, telemetry fan-out and history, commands on the wire, answers to the dock's file requests, the flight file server, the cloud geofence | M1 |
+| [`soc-cloud`](soc-cloud/README.md) | The DJI cloud party: one MQTT connection per Sky Orchestrator stack, topology and presence, telemetry fan-out and history, commands on the wire, answers to the dock's file requests, the flight file server, the cloud geofence | M1 |
 | `soc-operations` | The operation lifecycle and its state machine, preflight checks, the simulation gate, flight file production | M1 |
 
 Boundaries and the reason there are two:
