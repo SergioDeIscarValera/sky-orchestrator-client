@@ -57,8 +57,10 @@ The MVP is M5: **a first real flight commanded from SOC**
 
 | Step | Pull request |
 | --- | --- |
-| Migration runner, schema `soc` baseline, database test harness with VO2's contract surface | `feature/database/runner-and-baseline` |
-| Shared Python: declared configuration, correlated logs, the database connection, the Realtime Broadcast client | `feature/libs/foundations` |
+| Migration runner, schema `soc` baseline, database test harness with VO2's contract surface | `feature/database/soc-baseline`, merged (#15) |
+| Shared Python: the configuration contract and its loader, correlated logs | `feature/libs/config-and-logs` |
+| Shared Python: the one database connection, with `LISTEN`, claims and `COPY` | `feature/libs/database-connection` |
+| Shared Python: the Realtime Broadcast client, with its HTTP fallback | `feature/libs/realtime-client` |
 | `soc-cloud` skeleton: one link per stack, topology, OSD ingest, devices, the file server, health | `feature/cloud/link-skeleton` |
 | `soc-operations` skeleton: configuration, health, the intent sweep | `feature/operations/skeleton` |
 | `soc-web` skeleton: tokens, sign-in, organization first, the persistent scene, panels, runtime configuration | `feature/web/shell` |

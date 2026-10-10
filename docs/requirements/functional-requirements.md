@@ -445,7 +445,8 @@ every build and accepted by Sky Orchestrator's dry run.
 
 ### FR-WAY-12 — Waypoint actions · COULD
 Hover, take a photo and set the gimbal pitch at a waypoint, in the subset Sky
-Orchestrator flies (SO's FR-BRG-09).
+Orchestrator flies (SO's FR-BRG-09): once per waypoint visit, never repeated on a
+resume (`DEP-13`).
 
 **Acceptance**: deferred. The wayline's waypoint shape reserves an action list.
 
@@ -549,7 +550,8 @@ From `ready`, after explicit confirmation by a pilot, the real flight is prepare
 with the same file and executed. Refusals are shown with their meaning, told
 apart by the method that drew them (SO's ADR-0037): `314010` on a prepare, "this
 file has not completed a simulation on this stack"; `314010` on an execute, "arm
-the phone and retry"; `319015` "the stack's mode is not known yet"; `319004` "the
+the phone, or release the aircraft held from the phone's console, and retry"
+(`DEP-12`); `319015` "the stack's mode is not known yet"; `319004` "the
 task was prepared under the other mode: cancel it and prepare again"; `314003`
 "Sky Orchestrator refused the file".
 

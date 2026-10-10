@@ -2,7 +2,7 @@
 # one lockfile pins them all with hashes (ADR-0017, NFR-PORT-02).
 
 [tool.uv.workspace]
-members = ["database", "infra/migrate"]
+members = ["database", "infra/migrate", "libs/soc-config", "libs/soc-log"]
 
 [dependency-groups]
 dev = [
@@ -32,7 +32,6 @@ ignore = ["S101"]
 known-first-party = ["soc_*"]
 
 [tool.mypy]
-files = ["database/src", "database/tests", "infra/migrate/src", "infra/migrate/tests"]
 python_version = "3.14"
 strict = true
 warn_unreachable = true

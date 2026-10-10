@@ -76,15 +76,33 @@ jobs:
           uv run --frozen ruff check
           uv run --frozen ruff format --check
 
-      - name: Python types
+      # Types are checked one unit at a time, as each unit is built and tested
+      # on its own; tools at the Python the hooks run them with.
+      - name: Tooling types
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: uv run --frozen mypy --python-version 3.12 tools
+
+      - name: Database types
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: uv run --frozen mypy database
+
+      - name: soc-migrate gate
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
         run: |
-          uv run --frozen mypy
-          uv run --frozen mypy --python-version 3.12 tools
+          uv run --frozen mypy infra/migrate
+          uv run --frozen pytest infra/migrate/tests
 
-      - name: Migration runner gate tests
+      - name: soc-config gate
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
-        run: uv run --frozen pytest infra/migrate/tests
+        run: |
+          uv run --frozen mypy libs/soc-config
+          uv run --frozen pytest libs/soc-config/tests
+
+      - name: soc-log gate
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: |
+          uv run --frozen mypy libs/soc-log
+          uv run --frozen pytest libs/soc-log/tests
 
       # The database lane (NFR-TEST-02): an ephemeral Postgres from the production
       # image, so it costs a pull and about ten seconds. It runs when a pull request
