@@ -1,0 +1,10 @@
+[project]
+name = "soc-log"
+version = "0.1.0"
+description = "JSON log lines carrying the correlation identifiers in force (NFR-OBS-01)"
+requires-python = ">=3.14,<3.15"
+dependencies = ["msgspec==0.22.0", "structlog==26.1.0"]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
