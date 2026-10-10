@@ -19,5 +19,17 @@ updates:
       prefix: "build(repo)"
     open-pull-requests-limit: 5
 
+  # The base images of the Python services, pinned by digest (NFR-SEC-08).
+  - package-ecosystem: docker
+    directories:
+      - /services/soc-cloud
+      - /services/soc-operations
+      - /infra/migrate
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "build(repo)"
+    open-pull-requests-limit: 5
+
   # Each unit's ecosystem joins this file with its manifest. Versions are pinned
   # on purpose (NFR-PORT-02): Dependabot proposes, review decides.
