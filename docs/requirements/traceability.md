@@ -133,7 +133,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-SAF-04 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
 | NFR-SAF-05 | MUST | soc-operations | M4 | — | Planned |
 | NFR-SAF-06 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
-| NFR-SEC-01 | MUST | database, soc-web, soc-cloud, infra | M1 | `database/tests/test_realtime_authorization.py`, `database/tests/test_membership.py` | Partial: live-membership helpers and Realtime authorization tested per role; each table adds its policies |
+| NFR-SEC-01 | MUST | database, soc-web, soc-cloud, infra | M1 | `database/tests/test_realtime_authorization.py`, `database/tests/test_membership.py`, `libs/soc-realtime/tests/test_against_realtime.py` | Partial: live-membership helpers and Realtime authorization tested per role, and enforced by the real Realtime: strangers, deleted organizations and anonymous clients refused, member sends dropped; each table adds its policies |
 | NFR-SEC-02 | MUST | database, soc-web, soc-cloud, infra | M1 | — | Planned |
 | NFR-SEC-03 | MUST | database, soc-web, soc-cloud, infra | M1 | `libs/soc-config/tests/test_configuration.py::test_served_organizations_are_distinct_uuids` | Partial: an empty or malformed allowlist stops the start; refusing intents outside it arrives with the services |
 | NFR-SEC-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (gitleaks over the full history), `.pre-commit-config.yaml` (gitleaks on what is staged) | Done: secret scan in CI on every pull request and before every commit |
@@ -160,7 +160,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
 | NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*` | Done so far: tooling 119, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 11, soc-db 13, soc-realtime 17 tests, each suite under 0.3 s, per unit in pre-commit and CI |
-| NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded; `soc-db` runs its connection tests there too |
+| NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, and the real Realtime v2.102.3 beside it; `soc-db` and `soc-realtime` run their end-to-end tests there |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |
 | NFR-TEST-05 | MUST | soc-cloud | M2 | — | Planned |

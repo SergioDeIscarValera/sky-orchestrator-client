@@ -8,7 +8,7 @@ its migrations and their tests.
 | --- | --- |
 | `migrations/` | Ordered SQL, `NNNN-kebab-name.sql`, applied by [`infra/migrate`](../infra/migrate/README.md) |
 | `fixtures/` | What the tests need of the platform SOC does not own, reproduced faithfully (below) |
-| `src/soc_database/` | The test harness: an ephemeral Postgres, tenancy helpers, acting as a user |
+| `src/soc_database/` | The test harness: an ephemeral Postgres, tenancy helpers, acting as a user; `RealtimeStack`, Postgres and Realtime v2.102.3 on a private network with its tokens |
 | `tests/` | The database lane (`NFR-TEST-02`) |
 
 ## What exists

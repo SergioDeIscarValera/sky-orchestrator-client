@@ -690,6 +690,12 @@ dependencies = [
     { name = "websockets" },
 ]
 
+[package.dev-dependencies]
+test = [
+    { name = "soc-database" },
+    { name = "soc-migrate" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = "==3.14.4" },
@@ -697,6 +703,12 @@ requires-dist = [
     { name = "soc-log", editable = "libs/soc-log" },
     { name = "soc-supervision", editable = "libs/soc-supervision" },
     { name = "websockets", specifier = "==17.2" },
+]
+
+[package.metadata.requires-dev]
+test = [
+    { name = "soc-database", editable = "database" },
+    { name = "soc-migrate", editable = "infra/migrate" },
 ]
 
 [[package]]

@@ -22,29 +22,46 @@ READY_QUERY = "select count(*) from pg_roles where rolname = 'authenticated'"
 DOCKER = shutil.which("docker") or "docker"
 
 
+def docker(
+    *arguments: str, script: str | None = None, check: bool = True
+) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        [DOCKER, *arguments], input=script, capture_output=True, text=True, check=check
+    )
+    result.stdout = result.stdout.strip()
+    return result
+
+
 @dataclass
 class EphemeralPostgres:
     name: str = field(default_factory=lambda: f"soc-dbtest-{secrets.token_hex(4)}")
     password: str = field(default_factory=lambda: secrets.token_hex(24), repr=False)
     port: int = 0
+    network: str | None = None
+    realtime_fixture: bool = True
 
     def start(self) -> None:
-        self._docker(
-            "run", "-d", "--rm", "--name", self.name,
+        on_network = ("--network", self.network, "--network-alias", "db") if self.network else ()
+        docker(
+            "run", "-d", "--rm", "--name", self.name, *on_network,
             "-p", "127.0.0.1::5432",
             "-e", f"POSTGRES_PASSWORD={self.password}",
             "-e", f"JWT_SECRET={secrets.token_hex(32)}",
             "-e", "JWT_EXP=3600",
             IMAGE,
         )  # fmt: skip
-        self.port = int(self._docker("port", self.name, "5432/tcp").stdout.split(":")[-1])
+        self.port = int(docker("port", self.name, "5432/tcp").stdout.split(":")[-1])
         self._wait_until_ready()
         self._load(FIXTURES / "auth-functions.sql", user="supabase_admin")
-        self._load(FIXTURES / "realtime-schema.sql", user="supabase_admin")
+        if self.realtime_fixture:
+            self._load(FIXTURES / "realtime-schema.sql", user="supabase_admin")
         self._load(FIXTURES / "vo2-contract.sql", user="postgres")
 
     def stop(self) -> None:
-        self._docker("rm", "-f", self.name, check=False)
+        docker("rm", "-f", self.name, check=False)
+
+    def query(self, sql: str, user: str = "supabase_admin") -> str:
+        return self._psql(user, "-Atqc", sql).stdout
 
     def dsn(self, user: str = "postgres", password: str | None = None) -> str:
         return f"postgresql://{user}:{password or self.password}@127.0.0.1:{self.port}/postgres"
@@ -70,21 +87,11 @@ class EphemeralPostgres:
     def _psql(
         self, user: str, *arguments: str, script: str | None = None, check: bool = True
     ) -> subprocess.CompletedProcess[str]:
-        return self._docker(
+        return docker(
             "exec", "-i", "-e", f"PGPASSWORD={self.password}", self.name,
             "psql", "-h", "localhost", "-U", user, "-d", "postgres", *arguments,
             script=script, check=check,
         )  # fmt: skip
-
-    @staticmethod
-    def _docker(
-        *arguments: str, script: str | None = None, check: bool = True
-    ) -> subprocess.CompletedProcess[str]:
-        result = subprocess.run(
-            [DOCKER, *arguments], input=script, capture_output=True, text=True, check=check
-        )
-        result.stdout = result.stdout.strip()
-        return result
 
 
 @dataclass(frozen=True)

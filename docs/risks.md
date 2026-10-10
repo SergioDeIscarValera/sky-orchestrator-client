@@ -120,6 +120,15 @@ dropping settings.
 container, before anything depends on it (`DEP-23`); fallback design: telemetry
 through `postgres_changes` on a narrow table, at a higher database cost.
 
+**Status, 2026-10-10**: reduced. The database lane runs Realtime v2.102.3 against
+the production Postgres image with SOC's migrations on every relevant pull
+request: the service role joins private SOC topics and its broadcasts reach
+members, by socket, by the HTTP endpoint and by `realtime.send()` from SQL;
+strangers, members of a deleted organization and anonymous clients are refused;
+a member's own send is dropped; the socket joins again after the container
+restarts. What only the box can show remains: VO2's tenant settings and ES256
+keys, the latency, and a recreate rather than a restart.
+
 **Trigger**: the M1 session fails any Broadcast criterion.
 
 ---

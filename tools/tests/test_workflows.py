@@ -10,8 +10,9 @@ from typing import Any
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 RULESETS = WORKFLOWS.parent / "rulesets"
 REPOSITORY = WORKFLOWS.parents[1]
+LANE_STEP = "- name: Database lane against ephemeral Postgres and Realtime"
 LANE_ONLY_UNITS = ("database",)
-SPLIT_BY_MARKER_UNITS = ("libs/soc-db",)
+SPLIT_BY_MARKER_UNITS = ("libs/soc-db", "libs/soc-realtime")
 NOT_IN_THE_LANE = '-m "not database"'
 
 
@@ -143,7 +144,7 @@ class ContinuousIntegration(unittest.TestCase):
         self.assertEqual(unguarded, ["id: checkout", "id: python"])
 
     def test_the_database_lane_runs_only_when_what_it_tests_changes(self) -> None:
-        step = self.text[self.text.index("- name: Database tests against an ephemeral Postgres") :]
+        step = self.text[self.text.index(LANE_STEP) :]
         self.assertIn("steps.database-changes.outputs.changed == 'true'", step.splitlines()[1])
 
 
@@ -245,7 +246,7 @@ class PythonUnits(unittest.TestCase):
             )
         }
         self.assertEqual(marked, set(SPLIT_BY_MARKER_UNITS))
-        lane = self.ci[self.ci.index("- name: Database tests against an ephemeral Postgres") :]
+        lane = self.ci[self.ci.index(LANE_STEP) :]
         detection = self.ci[self.ci.index("- id: database-changes") :]
         for unit in (*LANE_ONLY_UNITS, *SPLIT_BY_MARKER_UNITS):
             selection = "" if unit in LANE_ONLY_UNITS else " -m database"

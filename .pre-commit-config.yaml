@@ -125,10 +125,10 @@ repos:
 
       - id: soc-realtime-gate
         name: soc-realtime gate
-        entry: bash -c 'uv run --frozen mypy libs/soc-realtime && uv run --frozen pytest libs/soc-realtime/tests'
+        entry: bash -c 'uv run --frozen mypy libs/soc-realtime && uv run --frozen pytest libs/soc-realtime/tests -m "not database"'
         language: system
         pass_filenames: false
-        files: ^(libs/soc-realtime/|libs/soc-supervision/|libs/soc-log/|pyproject\.toml$|uv\.lock$)
+        files: ^(libs/soc-realtime/|libs/soc-supervision/|libs/soc-log/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
 
       - id: tools-gate-tests
         name: tools gate tests
