@@ -10,6 +10,7 @@ members = [
     "soc-db",
     "soc-log",
     "soc-migrate",
+    "soc-operations",
     "soc-realtime",
     "soc-supervision",
 ]
@@ -740,6 +741,41 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "asyncpg", specifier = "==0.32.0" }]
+
+[[package]]
+name = "soc-operations"
+version = "0.1.0"
+source = { editable = "services/soc-operations" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "msgspec" },
+    { name = "soc-config" },
+    { name = "soc-db" },
+    { name = "soc-log" },
+    { name = "soc-supervision" },
+]
+
+[package.dev-dependencies]
+test = [
+    { name = "soc-database" },
+    { name = "soc-migrate" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = "==3.14.4" },
+    { name = "msgspec", specifier = "==0.22.0" },
+    { name = "soc-config", editable = "libs/soc-config" },
+    { name = "soc-db", editable = "libs/soc-db" },
+    { name = "soc-log", editable = "libs/soc-log" },
+    { name = "soc-supervision", editable = "libs/soc-supervision" },
+]
+
+[package.metadata.requires-dev]
+test = [
+    { name = "soc-database", editable = "database" },
+    { name = "soc-migrate", editable = "infra/migrate" },
+]
 
 [[package]]
 name = "soc-realtime"
