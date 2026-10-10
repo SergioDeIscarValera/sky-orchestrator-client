@@ -74,19 +74,40 @@ repos:
         pass_filenames: false
         files: (\.py|^pyproject\.toml)$
 
-      - id: python-types
-        name: python types
-        entry: bash -c 'uv run --frozen mypy && uv run --frozen mypy --python-version 3.12 tools'
+      - id: tools-types
+        name: tools types
+        entry: uv run --frozen mypy --python-version 3.12 tools
         language: system
         pass_filenames: false
-        files: (\.py|^pyproject\.toml|^uv\.lock)$
+        files: ^(tools/.*\.py|pyproject\.toml)$
 
-      - id: migrate-gate-tests
-        name: migration runner gate tests
-        entry: uv run --frozen pytest infra/migrate/tests
+      - id: database-types
+        name: database types
+        entry: uv run --frozen mypy database
+        language: system
+        pass_filenames: false
+        files: ^(database/.*\.py|pyproject\.toml|uv\.lock)$
+
+      - id: soc-migrate-gate
+        name: soc-migrate gate
+        entry: bash -c 'uv run --frozen mypy infra/migrate && uv run --frozen pytest infra/migrate/tests'
         language: system
         pass_filenames: false
         files: ^(infra/migrate/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-config-gate
+        name: soc-config gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-config && uv run --frozen pytest libs/soc-config/tests'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-config/|contracts/config/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-log-gate
+        name: soc-log gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-log && uv run --frozen pytest libs/soc-log/tests'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-log/|pyproject\.toml$|uv\.lock$)
 
       - id: tools-gate-tests
         name: tools gate tests

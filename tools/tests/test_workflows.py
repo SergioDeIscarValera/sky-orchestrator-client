@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 import unittest
 from pathlib import Path
 from typing import Any
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 RULESETS = WORKFLOWS.parent / "rulesets"
+REPOSITORY = WORKFLOWS.parents[1]
+LANE_UNITS = ("database",)
 
 
 def read(name: str) -> str:
@@ -123,7 +126,6 @@ class ContinuousIntegration(unittest.TestCase):
             "uv sync --frozen --all-packages",
             "uv run --frozen ruff check\n",
             "uv run --frozen ruff format --check\n",
-            "uv run --frozen mypy\n",
             "mypy --python-version 3.12 tools",
             "pytest infra/migrate/tests",
             "pytest database/tests",
@@ -161,6 +163,28 @@ class PullRequestPolicy(unittest.TestCase):
             for script in run_scripts(workflow.read_text(encoding="utf-8")):
                 with self.subTest(workflow=workflow.name, script=script[:60]):
                     self.assertNotIn("${{", script)
+
+
+class PythonUnits(unittest.TestCase):
+    def setUp(self) -> None:
+        project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+        self.units = project["tool"]["uv"]["workspace"]["members"]
+        self.ci = read("ci.yml")
+        self.hooks = (REPOSITORY / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+
+    def test_every_unit_is_type_checked_on_its_own(self) -> None:
+        for unit in self.units:
+            with self.subTest(unit=unit):
+                self.assertIn(f"uv run --frozen mypy {unit}\n", self.ci)
+                self.assertRegex(self.hooks, rf"uv run --frozen mypy {re.escape(unit)}['\n &]")
+
+    def test_every_unit_outside_a_lane_runs_its_gate_tests(self) -> None:
+        for unit in self.units:
+            if unit in LANE_UNITS:
+                continue
+            with self.subTest(unit=unit):
+                self.assertIn(f"uv run --frozen pytest {unit}/tests\n", self.ci)
+                self.assertIn(f"uv run --frozen pytest {unit}/tests'", self.hooks)
 
 
 class Rulesets(unittest.TestCase):
