@@ -9,6 +9,7 @@ members = [
     "soc-db",
     "soc-log",
     "soc-migrate",
+    "soc-supervision",
 ]
 
 [manifest.dependency-groups]
@@ -439,6 +440,17 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "asyncpg", specifier = "==0.32.0" }]
+
+[[package]]
+name = "soc-supervision"
+version = "0.1.0"
+source = { editable = "libs/soc-supervision" }
+dependencies = [
+    { name = "soc-log" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "soc-log", editable = "libs/soc-log" }]
 
 [[package]]
 name = "structlog"
