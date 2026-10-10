@@ -5,8 +5,8 @@ mechanism, never a business decision.
 
 | Library | Purpose | Arrives |
 | --- | --- | --- |
-| `soc-config` | Configuration declared once in `contracts/config/`, loaded and validated at start, fail closed | M1 |
-| `soc-log` | JSON log lines carrying the correlation identifiers | M1 |
+| [`soc-config`](soc-config/README.md) | Configuration declared once in `contracts/config/`, loaded and validated at start, fail closed | M1, here |
+| [`soc-log`](soc-log/README.md) | JSON log lines carrying the correlation identifiers | M1, here |
 | `soc-db` | The one direct Postgres connection: `LISTEN`, intent claims, `COPY` | M1 |
 | `soc-realtime` | The Realtime Broadcast client: join, heartbeat, send, supervised reconnection | M1 |
 | `soc-geo` | Validators: containment with clearance, the local frame, Sky Orchestrator's haversine, held to `contracts/geometry/` | M3 |
