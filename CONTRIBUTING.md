@@ -193,6 +193,7 @@ git switch -c release/v0.2.0 && git push -u origin release/v0.2.0
 2. Update `CHANGELOG.md` by hand from the merged pull requests.
 3. Open the pull request into `main`; merge it with a merge commit.
 4. The release workflow verifies the version, tags it, publishes the release,
-   and opens the back-merge into `develop`. Merge that with a merge commit.
+   pushes the service images to GHCR at the tag, and opens the back-merge into
+   `develop`. Merge that with a merge commit.
 
 Never open a pull request from `main`: automatic branch deletion would delete it.

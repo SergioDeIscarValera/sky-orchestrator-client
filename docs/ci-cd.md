@@ -37,8 +37,9 @@ hand:
 name and direction, version admissibility on release branches, title and commits
 linted, description present.
 
-`release.yml`: tag, release, back-merge, on a release or hotfix merged into
-`main`.
+`release.yml`: tag, release, the service images published to GHCR at the tag
+(`ghcr.io/<owner>/sky-orchestrator-client/<service>:vX.Y.Z`, never moved), and
+the back-merge, on a release or hotfix merged into `main` (`FR-DEP-06`).
 
 Each unit adds its gate as a step of `Gate` when it arrives: `soc-web` (type
 check, lint, unit tests, bundle budget), each Python unit (type check and gate
