@@ -12,6 +12,7 @@ answer, so it is a script with tests rather than a judgement made each time
 | [`next_version.py`](next_version.py) | The next version, suggested and verified | [`test_next_version.py`](tests/test_next_version.py) |
 | [`check_links.py`](check_links.py) | Every relative Markdown link resolves | [`test_check_links.py`](tests/test_check_links.py) |
 | [`vendor_sky_orchestrator.py`](vendor_sky_orchestrator.py) | Sky Orchestrator's wire contracts, vendored at a pinned commit and held to their hashes | [`test_vendor_sky_orchestrator.py`](tests/test_vendor_sky_orchestrator.py) |
+| [`merge_when_green.py`](merge_when_green.py) | A pull request merged only once every check, and every check the rulesets require, has passed | [`test_merge_when_green.py`](tests/test_merge_when_green.py) |
 | [`prune_branches.py`](prune_branches.py) | Local branches whose merged remote was deleted, deleted safely | [`test_prune_branches.py`](tests/test_prune_branches.py) |
 | [`setup_github.sh`](setup_github.sh) | Applies the [governance](../docs/github-governance.md) | Idempotent; `--dry-run` shows the plan |
 | [`tests/test_workflows.py`](tests/test_workflows.py) | Holds the workflows to the [minutes budget](../docs/ci-cd.md#minutes-budget) and to safe scripting | Itself |
