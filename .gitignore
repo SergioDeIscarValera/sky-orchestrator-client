@@ -4,6 +4,10 @@
 .env
 .env.*
 !.env.example
+# The compose project's files filled on the mini-PC: secrets and addresses.
+infra/compose/*.env
+!infra/compose/*.env.example
+infra/compose/*.json
 *.pem
 *.key
 *.p12

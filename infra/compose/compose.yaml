@@ -1,0 +1,75 @@
+# The sky-orchestrator-client compose project on the farm's mini-PC (ADR-0015).
+#
+#   cp .env.example .env              # the version and the networks
+#   cp soc-cloud.env.example soc-cloud.env ... and fill the secrets
+#   uv run soc-config example soc-cloud > soc-cloud.json ... and fill the blanks
+#   docker compose up -d
+#
+# SOC joins Virtual Origen's and Sky Orchestrator's networks and adds nothing to
+# theirs. No port is published: the health endpoints answer inside the networks,
+# and the flight files are served on Sky Orchestrator's network only (ADR-0008).
+# Every container is read-only, unprivileged and limited; the memory limits add
+# up to 512 MB at most (NFR-RES-05).
+
+name: sky-orchestrator-client
+
+x-hardened: &hardened
+  read_only: true
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  soc-migrate:
+    <<: *hardened
+    image: ${SOC_REGISTRY:-ghcr.io/sergiodeiscarvalera/sky-orchestrator-client}/soc-migrate:${SOC_VERSION:?set SOC_VERSION}
+    restart: "no"
+    env_file: [migrate.env]
+    networks: [virtual-origen]
+    deploy:
+      resources:
+        limits: {memory: 128M, cpus: "0.50"}
+
+  soc-cloud:
+    <<: *hardened
+    image: ${SOC_REGISTRY:-ghcr.io/sergiodeiscarvalera/sky-orchestrator-client}/soc-cloud:${SOC_VERSION:?set SOC_VERSION}
+    depends_on:
+      soc-migrate: {condition: service_completed_successfully}
+    env_file: [soc-cloud.env]
+    environment:
+      SOC_CONFIG_FILE: /etc/soc/soc-cloud.json
+    volumes:
+      - ./soc-cloud.json:/etc/soc/soc-cloud.json:ro
+    networks:
+      virtual-origen: {}
+      sky-orchestrator:
+        aliases: [soc-cloud]
+    deploy:
+      resources:
+        limits: {memory: 128M, cpus: "0.50"}
+
+  soc-operations:
+    <<: *hardened
+    image: ${SOC_REGISTRY:-ghcr.io/sergiodeiscarvalera/sky-orchestrator-client}/soc-operations:${SOC_VERSION:?set SOC_VERSION}
+    depends_on:
+      soc-migrate: {condition: service_completed_successfully}
+    env_file: [soc-operations.env]
+    environment:
+      SOC_CONFIG_FILE: /etc/soc/soc-operations.json
+    volumes:
+      - ./soc-operations.json:/etc/soc/soc-operations.json:ro
+    networks: [virtual-origen]
+    deploy:
+      resources:
+        limits: {memory: 96M, cpus: "0.25"}
+
+networks:
+  virtual-origen:
+    external: true
+    name: ${VO2_NETWORK:-supabase-local_default}
+  sky-orchestrator:
+    external: true
+    name: ${SO_NETWORK:-sky-orchestrator_default}
