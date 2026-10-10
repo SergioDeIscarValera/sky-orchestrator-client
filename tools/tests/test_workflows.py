@@ -17,6 +17,7 @@ SPLIT_BY_MARKER_UNITS = (
     "libs/soc-realtime",
     "services/soc-cloud",
     "services/soc-operations",
+    "infra/check",
 )
 NOT_IN_THE_LANE = '-m "not lane"'
 
