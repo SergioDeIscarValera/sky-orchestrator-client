@@ -10,9 +10,11 @@
     await supervisor.run()
 
 A transient error marks the link down and is retried after 0.5, 1, 2, 4, 8, then
-every 10 s; a successful connection resets the delay. Any other error ends
-`run()`: a bug is not retried in a loop. `health` says whether the link is up,
-since when, and the last error.
+every 10 s. The delay starts again from 0.5 s only after a link stayed up for
+`stable_s`, so a link that is lost as soon as it is made, as one displaced by
+another client is, backs off instead of hammering. Any other error ends `run()`:
+a bug is not retried in a loop. `health` says whether the link is up, since
+when, and the last error.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from dataclasses import dataclass, field
 import soc_log
 
 CAP_S = 10.0
+STABLE_S = 10.0
 NOT_YET = "not connected yet"
 CLOSED_BY_PEER = "the other side closed the link"
 
@@ -73,6 +76,7 @@ class Supervisor[Link]:
         transient: tuple[type[Exception], ...],
         backoff: Backoff | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        stable_s: float = STABLE_S,
     ) -> None:
         self.name = name
         self._connect = connect
@@ -81,6 +85,7 @@ class Supervisor[Link]:
         self._transient = transient
         self._backoff = backoff or Backoff()
         self._sleep = sleep
+        self._stable_s = stable_s
         self._health = Health(up=False, since=time.monotonic(), error=NOT_YET)
 
     @property
@@ -95,8 +100,8 @@ class Supervisor[Link]:
                 self._mark_down(describe(error))
                 await self._sleep(self._backoff.next())
                 continue
-            self._backoff.reset()
             self._mark_up()
+            up_since = self._health.since
             try:
                 await self._serve(link)
                 self._mark_down(CLOSED_BY_PEER)
@@ -104,6 +109,8 @@ class Supervisor[Link]:
                 self._mark_down(describe(lost))
             finally:
                 await self._disconnect(link)
+            if time.monotonic() - up_since >= self._stable_s:
+                self._backoff.reset()
             await self._sleep(self._backoff.next())
 
     def _mark_up(self) -> None:
