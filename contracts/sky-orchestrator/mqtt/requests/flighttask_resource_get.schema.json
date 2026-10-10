@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/requests/flighttask_resource_get.schema.json",
+  "title": "flighttask_resource_get",
+  "description": "From DJI's SDK at bef525cb: TopicRequestsRequest of cloudapi/wayline/FlighttaskResourceGetRequest. The dock asks, at execute, for the latest URL of the task's file (ExecutionStepEnum 13, GET_KMZ; FR-FLT-03).",
+  "x-version": "1.0.0",
+  "x-topic": "thing/product/{gateway_sn}/requests",
+  "x-direction": "dock_to_cloud",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "gateway",
+    "method",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/own_id"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/bid"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "gateway": {
+      "$ref": "../dji-envelope.schema.json#/$defs/sn"
+    },
+    "method": {
+      "const": "flighttask_resource_get"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "flight_id"
+      ],
+      "properties": {
+        "flight_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "tid": "00000000-0000-4000-8000-000000000011",
+  "bid": "flight-0001",
+  "timestamp": 1790800000000,
+  "gateway": "SOTESTDOCK01",
+  "method": "flighttask_progress",
+  "need_reply": 0,
+  "data": {
+    "result": 0,
+    "output": {
+      "ext": {
+        "current_waypoint_index": 0,
+        "media_count": 0,
+        "flight_id": "flight-0001",
+        "wayline_mission_state": 4,
+        "wayline_id": 0
+      },
+      "progress": {
+        "current_step": 20,
+        "percent": 0
+      },
+      "status": "in_progress"
+    }
+  }
+}

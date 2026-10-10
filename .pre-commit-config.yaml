@@ -14,8 +14,9 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: \.md$
+        exclude: (\.md$|^contracts/sky-orchestrator/)
       - id: end-of-file-fixer
+        exclude: ^contracts/sky-orchestrator/
       - id: check-yaml
       - id: check-json
       - id: check-toml
@@ -24,6 +25,7 @@ repos:
       - id: check-executables-have-shebangs
       - id: mixed-line-ending
         args: [--fix=lf]
+        exclude: ^contracts/sky-orchestrator/
       - id: check-added-large-files
         args: [--maxkb=512]
       - id: detect-private-key
@@ -59,6 +61,13 @@ repos:
         language: system
         pass_filenames: false
         files: \.md$
+
+      - id: sky-orchestrator-contracts
+        name: sky orchestrator's vendored contracts are unchanged
+        entry: python3 tools/vendor_sky_orchestrator.py --check
+        language: system
+        pass_filenames: false
+        files: ^(contracts/sky-orchestrator/|tools/vendor_sky_orchestrator\.py$)
 
       - id: traceability
         name: traceability matrix equals the requirements

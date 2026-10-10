@@ -1,0 +1,523 @@
+# so-wayline's HTTP API: ingest, catalogue and presigned serving (FR-WAY-01,
+# FR-WAY-04, FR-WAY-05, FR-WAY-07), and the judgement without the upload with the
+# envelope it is made against (FR-WAY-12, FR-WAY-11). The source of truth the
+# service is held to: services/so-wayline/tests/test_api_contract.py validates
+# every response the service gives against these schemas, and holds
+# RejectionCode equal to the service's closed list of codes.
+openapi: 3.1.0
+info:
+  title: Sky Orchestrator wayline API
+  version: 1.3.0
+  description: 'Waylines in, mission plans and presigned URLs out. Cloud role for ingest, storage and
+    serving; dock side for validation and the plan (ADR-0010).
+
+
+    An upload is judged at once and recorded either way: a VALID wayline with its bytes stored, or a
+    REJECTED one with every problem found and without its bytes. The mission plan and the validation
+    report are stored as they were when the file was judged, and never recomputed (IR-WAY-01, IR-WAY-02).
+
+
+    A delete asks so-fleet whether a flight task still holds the wayline and fails closed when it cannot
+    tell (ADR-0023).
+
+
+    1.1.0: the presigned URL may be refused with 503, storage_unavailable, where there is no store, under
+    cloud_role external (ADR-0029).
+
+
+    1.2.0: the envelope a wayline is judged against is readable (FR-WAY-11), and a KMZ can be judged as an
+    upload judges it with nothing stored and nothing counted (FR-WAY-12).
+
+
+    1.3.0: the stack''s state, as a client reads it without the phone (FR-DEV-07, ADR-0038).'
+servers:
+- url: http://{host}:{port}
+  description: The mini-PC. Bound to SO_BIND, loopback unless set (NFR-SEC-01).
+  variables:
+    host:
+      default: 127.0.0.1
+    port:
+      default: '8081'
+security:
+- bearerAuth: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      security: []
+      summary: Whether the service can serve. 200 when the database and the object store answer.
+      responses:
+        '200':
+          description: Serving.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Health'}
+        '503':
+          description: The database or the object store does not answer.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Health'}
+  /v1/waylines:
+    post:
+      operationId: uploadWayline
+      summary: Upload a KMZ (FR-WAY-01). The body is the file's bytes, nothing else.
+      parameters:
+      - name: takeoff_latitude_deg
+        in: query
+        required: false
+        description: The expected takeoff position, with takeoff_longitude_deg. Given, the transit and
+          every point's distance from home are checked at ingest (FR-WAY-10); absent, they are left to the
+          aircraft at start and the report says so.
+        schema: {type: number, minimum: -90, maximum: 90}
+      - name: takeoff_longitude_deg
+        in: query
+        required: false
+        schema: {type: number, minimum: -180, maximum: 180}
+      requestBody:
+        required: true
+        content:
+          application/vnd.google-earth.kmz:
+            schema: {type: string, contentMediaType: application/vnd.google-earth.kmz}
+          application/octet-stream:
+            schema: {type: string, contentMediaType: application/octet-stream}
+      responses:
+        '201':
+          description: Accepted and stored.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Wayline'}
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: Refused. A judged file is recorded without its bytes, every problem listed
+            (FR-WAY-02, FR-WAY-03, FR-WAY-06, FR-WAY-09). A body over max_kmz_bytes is refused before it is
+            read, as kmz_too_large, and nothing is recorded.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - {$ref: '#/components/schemas/Wayline'}
+                - {$ref: '#/components/schemas/Rejection'}
+        '503':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listWaylines
+      summary: The catalogue, newest first (FR-WAY-07).
+      parameters:
+      - name: status
+        in: query
+        required: false
+        description: VALID by default; REJECTED lists refusals, ALL both.
+        schema: {enum: [VALID, REJECTED, ALL]}
+      responses:
+        '200':
+          description: The catalogue.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [waylines]
+                properties:
+                  waylines:
+                    type: array
+                    items: {$ref: '#/components/schemas/WaylineSummary'}
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+  /v1/waylines/{wayline_id}:
+    parameters:
+    - $ref: '#/components/parameters/WaylineId'
+    get:
+      operationId: getWayline
+      summary: One wayline's record, with its report and metadata.
+      responses:
+        '200':
+          description: The record.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Wayline'}
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteWayline
+      summary: Delete a wayline, unless a flight task not yet terminal holds it (FR-WAY-07, ADR-0023).
+      responses:
+        '204':
+          description: Deleted. The record goes first; if the object store then fails to delete the
+            bytes, they are left unreachable and logged as wayline_object_orphaned (ADR-0023).
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: A flight task holds it (wayline_held, with the flights in details), or another
+            delete of it is under way (wayline_deleting).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '503':
+          description: so-fleet could not say whether a task holds it (fleet_unanswered). Nothing was
+            deleted.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /v1/waylines/{wayline_id}/plan:
+    parameters:
+    - $ref: '#/components/parameters/WaylineId'
+    get:
+      operationId: getMissionPlan
+      summary: The mission plan the wayline was accepted with (FR-WAY-08, IR-WAY-02).
+      responses:
+        '200':
+          description: The plan, as contracts/msdk/mission-plan.schema.json defines it.
+          content:
+            application/json:
+              schema: {$ref: '../msdk/mission-plan.schema.json'}
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /v1/waylines/{wayline_id}/url:
+    parameters:
+    - $ref: '#/components/parameters/WaylineId'
+    get:
+      operationId: getPresignedUrl
+      summary: A time-limited URL for the KMZ, on the address devices reach (FR-WAY-05, RISK-09).
+      responses:
+        '200':
+          description: The URL, the fingerprint the downloaded bytes must match (FR-WAY-04), and when it
+            stops working.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PresignedUrl'}
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /v1/validations:
+    post:
+      operationId: validateWayline
+      summary: Judge a KMZ as an upload would, and keep nothing (FR-WAY-12). Added in 1.2.0.
+      description: The same stages, checks, problems and report as POST /v1/waylines, against the same
+        envelope. No record, no stored bytes, and nothing counted (IR-WAY-03), so a client can check a
+        draft on every edit without filling the catalogue.
+      parameters:
+      - name: takeoff_latitude_deg
+        in: query
+        required: false
+        description: The expected takeoff position, with takeoff_longitude_deg, as for an upload (FR-WAY-10).
+        schema: {type: number, minimum: -90, maximum: 90}
+      - name: takeoff_longitude_deg
+        in: query
+        required: false
+        schema: {type: number, minimum: -180, maximum: 180}
+      requestBody:
+        required: true
+        content:
+          application/vnd.google-earth.kmz:
+            schema: {type: string, contentMediaType: application/vnd.google-earth.kmz}
+          application/octet-stream:
+            schema: {type: string, contentMediaType: application/octet-stream}
+      responses:
+        '200':
+          description: The file judged, VALID or REJECTED, every problem listed. The verdict is the answer
+            either way.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Validation'}
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: A body over max_kmz_bytes, refused before it is read, as an upload would be.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Rejection'}
+  /v1/status:
+    get:
+      operationId: getStatus
+      summary: The stack's state, as so-bridge and so-fleet last published it (FR-DEV-07). Added in 1.3.0.
+      responses:
+        '200':
+          description: Every field the stack knows; null for one it does not, never a guess.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StackStatus'}
+        '401':
+          $ref: '#/components/responses/Error'
+  /v1/envelope:
+    get:
+      operationId: getEnvelope
+      summary: The envelope a wayline is judged against (FR-WAY-11). Added in 1.2.0.
+      responses:
+        '200':
+          description: The limits, under their configuration keys (IR-CFG), with their fingerprint and the
+            configuration's.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Envelope'}
+        '401':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: SO_WAYLINE_API_TOKEN. Every path but /healthz refuses a request without it, before
+        reading the body.
+  parameters:
+    WaylineId:
+      name: wayline_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/Uuid'}
+  responses:
+    Error:
+      description: Refused, with a code from ErrorCode.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Uuid:
+      type: string
+      pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+    ErrorCode:
+      description: Every refusal that is not a judgement of the file. Closed.
+      enum: [unauthorized, bad_request, not_found, not_valid, wayline_held, wayline_deleting,
+        fleet_unanswered, storage_unavailable]
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code: {$ref: '#/components/schemas/ErrorCode'}
+        message: {type: string, minLength: 1}
+        details: {type: object}
+    RejectionCode:
+      description: Why a file was refused. Closed; services/so-wayline/src/so_wayline/problems.py holds
+        the same list.
+      enum: [kmz_too_large, not_a_zip, path_traversal, unexpected_entry, duplicate_entry, too_many_entries,
+        encrypted_entry, unsupported_compression, archive_expands_too_far, corrupt_entry, template_missing,
+        waylines_missing, xml_malformed, xml_doctype, namespace_unsupported, element_unsupported,
+        value_unsupported, value_malformed, element_missing, element_repeated, template_type_unsupported,
+        height_mode_wgs84, height_mode_follow_surface, too_many_waypoints, takeoff_security_height_above_max,
+        height_above_max, outside_geofence, leg_too_long, total_distance_too_long, speed_above_max,
+        transit_too_long, home_distance_too_far]
+    Rejection:
+      description: A refusal before the file is read, so with no record. Only kmz_too_large.
+      type: object
+      additionalProperties: false
+      required: [code, message, details]
+      properties:
+        code: {const: kmz_too_large}
+        message: {type: string, minLength: 1}
+        details:
+          type: object
+          additionalProperties: false
+          required: [limit_bytes]
+          properties:
+            limit_bytes: {type: integer, minimum: 1}
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [code, kind, message]
+      properties:
+        code: {$ref: '#/components/schemas/RejectionCode'}
+        kind: {enum: [container, malformed, unsupported, missing, envelope]}
+        message: {type: string, minLength: 1}
+        file: {type: string}
+        path: {type: string, description: 'An element path into the XML, or a JSON pointer into the plan.'}
+        line: {type: integer, minimum: 1}
+        waypoint_index: {type: integer, minimum: 0}
+        details: {type: object}
+    Check:
+      type: object
+      additionalProperties: false
+      required: [check, status, detail]
+      properties:
+        check: {type: string, minLength: 1}
+        status: {enum: [passed, failed, deferred]}
+        detail: {type: string}
+    WaylineSummary:
+      type: object
+      additionalProperties: false
+      required: [wayline_id, status, fingerprint_md5, size_bytes, uploaded_at_ms, name, waypoint_count]
+      properties:
+        wayline_id: {$ref: '#/components/schemas/Uuid'}
+        status: {enum: [VALID, REJECTED]}
+        fingerprint_md5: {type: string, pattern: '^[0-9a-f]{32}$'}
+        size_bytes: {type: integer, minimum: 0}
+        uploaded_at_ms: {type: integer, minimum: 0, description: Unix milliseconds, UTC.}
+        name: {type: [string, 'null']}
+        waypoint_count: {type: [integer, 'null'], minimum: 0}
+    Wayline:
+      description: A record as IR-WAY defines it. A REJECTED record has no plan and no stored bytes.
+      type: object
+      additionalProperties: false
+      required: [wayline_id, status, deleting, fingerprint_md5, size_bytes, uploaded_at_ms, metadata, report]
+      properties:
+        wayline_id: {$ref: '#/components/schemas/Uuid'}
+        status: {enum: [VALID, REJECTED]}
+        deleting: {type: boolean, description: A delete of it is under way; it cannot be resolved (ADR-0023).}
+        fingerprint_md5: {type: string, pattern: '^[0-9a-f]{32}$'}
+        size_bytes: {type: integer, minimum: 0}
+        uploaded_at_ms: {type: integer, minimum: 0}
+        metadata: {type: object, description: 'IR-WAY attributes: name, template_type, height_mode,
+            takeoff_ref_point, takeoff_security_height_m, waypoint_count, total_distance_m, max_height_m,
+            max_home_distance_m, config_fingerprint, and the WPML values recorded but not flown.'}
+        report: {$ref: '#/components/schemas/Report'}
+    Report:
+      description: The validation report (IR-WAY-01), every check that ran with its verdict.
+      type: object
+      additionalProperties: false
+      required: [status, checks, problems]
+      properties:
+        status: {enum: [VALID, REJECTED]}
+        checks:
+          type: array
+          items: {$ref: '#/components/schemas/Check'}
+        problems:
+          type: array
+          items: {$ref: '#/components/schemas/Problem'}
+    Validation:
+      description: A judgement kept nowhere (FR-WAY-12). The same metadata and report an upload of the same
+        bytes records, without a wayline_id or an upload time, since nothing was uploaded, and without the
+        plan, which would name a wayline that does not exist.
+      type: object
+      additionalProperties: false
+      required: [status, fingerprint_md5, size_bytes, config_fingerprint, metadata, report]
+      properties:
+        status: {enum: [VALID, REJECTED]}
+        fingerprint_md5: {type: string, pattern: '^[0-9a-f]{32}$'}
+        size_bytes: {type: integer, minimum: 0}
+        config_fingerprint: {$ref: '#/components/schemas/Sha256', description: The configuration the file was
+            judged under; GET /v1/envelope says the one in force.}
+        metadata: {type: object, description: As a Wayline's.}
+        report: {$ref: '#/components/schemas/Report'}
+    StackStatus:
+      description: What DJI's wire does not carry (FR-DEV-07, ADR-0038), from so-bridge's link state and
+        so-fleet's devices, both retained on the bus. Null where it is not known, before either has
+        arrived, while the link is down, or from a so-bridge too old to say it.
+      type: object
+      additionalProperties: false
+      required: [schema_version, at_ms, simulator_mode, link, simulator_active, aircraft_connected, aircraft_online,
+                 aircraft_reason, armed, arming_remaining_s, clock_offset_ms, clock_offset_uncertainty_ms,
+                 contract_version, config_fingerprint, warnings]
+      properties:
+        schema_version: {type: string, pattern: '^1\.[0-9]+\.[0-9]+$'}
+        at_ms: {type: integer, minimum: 0, description: When this was said, Unix milliseconds on the server's clock.}
+        simulator_mode:
+          type: [boolean, 'null']
+          description: so-bridge's simulator_mode, the server's key of NFR-SAF-03. A prepare must agree with
+            it (FR-FLT-11).
+        link:
+          type: object
+          additionalProperties: false
+          required: [state, reason, changed_at_ms]
+          properties:
+            state: {enum: [up, down, null]}
+            reason: {type: [string, 'null'], description: What made the link what it is, as so-bridge said it.}
+            changed_at_ms: {type: [integer, 'null'], minimum: 0}
+        simulator_active: {type: [boolean, 'null'], description: Whether the application reports its simulator active.}
+        aircraft_connected: {type: [boolean, 'null'], description: Whether the application reports the aircraft connected.}
+        aircraft_online:
+          type: [boolean, 'null']
+          description: so-fleet's judgement (FR-DEV-03), the one DJI's topology says. Link up, aircraft connected
+            and its telemetry fresh.
+        aircraft_reason: {type: [string, 'null'], description: so-fleet's reason for that judgement.}
+        armed:
+          type: [boolean, 'null']
+          description: Whether the operator's arming holds (FR-SAF-07). False once its end has passed since the
+            last health read.
+        arming_remaining_s: {type: [integer, 'null'], minimum: 1, description: Whole seconds the arming still holds.}
+        clock_offset_ms:
+          type: [integer, 'null']
+          description: The application's clock less the server's, as so-bridge bounds it (ADR-0036).
+        clock_offset_uncertainty_ms: {type: [integer, 'null'], minimum: 0}
+        contract_version: {type: [string, 'null'], description: The bridge contract the application implements.}
+        config_fingerprint:
+          type: [string, 'null']
+          pattern: '^[0-9a-f]{64}$'
+          description: The application's configuration fingerprint (IR-CFG-01).
+        warnings:
+          type: [array, 'null']
+          description: The application's health warnings (FR-BRG-13), its clock offset beyond the limit among
+            them; null while the link is down.
+          items: {type: object}
+    Envelope:
+      description: The envelope a wayline is judged against (FR-WAY-11, envelope.py), as the configuration
+        holds it. max_vertical_speed_ms is not part of it, since no file states a climb rate; the aircraft
+        applies it in flight.
+      type: object
+      additionalProperties: false
+      required: [envelope, envelope_fingerprint, config_fingerprint, application_in_force]
+      properties:
+        envelope:
+          type: object
+          additionalProperties: false
+          required: [geofence_center, geofence_radius_m, max_height_m, max_home_distance_m, max_leg_m,
+            max_transit_m, max_total_distance_m, max_waypoints, max_horizontal_speed_ms]
+          description: Each limit under its configuration key, with the unit its name carries (IR-CFG).
+          properties:
+            geofence_center:
+              type: object
+              additionalProperties: false
+              required: [latitude_deg, longitude_deg]
+              properties:
+                latitude_deg: {type: number, minimum: -90, maximum: 90}
+                longitude_deg: {type: number, minimum: -180, maximum: 180}
+            geofence_radius_m: {type: number, exclusiveMinimum: 0}
+            max_height_m: {type: number, exclusiveMinimum: 0, description: Relative to the takeoff.}
+            max_home_distance_m: {type: number, exclusiveMinimum: 0}
+            max_leg_m: {type: number, exclusiveMinimum: 0}
+            max_transit_m: {type: number, exclusiveMinimum: 0}
+            max_total_distance_m: {type: number, exclusiveMinimum: 0}
+            max_waypoints: {type: integer, minimum: 1}
+            max_horizontal_speed_ms: {type: number, exclusiveMinimum: 0}
+        envelope_fingerprint:
+          $ref: '#/components/schemas/Sha256'
+          description: SHA-256 of the envelope's values. It changes when one of them changes, and only then,
+            however the configuration file writes a number.
+        config_fingerprint:
+          $ref: '#/components/schemas/Sha256'
+          description: The fingerprint of so-wayline's whole configuration (IR-CFG-01), the one each judged
+            wayline records in metadata.config_fingerprint. A record whose fingerprint differs was judged under
+            another configuration.
+        application_in_force:
+          type: [boolean, 'null']
+          description: Whether the application enforces the same envelope. Always null from so-wayline, which
+            does not hear the application; and the application's fingerprint covers its whole configuration
+            in another canonical form, so the two fingerprints could not be compared even if it did.
+    Sha256:
+      type: string
+      pattern: ^[0-9a-f]{64}$
+    PresignedUrl:
+      type: object
+      additionalProperties: false
+      required: [url, fingerprint_md5, expires_at_ms]
+      properties:
+        url: {type: string, format: uri}
+        fingerprint_md5: {type: string, pattern: '^[0-9a-f]{32}$'}
+        expires_at_ms: {type: integer, minimum: 0}
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status, database, object_store, broker]
+      properties:
+        status: {enum: [ok, unavailable]}
+        database: {enum: [ok, unavailable]}
+        object_store: {enum: [ok, unavailable]}
+        broker: {enum: [connected, disconnected], description: Deletes need it; reads and uploads do not.}

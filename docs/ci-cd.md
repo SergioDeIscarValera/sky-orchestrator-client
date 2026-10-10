@@ -23,6 +23,7 @@ hand:
 | --- | --- |
 | Relative Markdown links resolve | Documentation integrity |
 | Traceability matrix equals the requirements | `tools/check_traceability.py` |
+| Sky Orchestrator's vendored contracts equal their manifest | `FR-LNK-10`, `tools/vendor_sky_orchestrator.py` |
 | No file over 512 KB | `NFR-MNT-04` |
 | Tooling gate tests | `NFR-TEST-01` |
 | Python workspace synced from its lockfile, uv 0.12.23 | `NFR-PORT-02` |

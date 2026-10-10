@@ -44,6 +44,10 @@ jobs:
         if: ${{ !cancelled() && steps.python.outcome == 'success' }}
         run: python3 tools/check_traceability.py .
 
+      - name: Sky Orchestrator's vendored contracts are unchanged
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        run: python3 tools/vendor_sky_orchestrator.py --check
+
       - name: No file over 512 KB
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: |

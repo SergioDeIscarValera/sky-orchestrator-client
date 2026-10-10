@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/sys/update_topo.schema.json",
+  "title": "update_topo",
+  "description": "Dock to cloud on sys/product/{gateway_sn}/status: the gateway and the devices behind it (FR-DEV-01). An empty sub_devices says the aircraft is offline (FR-DEV-03): DJI's StatusRouter routes on exactly that. From cloudapi/device/UpdateTopo and UpdateTopoSubDevice. device_secret, nonce and thing_version are synthetic (contracts/mqtt/README.md).",
+  "x-version": "1.0.0",
+  "x-topic": "sys/product/{gateway_sn}/status",
+  "x-direction": "dock_to_cloud",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "method",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/own_id"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/own_id"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "method": {
+      "const": "update_topo"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domain",
+        "type",
+        "sub_type",
+        "device_secret",
+        "nonce",
+        "thing_version",
+        "sub_devices"
+      ],
+      "properties": {
+        "domain": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "type": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sub_type": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "device_secret": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string"
+        },
+        "thing_version": {
+          "type": "string"
+        },
+        "sub_devices": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "sn",
+              "domain",
+              "type",
+              "sub_type",
+              "index",
+              "device_secret",
+              "nonce",
+              "thing_version"
+            ],
+            "properties": {
+              "sn": {
+                "$ref": "../dji-envelope.schema.json#/$defs/sn"
+              },
+              "domain": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "type": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sub_type": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "index": {
+                "const": "A",
+                "description": "ControlSourceEnum: the dock's one aircraft is A."
+              },
+              "device_secret": {
+                "type": "string"
+              },
+              "nonce": {
+                "type": "string"
+              },
+              "thing_version": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/services/flighttask_recovery.schema.json",
+  "title": "flighttask_recovery",
+  "description": "From DJI's SDK at bef525cb: AbstractWaylineService sends flighttask_recovery with no data, an empty string. It acts on the dock's one unfinished task: the paused task resumed from its breakpoint.",
+  "x-version": "1.0.0",
+  "x-topic": "thing/product/{gateway_sn}/services",
+  "x-direction": "cloud_to_dock",
+  "type": "object",
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "method",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/tid"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/bid"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "method": {
+      "const": "flighttask_recovery"
+    },
+    "data": {
+      "type": [
+        "string",
+        "object",
+        "null"
+      ]
+    }
+  }
+}

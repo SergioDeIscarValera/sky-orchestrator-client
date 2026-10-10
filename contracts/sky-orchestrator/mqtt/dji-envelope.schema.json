@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/dji-envelope.schema.json",
+  "title": "DJI envelope",
+  "description": "The fields every DJI Cloud API message carries, from DJI's SDK, dji-sdk/DJI-Cloud-API-Demo at bef525cb (cloud-sdk/src/main/java/com/dji/sdk), serialised snake_case as its Common.getObjectMapper() does: mqtt/CommonTopicRequest and CommonTopicResponse. What so-gateway sends is held to these exactly; what a client sends is held to the types, and may carry more.",
+  "x-version": "1.0.0",
+  "$defs": {
+    "tid": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Transaction: a request and its reply share it."
+    },
+    "bid": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Business: the messages of one piece of work share it."
+    },
+    "own_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "A tid or bid so-gateway made: a random UUID, as DJI's SDK makes them."
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Unix milliseconds."
+    },
+    "method": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "sn": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9]+$",
+      "description": "A serial number, as the SDK's REGEX_SN."
+    },
+    "flag": {
+      "enum": [
+        0,
+        1
+      ],
+      "description": "A DJI boolean on the wire: 0 or 1, as DJI's examples send it; the SDK's Boolean fields accept it."
+    },
+    "result": {
+      "type": "integer",
+      "description": "0 is success; anything else is one of DJI's error codes (WaylineErrorCodeEnum, CommonErrorEnum)."
+    }
+  }
+}

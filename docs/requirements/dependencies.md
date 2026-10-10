@@ -9,6 +9,11 @@ Sources: the integration exchange with both projects' maintainers on
 
 ## Sky Orchestrator
 
+SOC vendors Sky Orchestrator's wire contracts at a pinned commit,
+[`contracts/sky-orchestrator/`](../../contracts/sky-orchestrator/README.md),
+currently `v0.4.0-27-gd76dc14`. SO PR #117 bumps `flighttask_prepare` and
+`flighttask_progress` to 1.1.0; the pin moves to the v0.4.1 tag when it exists.
+
 | ID | SO item | SO milestone | What it gives SOC | SOC requirements waiting on it | Status |
 | --- | --- | --- | --- | --- | --- |
 | `DEP-01` | FR-DEV-07, ADR-0038 | M4 | The stack's state over HTTP: simulator mode, link and its reason, aircraft connected, armed and seconds left, clock offset | `FR-LNK-08`, `FR-OPS-05` (`PF-MODE`, `PF-ARMED`, `PF-CLOCK`), `FR-OPS-06`, `FR-OPS-07`, `FR-SAF-04` | **Delivered**, SO PR #113: `GET /v1/status`, so-wayline API 1.3.0 |
@@ -16,7 +21,7 @@ Sources: the integration exchange with both projects' maintainers on
 | `DEP-03` | FR-WAY-11 | M4 | `GET /v1/envelope`: the active device envelope, with its fingerprint | `FR-OPS-08`, `FR-WAY-08`, `FR-GEO-04` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
 | `DEP-04` | FR-WAY-12 | M4 | `POST /v1/validations`: dry-run validation of a flight file | `FR-LNK-09`, `PF-SO-DRYRUN`, `NFR-COMP-02` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
 | `DEP-05` | FR-FLT-12 | M4 | The cause of a pause in `break_point.break_reason`, as DJI's `FlighttaskBreakReasonEnum` | `FR-LOG-02` | **Delivered**, SO PR #112 |
-| `DEP-06` | NFR-TEST-07 | M4 | The fake bridge image on GHCR, test only | `NFR-TEST-03` | **Delivered**, SO PR #111, from SO's first release after v0.4.0 |
+| `DEP-06` | NFR-TEST-07 | M4 | The fake bridge image on GHCR, test only | `NFR-TEST-03` | **Delivered**, SO PR #111; published from v0.4.1, proposed right after SO PR #117 |
 | `DEP-07` | FR-TEL-01 at 5 Hz | M4 | OSD at 5 Hz measured on the phone | `NFR-PERF-01` in the field, `FR-SAF-01` reaction distance | Requested |
 | `DEP-08` | FR-TEL-07 | M5, possibly earlier | Horizontal and vertical speed, pitch, roll, remaining flight time | `FR-TEL-03` | Requested |
 | `DEP-09` | FR-TEL-08 | M5 | Remote controller link quality, once verified on the Mavic Air 2 | `FR-TEL-03` | Requested |

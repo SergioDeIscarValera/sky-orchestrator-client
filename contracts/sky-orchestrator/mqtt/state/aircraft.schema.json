@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/state/aircraft.schema.json",
+  "title": "Aircraft state",
+  "description": "Dock to cloud on thing/product/{aircraft_sn}/state. Published on change only, never on a timer, and only the properties that changed (FR-TEL-03). From mqtt/state/TopicStateRequest; the keys from mqtt/state/DockStateDataKeyEnum.",
+  "x-version": "1.0.0",
+  "x-topic": "thing/product/{aircraft_sn}/state",
+  "x-direction": "dock_to_cloud",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "gateway",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/own_id"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/own_id"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "gateway": {
+      "$ref": "../dji-envelope.schema.json#/$defs/sn"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "firmware_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
