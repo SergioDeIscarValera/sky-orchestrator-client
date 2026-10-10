@@ -390,12 +390,15 @@ incidents entered by hand. Not built in the MVP.
 ## IR-CFG — Configuration
 
 Schema: `contracts/config/soc-config.schema.json`, the single source of every key
-with its type, unit, range, default and the units that read it (`FR-DEP-03`).
+with its type, unit, range, default and the units that read it (`FR-DEP-03`), and
+of every environment variable each service reads, with its rule (ADR-0019). Each
+service's file holds exactly its keys, all required: a default is what a new file
+starts from, never applied at load.
 
 | Key | Default | Notes |
 | --- | --- | --- |
 | `served_organizations` | none | Required. Fail closed (`NFR-SEC-03`) |
-| `stacks` | none | Required by `soc-cloud`: each stack's name, broker, file server and HTTP endpoints, credentials by environment variable name |
+| `stacks` | none | Required by `soc-cloud`: each stack's name, broker, `so-wayline` API and the flight file URL the dock reaches, credentials by environment variable name |
 | `telemetry_stale_after_ms` | 3000 | `FR-TEL-02` |
 | `telemetry_lost_after_ms` | 10000 | `FR-TEL-02` |
 | `telemetry_batch_s` | 5 | `FR-TEL-04`, `NFR-RES-06` |
@@ -414,6 +417,13 @@ with its type, unit, range, default and the units that read it (`FR-DEP-03`).
 
 **IR-CFG-01**: the safety-relevant keys have no permissive fallback; a missing
 one stops the service (`FR-SAF-05`).
+
+**IR-CFG-02**: secrets live only in the environment. The file names a secret by
+its variable (`password_env`, `token_env`), never holds it, and a named variable
+that is unset or weak stops the service (`NFR-SEC-04`).
+
+**IR-CFG-03**: a loaded file is identified by the SHA-256 of its canonical form,
+logged at start with the contract version.
 
 ---
 
@@ -441,3 +451,4 @@ this document updated first.
 | Date | Change |
 | --- | --- |
 | 2026-10-07 | Initial set, MVP scope. |
+| 2026-10-10 | IR-CFG: the environment is declared in the contract, files hold every key, IR-CFG-02 and IR-CFG-03 (ADR-0019). |
