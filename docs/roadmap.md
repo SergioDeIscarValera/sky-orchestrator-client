@@ -58,11 +58,14 @@ The MVP is M5: **a first real flight commanded from SOC**
 | Step | Pull request |
 | --- | --- |
 | Migration runner, schema `soc` baseline, database test harness with VO2's contract surface | `feature/database/soc-baseline`, merged (#15) |
-| Shared Python: the configuration contract and its loader, correlated logs | `feature/libs/config-and-logs` |
-| Shared Python: the one database connection, with `LISTEN`, claims and `COPY` | `feature/libs/database-connection` |
-| Shared Python: the Realtime Broadcast client, with its HTTP fallback, and the supervision every link shares | `feature/libs/realtime-client` |
-| The real Realtime in the database lane: private channel joins held to SOC's policies, the client end to end | `feature/database/realtime-lane` |
-| `soc-cloud` skeleton: one link per stack, topology, OSD ingest, devices, the file server, health | `feature/cloud/link-skeleton` |
+| Shared Python: the configuration contract and its loader, correlated logs | `feature/libs/config-and-logs`, merged (#18) |
+| Shared Python: the one database connection, with `LISTEN`, claims and `COPY` | `feature/libs/database-connection`, merged (#19) |
+| Shared Python: the Realtime Broadcast client, with its HTTP fallback, and the supervision every link shares | `feature/libs/realtime-client`, merged (#20) |
+| The real Realtime in the database lane: private channel joins held to SOC's policies, the client end to end | `feature/database/realtime-lane`, merged (#21) |
+| Sky Orchestrator's wire contracts vendored at a pinned commit, held to their checksums | `feature/contracts/sky-orchestrator-wire`, merged (#22) |
+| `soc-cloud` skeleton: settings, the wire contract, database and Realtime links, health, the process | `feature/cloud/service-skeleton` |
+| `soc-cloud` stack links: one MQTT link per stack, topology and presence, OSD ingest, `status_reply` | `feature/cloud/stack-links` |
+| `soc-cloud` flight files: the dock's `flighttask_resource_get` answered from memory, the file server | `feature/cloud/flight-files` |
 | `soc-operations` skeleton: configuration, health, the intent sweep | `feature/operations/skeleton` |
 | `soc-web` skeleton: tokens, sign-in, organization first, the persistent scene, panels, runtime configuration | `feature/web/shell` |
 | Compose stack for the mini-PC, the stack check in CI, the deploy command with its flight guard | `feature/infra/stack-and-check` |

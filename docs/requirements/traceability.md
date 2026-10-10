@@ -41,7 +41,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-LNK-07 | MUST | soc-cloud | M4 | — | Planned |
 | FR-LNK-08 | MUST | soc-cloud | M4 | — | Planned |
 | FR-LNK-09 | MUST | soc-cloud | M4 | — | Planned |
-| FR-LNK-10 | MUST | soc-cloud | M1 | — | Planned |
+| FR-LNK-10 | MUST | soc-cloud | M1 | `services/soc-cloud/tests/test_wire.py` | Partial: every outgoing message can be held to Sky Orchestrator's vendored schema and is refused with its problems; each publisher calls it as it arrives |
 | FR-LNK-11 | SHOULD | soc-cloud | M1 | — | Planned |
 | FR-TEL-01 | MUST | soc-cloud, soc-web | M2 | — | Planned |
 | FR-TEL-02 | MUST | soc-web | M2 | — | Planned |
@@ -88,7 +88,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-SAF-02 | MUST | soc-web, soc-operations | M2 | — | Planned |
 | FR-SAF-03 | MUST | soc-cloud, soc-web | M2 | — | Planned |
 | FR-SAF-04 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
-| FR-SAF-05 | MUST | soc-cloud, soc-operations | M1 | `libs/soc-config/tests/test_configuration.py::test_each_key_removed_is_named`, `libs/soc-config/tests/test_start.py::test_each_variable_removed_is_named` | Partial: every missing or invalid key and variable refused by name, all at once; each service's start test arrives with it |
+| FR-SAF-05 | MUST | soc-cloud, soc-operations | M1 | `libs/soc-config/tests/test_configuration.py::test_each_key_removed_is_named`, `libs/soc-config/tests/test_start.py::test_each_variable_removed_is_named`, `services/soc-cloud/tests/test_main.py` | Partial: every missing or invalid key and variable refused by name, all at once; `soc-cloud` exits with status 2 before any connection; `soc-operations` arrives next |
 | FR-SAF-06 | MUST | soc-operations, soc-web | M4 | — | Planned |
 | FR-LOG-01 | MUST | soc-operations, soc-cloud, database, soc-web | M4 | — | Planned |
 | FR-LOG-02 | MUST | soc-operations, soc-cloud, database, soc-web | M4 | — | Planned |
@@ -97,7 +97,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-REP-02 | COULD | soc-web | M6 | — | Planned |
 | FR-DEP-01 | MUST | infra | M1 | — | Planned |
 | FR-DEP-02 | MUST | infra | M1 | `database/tests/test_ledger_and_roles.py`, `infra/migrate/tests/*` | Done: ledger, checksums, advisory lock, SCRAM passwords; 26 gate tests and the database lane |
-| FR-DEP-03 | MUST | contracts, soc-config | M1 | `libs/soc-config/tests/test_contract.py`, `libs/soc-config/tests/test_configuration.py` | Partial: every key and variable declared once with unit, range and default, validated at start (ADR-0019); the read-equals-declared test arrives with each service |
+| FR-DEP-03 | MUST | contracts, soc-config | M1 | `libs/soc-config/tests/test_contract.py`, `libs/soc-config/tests/test_configuration.py`, `services/soc-cloud/tests/test_settings.py` | Partial: every key and variable declared once with unit, range and default, validated at start (ADR-0019); `soc-cloud` reads exactly its keys; `soc-operations` and `soc-web` arrive next |
 | FR-DEP-04 | MUST | infra | M1 | — | Planned |
 | FR-DEP-05 | MUST | infra | M2 | — | Planned |
 | FR-DEP-06 | MUST | infra, repository | M1 | — | Planned |
@@ -122,7 +122,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-RES-07 | MUST | soc-cloud | M2 | — | Planned |
 | NFR-REL-01 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
 | NFR-REL-02 | MUST | soc-cloud | M4 | — | Planned |
-| NFR-REL-03 | MUST | soc-cloud, soc-operations | M1 | `libs/soc-supervision/tests/test_supervisor.py`, `libs/soc-db/tests/test_against_postgres.py::test_a_terminated_backend_is_replaced_listened_and_swept_again`, `libs/soc-realtime/tests/test_socket.py` | Partial: one supervisor, backoff capped at 10 s, under the database connection and the Realtime socket; the broker links and the services' health arrive with their units |
+| NFR-REL-03 | MUST | soc-cloud, soc-operations | M1 | `libs/soc-supervision/tests/test_supervisor.py`, `libs/soc-db/tests/test_against_postgres.py::test_a_terminated_backend_is_replaced_listened_and_swept_again`, `libs/soc-realtime/tests/test_socket.py`, `services/soc-cloud/tests/test_against_platform.py` | Partial: one supervisor, backoff capped at 10 s and reset only after a stable link, under the database connection and the Realtime socket; `soc-cloud` comes up ready on the platform; the broker links arrive next |
 | NFR-REL-04 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
 | NFR-REL-05 | SHOULD | soc-cloud, soc-operations | M5 | — | Planned |
 | NFR-REL-06 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
@@ -159,14 +159,14 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (no file over 512 KB), `.pre-commit-config.yaml` (large files, private keys) | Done for size and keys; build output kept out by `.gitignore` |
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
-| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*` | Done so far: tooling 119, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 11, soc-db 13, soc-realtime 17 tests, each suite under 0.3 s, per unit in pre-commit and CI |
+| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*` | Done so far: tooling 134, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 25 tests, each suite under 0.3 s, per unit in pre-commit and CI |
 | NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, and the real Realtime v2.102.3 beside it; `soc-db` and `soc-realtime` run their end-to-end tests there |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |
 | NFR-TEST-05 | MUST | soc-cloud | M2 | — | Planned |
 | NFR-TEST-06 | MUST | repository | M0 | — | Done: no model in SOC, no eval suite; stated in `docs/ci-cd.md` |
 | NFR-OBS-01 | MUST | soc-cloud, soc-operations, soc-web | M1 | `libs/soc-log/tests/test_soc_log.py` | Partial: JSON lines with service, level, time and the correlation identifiers per task; the reconstruction test arrives with `soc-cloud` |
-| NFR-OBS-02 | MUST | soc-cloud, soc-operations, soc-web | M1 | — | Planned |
+| NFR-OBS-02 | MUST | soc-cloud, soc-operations, soc-web | M1 | `libs/soc-supervision/tests/test_endpoint.py`, `services/soc-cloud/tests/test_against_platform.py` | Partial: `/health` and `/ready` report every link with its state, age and error; `soc-cloud` reports the database and Realtime, its brokers and `soc-operations` arrive next |
 | NFR-OBS-03 | MUST | repository | M0 | `.github/PULL_REQUEST_TEMPLATE.md`, `pr-policy.yml` (description present) | Done: every pull request names its evidence |
 | NFR-OBS-04 | MUST | soc-cloud | M2 | — | Planned |
 | NFR-OBS-05 | SHOULD | soc-web | M2 | — | Planned |
