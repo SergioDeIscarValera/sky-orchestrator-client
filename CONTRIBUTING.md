@@ -147,6 +147,10 @@ pre-commit install --install-hooks
 pre-commit install --hook-type commit-msg
 
 python3 -m unittest discover -s tools/tests
+
+uv sync --frozen --all-packages              # the Python workspace, CPython 3.14
+uv run --frozen pytest infra/migrate/tests   # a unit's gate
+uv run --frozen pytest database/tests        # the database lane, needs Docker
 ```
 
 The hooks refuse commits on `main` and `develop`, and messages that break the
