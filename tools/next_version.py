@@ -111,7 +111,9 @@ class Repository:
 
     def subjects_since(self, tag: Version | None) -> list[str]:
         revision_range = f"{tag}..HEAD" if tag else "HEAD"
-        return [line for line in self._git("log", "--format=%s", revision_range).splitlines() if line]
+        return [
+            line for line in self._git("log", "--format=%s", revision_range).splitlines() if line
+        ]
 
     @staticmethod
     def _git(*arguments: str) -> str:

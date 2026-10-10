@@ -26,7 +26,7 @@ hand:
 | No file over 512 KB | `NFR-MNT-04` |
 | Tooling gate tests | `NFR-TEST-01` |
 | Python workspace synced from its lockfile, uv 0.12.23 | `NFR-PORT-02` |
-| Python lint, format and strict types | `NFR-MNT-06` |
+| Python lint and format over the whole repository, strict types for the workspace and for `tools/` at Python 3.12 | `NFR-MNT-06` |
 | Migration runner gate tests | `NFR-TEST-01` |
 | Database tests against an ephemeral Postgres, when `database/`, `infra/migrate/` or the lockfile change | `NFR-TEST-02` |
 | Secret scan over the full history (gitleaks) | `NFR-SEC-04` |
@@ -75,8 +75,9 @@ run of `Gate` on `develop` is the remedy.
 ## Local enforcement
 
 `.pre-commit-config.yaml` runs the same scripts: the commit message linter on
-`commit-msg`; branch name, file hygiene, links, gitleaks at CI's version and the
-tooling tests on `pre-commit`. Each unit adds its gate when it arrives.
+`commit-msg`; branch name, file hygiene, links, gitleaks at CI's version, Python
+lint, format and types, and the tooling tests on `pre-commit`. Each unit adds its
+gate when it arrives.
 
 `--no-verify` is not an escape hatch.
 

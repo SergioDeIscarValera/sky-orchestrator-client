@@ -4,6 +4,7 @@ import json
 import re
 import unittest
 from pathlib import Path
+from typing import Any
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 RULESETS = WORKFLOWS.parent / "rulesets"
@@ -64,7 +65,10 @@ def child_keys(lines: list[str], indent: int) -> list[str]:
 
 
 class Helpers(unittest.TestCase):
-    SAMPLE = "on:\n  pull_request:\n    branches: [main]\n# note\njobs:\n  a:\n    x: 1\n  b:\n    y: 2\n"
+    SAMPLE = (
+        "on:\n  pull_request:\n    branches: [main]\n# note\n"
+        "jobs:\n  a:\n    x: 1\n  b:\n    y: 2\n"
+    )
 
     def test_child_keys_of_a_block(self) -> None:
         self.assertEqual(child_keys(block(self.SAMPLE, "jobs"), 2), ["a", "b"])
@@ -76,7 +80,9 @@ class Helpers(unittest.TestCase):
         self.assertEqual(block(self.SAMPLE, "permissions"), [])
 
     def test_run_scripts_inline_and_as_blocks(self) -> None:
-        text = "steps:\n  - run: echo one\n  - run: |\n      echo two\n      echo three\n  - name: x\n"
+        text = (
+            "steps:\n  - run: echo one\n  - run: |\n      echo two\n      echo three\n  - name: x\n"
+        )
         self.assertEqual(run_scripts(text), ["echo one", "      echo two\n      echo three"])
 
 
@@ -104,7 +110,9 @@ class ContinuousIntegration(unittest.TestCase):
         self.assertIn("    name: Gate\n", self.text)
 
     def test_pull_requests_and_manual_runs_only(self) -> None:
-        self.assertEqual(child_keys(block(self.text, "on"), 2), ["pull_request", "workflow_dispatch"])
+        self.assertEqual(
+            child_keys(block(self.text, "on"), 2), ["pull_request", "workflow_dispatch"]
+        )
 
     def test_every_check_is_present(self) -> None:
         checks = (
@@ -113,8 +121,10 @@ class ContinuousIntegration(unittest.TestCase):
             "-size +512k",
             "unittest discover -s tools/tests",
             "uv sync --frozen --all-packages",
-            "ruff check database infra/migrate",
-            "mypy database/src",
+            "uv run --frozen ruff check\n",
+            "uv run --frozen ruff format --check\n",
+            "uv run --frozen mypy\n",
+            "mypy --python-version 3.12 tools",
             "pytest infra/migrate/tests",
             "pytest database/tests",
             "gitleaks detect",
@@ -156,16 +166,25 @@ class PullRequestPolicy(unittest.TestCase):
 class Rulesets(unittest.TestCase):
     def setUp(self) -> None:
         self.branch_rulesets = [
-            json.loads((RULESETS / name).read_text(encoding="utf-8")) for name in ("main.json", "develop.json")
+            json.loads((RULESETS / name).read_text(encoding="utf-8"))
+            for name in ("main.json", "develop.json")
         ]
 
-    def rule(self, ruleset: dict, kind: str) -> dict:
-        return next(rule for rule in ruleset["rules"] if rule["type"] == kind)["parameters"]
+    def rule(self, ruleset: dict[str, Any], kind: str) -> dict[str, Any]:
+        parameters: dict[str, Any] = next(
+            rule for rule in ruleset["rules"] if rule["type"] == kind
+        )["parameters"]
+        return parameters
 
     def test_required_checks_are_job_names_that_exist(self) -> None:
-        job_names = set(re.findall(r"^    name: (.+)$", read("ci.yml") + read("pr-policy.yml"), re.MULTILINE))
+        job_names = set(
+            re.findall(r"^    name: (.+)$", read("ci.yml") + read("pr-policy.yml"), re.MULTILINE)
+        )
         for ruleset in self.branch_rulesets:
-            contexts = {check["context"] for check in self.rule(ruleset, "required_status_checks")["required_status_checks"]}
+            contexts = {
+                check["context"]
+                for check in self.rule(ruleset, "required_status_checks")["required_status_checks"]
+            }
             with self.subTest(ruleset=ruleset["name"]):
                 self.assertEqual(contexts, {"Gate", "Pull request policy"})
                 self.assertLessEqual(contexts, job_names)
@@ -173,7 +192,9 @@ class Rulesets(unittest.TestCase):
     def test_merge_commits_only(self) -> None:
         for ruleset in self.branch_rulesets:
             with self.subTest(ruleset=ruleset["name"]):
-                self.assertEqual(self.rule(ruleset, "pull_request")["allowed_merge_methods"], ["merge"])
+                self.assertEqual(
+                    self.rule(ruleset, "pull_request")["allowed_merge_methods"], ["merge"]
+                )
 
     def test_nobody_bypasses(self) -> None:
         for path in sorted(RULESETS.glob("*.json")):
@@ -186,7 +207,10 @@ class Release(unittest.TestCase):
         self.text = read("release.yml")
 
     def test_every_gh_pr_command_names_the_repository(self) -> None:
-        commands = [match.start() for match in re.finditer(r"\bgh (pr|release) (create|list|merge|view)\b", self.text)]
+        commands = [
+            match.start()
+            for match in re.finditer(r"\bgh (pr|release) (create|list|merge|view)\b", self.text)
+        ]
         self.assertTrue(commands)
         for start in commands:
             command = self.text[start:].split("\n\n", 1)[0]

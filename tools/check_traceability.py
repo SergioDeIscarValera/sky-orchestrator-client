@@ -69,8 +69,13 @@ def disagreements(requirements: list[Requirement], rows: list[tuple[str, str]]) 
 
     defined = {requirement.id: requirement.priority for requirement in requirements}
     traced = dict(rows)
-    problems.extend(f"{identifier} has no row in the matrix" for identifier in defined.keys() - traced.keys())
-    problems.extend(f"{identifier} in the matrix is not a requirement" for identifier in traced.keys() - defined.keys())
+    problems.extend(
+        f"{identifier} has no row in the matrix" for identifier in defined.keys() - traced.keys()
+    )
+    problems.extend(
+        f"{identifier} in the matrix is not a requirement"
+        for identifier in traced.keys() - defined.keys()
+    )
     problems.extend(
         f"{identifier} is {defined[identifier]} but its row says {traced[identifier]}"
         for identifier in defined.keys() & traced.keys()
@@ -91,7 +96,9 @@ def skeleton(requirements: list[Requirement], rows: list[tuple[str, str]]) -> li
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", nargs="?", default=".", help="the repository root")
-    parser.add_argument("--skeleton", action="store_true", help="print rows for untraced requirements")
+    parser.add_argument(
+        "--skeleton", action="store_true", help="print rows for untraced requirements"
+    )
     arguments = parser.parse_args(argv)
     root = Path(arguments.root).resolve()
 
@@ -103,7 +110,10 @@ def main(argv: list[str] | None = None) -> int:
 
     problems = disagreements(requirements, rows)
     if problems:
-        print(f"The traceability matrix disagrees with the requirements ({len(problems)}):", file=sys.stderr)
+        print(
+            f"The traceability matrix disagrees with the requirements ({len(problems)}):",
+            file=sys.stderr,
+        )
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         return 1

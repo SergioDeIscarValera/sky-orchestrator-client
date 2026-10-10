@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import next_version as nv  # noqa: E402
-from next_version import Bump, Version  # noqa: E402
+import next_version as nv
+from next_version import Bump, Version
 
 
 class FakeRepository(nv.Repository):
