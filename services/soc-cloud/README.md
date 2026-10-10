@@ -20,14 +20,17 @@ The skeleton every later part plugs into:
 | Topology and presence: online while listed by `update_topo` and reported online by the dock (`FR-LNK-02`) | `link/topology.py` |
 | Each aircraft OSD as one sample at its own time, a missing field unavailable (`FR-LNK-03`) | `link/telemetry.py` |
 | `update_topo` acknowledged with `status_reply` (`FR-LNK-11`); `flighttask_resource_get` answered on `requests_reply` (`FR-LNK-04`) | `link/stack.py` |
-| `/health` and `/ready` on `SOC_HEALTH_PORT`, one entry per link: `database`, `realtime`, `stack:<name>` (`NFR-OBS-02`) | `service.py`, through `soc-supervision` |
+| Flight files kept as exact bytes in memory, offered with their MD5, served at `/files/<128-bit token>.kmz` on `SOC_FLIGHT_FILES_PORT`, retired `flight_file_grace_s` after the flight ends (`FR-LNK-05`, `NFR-SEC-06`, [ADR-0008](../../docs/architecture/decisions/0008-flight-files-served-on-sky-orchestrators-network.md)) | `files.py` |
+| `/health` and `/ready` on `SOC_HEALTH_PORT`, one entry per part: `database`, `realtime`, `flight_files`, `stack:<name>` (`NFR-OBS-02`) | `service.py`, through `soc-supervision` |
 | The process: JSON logs, SIGTERM and SIGINT stop it cleanly | `__main__.py` |
 
 The topics read are those a DJI cloud reads (`link/topics.py`): `status`,
 `osd`, `state`, `events`, `requests`, `services_reply`, `property/set_reply`,
-at QoS 1. The samples are kept in memory; the fan-out to the browsers, the
-devices in the database and the flight files arrive next
-([roadmap](../../docs/roadmap.md)).
+at QoS 1. The samples are kept in memory; the fan-out to the browsers and the
+devices in the database arrive in M2, and the flight files enter the registry
+from `soc.flight_files` with the operations in M4 ([roadmap](../../docs/roadmap.md)).
+Each stack offers the files at its own `flight_files_url`: the address the dock
+reaches `soc-cloud` at on that stack's network.
 
 ## Running it
 
@@ -64,9 +67,14 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
   acknowledgement and presence, samples, 100 file requests answered with p99
   under 500 ms, a message sent while SOC was away delivered when it returns, the
   link back after the broker restarts, a takeover reported.
+- The flight files: the MD5 and the 128-bit path, each stack's own address,
+  the same bytes kept twice changing nothing, other bytes for the same flight
+  refused, the grace after the flight, the exact bytes downloaded, every other
+  path the same 404.
 - On the container lane, the service starts from a written file and environment
   against Postgres and Realtime v2.102.3 with SOC's migrations and the broker,
-  and answers `/ready` with every link up.
+  and answers `/ready` with every part up; then the dock asks for a flight's
+  file over MQTT and downloads it, its MD5 equal to the fingerprint offered.
 
 ## Failure modes
 
@@ -80,5 +88,8 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
 | A message from the dock SOC cannot read | Dropped with a `message_unreadable` line; the link stays up |
 | A reply SOC builds breaks its schema | It is not published; `reply_refused_by_schema` names every problem; the dock times out as it would without a reply |
 | A file request for a flight SOC does not know | Answered with a non-zero result and the reason; the dock refuses the execute with 314013 and the task stays prepared |
+| A request for any path but a live file's | The same 404, whether the token is unknown, malformed, retired or the path is a directory |
+| Other bytes kept for a flight that already has a file | Refused with `FlightFileConflictError`: what flies is what was kept (`IR-FIL-01`) |
+| The flight file port cannot be bound | The process ends with status 1 and `service_failed` |
 | A bug in a supervised part | The process ends with status 1 and a `service_failed` line, and the container restarts |
 | SIGTERM | Every link closes and the process exits with status 0 |
