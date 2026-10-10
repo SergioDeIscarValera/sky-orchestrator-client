@@ -17,7 +17,7 @@ from soc_database.realtime import RealtimeStack
 from soc_realtime import Endpoint
 from soc_realtime.socket import Connector
 
-pytestmark = pytest.mark.database
+pytestmark = pytest.mark.lane
 
 STACK = {
     "name": "lab",
