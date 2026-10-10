@@ -22,6 +22,11 @@ Sources: the integration exchange with both projects' maintainers on
 | `DEP-09` | FR-TEL-08 | M5 | Remote controller link quality, once verified on the Mavic Air 2 | `FR-TEL-03` | Requested |
 | `DEP-10` | FR-FLT-13 | M5 | `break_point` honoured after `return_home` | `FR-CMD-08` | Requested |
 | `DEP-11` | M4 exit: first real flight | M4 | The aircraft cleared for real flight through SO | SOC's M5 | Pending in SO |
+| `DEP-12` | FR-SAF-06, bridge contract 1.6.0 | M4 | An execute while the operator holds the aircraft from the phone's console is refused `314010`, as an unarmed phone is: the operator acts on the phone, then SOC retries | `FR-OPS-09` | **Delivered**, SO PR #114 |
+| `DEP-13` | FR-BRG-09 | M4 | `takePhoto` and `gimbalRotate` run once per waypoint visit, and a resume does not repeat a photo already taken; `flighttask_progress.ext.media_count` stays 0 | `FR-WAY-12` | **Delivered**, SO PR #115 |
+
+SO's `infra/fly.py --stop-after S` sends `return_home` S seconds into a route: the
+reference SOC's stop path is compared with.
 
 A stack whose status cannot be read has an unknown mode, and SOC refuses to
 prepare (`FR-SAF-04`). With SO's link down, its status still carries the
