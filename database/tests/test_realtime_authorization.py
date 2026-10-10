@@ -1,28 +1,18 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
 
 import asyncpg
 import pytest
 
-from soc_database.harness import EphemeralPostgres, Tenancy, impersonate
+from soc_database.harness import Tenancy, impersonate
 
 PROBE = "insert into realtime.messages (topic, extension) values ($1, 'broadcast')"
 
 
-@pytest.fixture(scope="session", autouse=True)
-async def todays_partition(migrated: EphemeralPostgres) -> AsyncIterator[None]:
-    connection = await migrated.connect("supabase_admin")
-    try:
-        await connection.execute(
-            "create table if not exists realtime.messages_soc_tests "
-            "partition of realtime.messages "
-            "for values from (now() - interval '2 days') to (now() + interval '2 days')"
-        )
-        yield
-    finally:
-        await connection.close()
+@pytest.fixture(autouse=True)
+def with_todays_partition(todays_partition: None) -> None:
+    pass
 
 
 async def can_receive(session: asyncpg.Connection, user_id: uuid.UUID | None, topic: str) -> bool:

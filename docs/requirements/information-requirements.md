@@ -304,7 +304,12 @@ Owner: the requester creates it (a pilot through an RPC, or `soc-operations`);
 **IR-CMD-01**: a command moves forward only (`pending → sent → accepted |
 refused | timed_out`; `pending → expired` when claimed after
 `command_intent_ttl_s`; `failed` before sending); the database refuses any other
-change.
+change, and any change to what was asked.
+
+**IR-CMD-02**: `soc-cloud` moves a command only through `soc.claim_command_intent`,
+`soc.record_command_reply`, `soc.time_out_command_intent` and
+`soc.fail_command_intent`, each one conditional update judged by the database's
+clock: run twice, the second does nothing.
 
 ---
 
@@ -452,3 +457,4 @@ this document updated first.
 | --- | --- |
 | 2026-10-07 | Initial set, MVP scope. |
 | 2026-10-10 | IR-CFG: the environment is declared in the contract, files hold every key, IR-CFG-02 and IR-CFG-03 (ADR-0019). |
+| 2026-10-10 | IR-CMD-01 covers what was asked; IR-CMD-02, `soc-cloud`'s four verbs (migration 0004). |

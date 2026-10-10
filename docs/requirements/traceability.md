@@ -81,7 +81,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-CMD-03 | MUST | soc-web, database, soc-cloud | M4 | — | Planned |
 | FR-CMD-04 | MUST | soc-web, database, soc-cloud | M4 | — | Planned |
 | FR-CMD-05 | MUST | soc-web, database, soc-cloud | M4 | — | Planned |
-| FR-CMD-06 | MUST | soc-web, database, soc-cloud | M4 | — | Planned |
+| FR-CMD-06 | MUST | soc-web, database, soc-cloud | M4 | `database/tests/test_command_intents.py::test_every_change_is_broadcast_on_the_organizations_state_topic` | Partial: every request and change of a command reaches the organization's state topic at commit; the console arrives in M4 |
 | FR-CMD-07 | MUST | soc-web, database, soc-cloud | M4 | — | Planned |
 | FR-CMD-08 | COULD | soc-operations, soc-cloud | M7 | — | Planned |
 | FR-SAF-01 | MUST | soc-cloud, libs | M4 | — | Planned |
@@ -121,7 +121,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-RES-06 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
 | NFR-RES-07 | MUST | soc-cloud | M2 | — | Planned |
 | NFR-REL-01 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
-| NFR-REL-02 | MUST | soc-cloud | M4 | — | Planned |
+| NFR-REL-02 | MUST | soc-cloud | M4 | `database/tests/test_command_intents.py::test_a_claim_runs_once`, `database/tests/test_command_intents.py::test_a_reply_is_recorded_once_with_its_result` | Partial: claiming an intent is one conditional update, so a second claim returns nothing whatever announced it; `soc-cloud`'s consumer arrives next |
 | NFR-REL-03 | MUST | soc-cloud, soc-operations | M1 | `libs/soc-supervision/tests/test_supervisor.py`, `libs/soc-db/tests/test_against_postgres.py::test_a_terminated_backend_is_replaced_listened_and_swept_again`, `libs/soc-realtime/tests/test_socket.py`, `services/soc-cloud/tests/test_against_platform.py`, `services/soc-cloud/tests/test_against_broker.py::test_the_link_returns_after_the_broker_restarts` | Partial: one supervisor, backoff capped at 10 s and reset only after a stable link, under the database connection and the Realtime socket; `soc-cloud` comes up ready on the platform and its stack, and its broker link returns after Mosquitto restarts |
 | NFR-REL-04 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
 | NFR-REL-05 | SHOULD | soc-cloud, soc-operations | M5 | — | Planned |

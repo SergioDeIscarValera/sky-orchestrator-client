@@ -18,6 +18,7 @@ its migrations and their tests.
 | `0001-soc-schema` | Schema `soc`; `soc.live_member_orgs()`, `soc.is_live_member(org)`, `soc.has_live_role(org, role)`: Virtual Origen's membership helpers, plus the organization's own `deleted_at` |
 | `0002-service-roles` | `soc_cloud` and `soc_operations`: login, `NOINHERIT`, three connections each, 5 s statement and 2 s lock timeouts, no password until the runner sets one |
 | `0003-realtime-authorization` | Who may join SOC's private Broadcast topics `org:<id>:soc:<stream>`: members of that live organization; restrictive guards that keep SOC's topics member-only, refuse anonymous readers and every client send, and pass any other topic through |
+| `0004-command-intents` | `soc.command_intents` (`IR-CMD`): announced to `soc-cloud` with `pg_notify('soc_command_intents', id)` at commit, broadcast on `org:<id>:soc:state` on every change, forward-only (`IR-CMD-01`); `soc-cloud` claims (or expires, past `command_intent_ttl_s`), records the reply, times out, or fails one through four functions; members read their organization's, `soc-operations` requests, nobody else writes |
 
 ## Rules every migration follows
 
