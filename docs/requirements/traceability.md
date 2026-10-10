@@ -32,17 +32,17 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-FLE-05 | MUST | soc-web, database | M2 | — | Planned |
 | FR-FLE-06 | COULD | database, soc-web | M6 | — | Planned |
 | FR-FLE-07 | COULD | database, soc-web | M6 | — | Planned |
-| FR-LNK-01 | MUST | soc-cloud | M1 | — | Planned |
-| FR-LNK-02 | MUST | soc-cloud | M1 | — | Planned |
-| FR-LNK-03 | MUST | soc-cloud | M1 | — | Planned |
-| FR-LNK-04 | MUST | soc-cloud | M1 | — | Planned |
+| FR-LNK-01 | MUST | soc-cloud | M1 | `services/soc-cloud/tests/test_stack_link.py`, `services/soc-cloud/tests/test_against_broker.py` | Partial: one supervised MQTT v5 link per stack as `cloud-client`, persistent session (QoS 1 messages wait while away), back within the backoff after a broker restart, a takeover logged as `link_displaced` and named in health; the operation event arrives with the event log (M4) |
+| FR-LNK-02 | MUST | soc-cloud | M1 | `services/soc-cloud/tests/test_stack_link.py::test_an_aircraft_is_online_only_while_listed_and_reported_online`, `services/soc-cloud/tests/test_stack_link.py::test_dropping_the_aircraft_from_the_topology_takes_it_offline`, `services/soc-cloud/tests/test_against_broker.py` | Partial: online only while listed by `update_topo` and reported online by the dock's OSD, changes logged at once; fleets go offline with it in M2 |
+| FR-LNK-03 | MUST | soc-cloud | M1 | `services/soc-cloud/tests/test_stack_link.py::test_a_value_the_osd_lacks_is_unavailable_not_remembered`, `services/soc-cloud/tests/test_against_broker.py::test_aircraft_osd_becomes_samples` | Done for the ingest: one sample per aircraft OSD at its own timestamp, a missing field unavailable; the fan-out arrives in M2 |
+| FR-LNK-04 | MUST | soc-cloud | M1 | `services/soc-cloud/tests/test_stack_link.py`, `services/soc-cloud/tests/test_against_broker.py::test_file_requests_are_answered_within_half_a_second_at_p99` | Partial: answered on `requests_reply` from memory, an unknown flight with a non-zero result and its reason, p99 under 500 ms over 100 requests against Mosquitto; the flights' files arrive next |
 | FR-LNK-05 | MUST | soc-cloud | M1 | — | Planned |
 | FR-LNK-06 | MUST | soc-cloud | M4 | — | Planned |
 | FR-LNK-07 | MUST | soc-cloud | M4 | — | Planned |
 | FR-LNK-08 | MUST | soc-cloud | M4 | — | Planned |
 | FR-LNK-09 | MUST | soc-cloud | M4 | — | Planned |
-| FR-LNK-10 | MUST | soc-cloud | M1 | `services/soc-cloud/tests/test_wire.py` | Partial: every outgoing message can be held to Sky Orchestrator's vendored schema and is refused with its problems; each publisher calls it as it arrives |
-| FR-LNK-11 | SHOULD | soc-cloud | M1 | — | Planned |
+| FR-LNK-10 | MUST | soc-cloud | M1 | `services/soc-cloud/tests/test_wire.py`, `services/soc-cloud/tests/test_stack_link.py::test_a_reply_its_schema_refuses_is_not_sent` | Partial: every reply the link sends is held to Sky Orchestrator's vendored schema first and not sent if refused; commands arrive in M4 |
+| FR-LNK-11 | SHOULD | soc-cloud | M1 | `services/soc-cloud/tests/test_stack_link.py::test_an_announcement_is_acknowledged_with_its_tid_and_bid`, `services/soc-cloud/tests/test_against_broker.py::test_an_announcement_is_acknowledged_and_presence_followed` | Done: each `update_topo` gets one `status_reply` with its tid and bid and result 0, held to its schema |
 | FR-TEL-01 | MUST | soc-cloud, soc-web | M2 | — | Planned |
 | FR-TEL-02 | MUST | soc-web | M2 | — | Planned |
 | FR-TEL-03 | MUST | soc-web | M2 | — | Planned |
@@ -122,7 +122,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-RES-07 | MUST | soc-cloud | M2 | — | Planned |
 | NFR-REL-01 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
 | NFR-REL-02 | MUST | soc-cloud | M4 | — | Planned |
-| NFR-REL-03 | MUST | soc-cloud, soc-operations | M1 | `libs/soc-supervision/tests/test_supervisor.py`, `libs/soc-db/tests/test_against_postgres.py::test_a_terminated_backend_is_replaced_listened_and_swept_again`, `libs/soc-realtime/tests/test_socket.py`, `services/soc-cloud/tests/test_against_platform.py` | Partial: one supervisor, backoff capped at 10 s and reset only after a stable link, under the database connection and the Realtime socket; `soc-cloud` comes up ready on the platform; the broker links arrive next |
+| NFR-REL-03 | MUST | soc-cloud, soc-operations | M1 | `libs/soc-supervision/tests/test_supervisor.py`, `libs/soc-db/tests/test_against_postgres.py::test_a_terminated_backend_is_replaced_listened_and_swept_again`, `libs/soc-realtime/tests/test_socket.py`, `services/soc-cloud/tests/test_against_platform.py`, `services/soc-cloud/tests/test_against_broker.py::test_the_link_returns_after_the_broker_restarts` | Partial: one supervisor, backoff capped at 10 s and reset only after a stable link, under the database connection and the Realtime socket; `soc-cloud` comes up ready on the platform and its stack, and its broker link returns after Mosquitto restarts |
 | NFR-REL-04 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
 | NFR-REL-05 | SHOULD | soc-cloud, soc-operations | M5 | — | Planned |
 | NFR-REL-06 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
@@ -159,8 +159,8 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (no file over 512 KB), `.pre-commit-config.yaml` (large files, private keys) | Done for size and keys; build output kept out by `.gitignore` |
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
-| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*` | Done so far: tooling 134, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 25 tests, each suite under 0.3 s, per unit in pre-commit and CI |
-| NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, and the real Realtime v2.102.3 beside it; `soc-db` and `soc-realtime` run their end-to-end tests there |
+| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*` | Done so far: tooling 134, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 40 tests, each suite under 0.3 s, per unit in pre-commit and CI |
+| NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py`, `services/soc-cloud/tests/test_against_broker.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, the real Realtime v2.102.3 beside it, and Mosquitto 2.0.22 configured as Sky Orchestrator's broker; `soc-db`, `soc-realtime` and `soc-cloud` run their end-to-end tests there |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |
 | NFR-TEST-05 | MUST | soc-cloud | M2 | — | Planned |
