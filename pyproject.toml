@@ -16,6 +16,8 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py314"
+# The repository tools are stdlib scripts run by the system python3 (3.12 and up).
+per-file-target-version = { "tools/**" = "py312" }
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "RUF", "ASYNC", "S"]
@@ -24,6 +26,7 @@ ignore = ["S101"]
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S105", "S106", "S108"]
 "database/src/soc_database/harness.py" = ["S603"]
+"tools/*.py" = ["S603", "S607"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["soc_*"]

@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import check_links  # noqa: E402
+import check_links
 
 
 class Extraction(unittest.TestCase):

@@ -20,8 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lint_commits import SCOPES  # noqa: E402
-from next_version import Version  # noqa: E402
+from lint_commits import SCOPES
+from next_version import Version
 
 PROTECTED = ("main", "develop")
 WORK_BRANCH_PATTERN = re.compile(
