@@ -35,3 +35,4 @@ Rules:
 | [0016](0016-web-stack.md) | Web stack: React, React Three Fiber, a persistent scene rendered on demand | Accepted |
 | [0017](0017-backend-stack.md) | Backend stack: small asyncio services, one database connection each | Accepted |
 | [0018](0018-the-site-model-is-baked-once.md) | The site model is baked once and served as static assets | Accepted |
+| [0019](0019-one-configuration-contract-no-fallbacks.md) | One configuration contract, a file per service, no fallbacks | Accepted |
