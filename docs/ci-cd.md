@@ -28,8 +28,8 @@ hand:
 | Python workspace synced from its lockfile, uv 0.12.23 | `NFR-PORT-02` |
 | Python lint and format over the whole repository | `NFR-MNT-06` |
 | Strict types for `tools/` at Python 3.12, and for `database` | `NFR-MNT-06` |
-| One gate per Python unit, its strict types then its tests: `soc-migrate`, `soc-config`, `soc-log`, `soc-db` (without its `database` tests) | `NFR-MNT-06`, `NFR-TEST-01` |
-| Database tests against an ephemeral Postgres, `database` and `soc-db`'s `database` tests, when `database/`, `infra/migrate/`, `libs/soc-db/`, `libs/soc-log/` or the lockfile change | `NFR-TEST-02` |
+| One gate per Python unit, its strict types then its tests: `soc-migrate`, `soc-config`, `soc-log`, `soc-supervision`, `soc-db` (without its `database` tests), `soc-realtime` | `NFR-MNT-06`, `NFR-TEST-01` |
+| Database tests against an ephemeral Postgres, `database` and `soc-db`'s `database` tests, when `database/`, `infra/migrate/`, `libs/soc-db/` or a library it uses, or the lockfile change | `NFR-TEST-02` |
 | Secret scan over the full history (gitleaks) | `NFR-SEC-04` |
 
 `pr-policy.yml`, one job named `Pull request policy`: changelog label, branch
@@ -44,7 +44,8 @@ check, lint, unit tests, bundle budget), each Python unit (type check and gate
 tests in its locked environment, one unit at a time, so two units never share a
 module namespace), `database` (migration and policy tests, in the database lane).
 `tools/tests/test_workflows.py` fails while a workspace member has no gate in CI
-and in the hooks.
+and in the hooks, or while a unit's hook or the lane's path filter misses a
+workspace unit it depends on.
 
 ## Minutes budget
 
