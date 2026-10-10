@@ -85,19 +85,17 @@ class Verdicts(unittest.TestCase):
     def test_a_failure_is_named(self) -> None:
         self.assertEqual(mwg.verdict(mwg.parse(RED), self.required).problems, ("Gate is fail",))
 
-    def test_a_required_check_that_never_reported_is_named(self) -> None:
-        only_policy = checks(("Pull request policy", "pass"))
-        self.assertEqual(
-            mwg.verdict(mwg.parse(only_policy), self.required).problems,
-            ("Gate has not reported",),
-        )
+    def test_a_required_check_not_reported_yet_is_waited_for(self) -> None:
+        only_policy = mwg.verdict(mwg.parse(checks(("Pull request policy", "pass"))), self.required)
+        self.assertTrue(only_policy.waiting)
+        self.assertEqual(only_policy.problems, ("Gate has not reported",))
 
     def test_a_skipped_check_is_not_a_failure(self) -> None:
         skipped = GREEN + checks(("Optional", "skipping"))
         self.assertTrue(mwg.verdict(mwg.parse(skipped), self.required).green)
 
-    def test_nothing_reported_is_not_green(self) -> None:
-        self.assertFalse(mwg.verdict([], self.required).green)
+    def test_nothing_reported_yet_is_waited_for(self) -> None:
+        self.assertTrue(mwg.verdict([], self.required).waiting)
 
 
 class Merging(unittest.TestCase):
@@ -122,7 +120,20 @@ class Merging(unittest.TestCase):
         status, output = run(gh, "--timeout-s", "60", "--interval-s", "15")
         self.assertEqual(status, 1)
         self.assertFalse(gh.merged)
-        self.assertIn("still pending", output)
+        self.assertIn("Gate is pending", output)
+
+    def test_checks_that_appear_late_are_waited_for(self) -> None:
+        gh = FakeGh("", "", PENDING, GREEN)
+        status, _ = run(gh)
+        self.assertEqual(status, 0)
+        self.assertTrue(gh.merged)
+
+    def test_a_required_check_that_never_reports_is_named_at_the_timeout(self) -> None:
+        gh = FakeGh(checks(("Pull request policy", "pass")))
+        status, output = run(gh, "--timeout-s", "30", "--interval-s", "15")
+        self.assertEqual(status, 1)
+        self.assertFalse(gh.merged)
+        self.assertIn("Gate has not reported", output)
 
 
 if __name__ == "__main__":

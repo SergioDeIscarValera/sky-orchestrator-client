@@ -68,13 +68,19 @@ def parse(text: str) -> list[Check]:
 
 
 def verdict(checks: Sequence[Check], required: frozenset[str]) -> Verdict:
-    if any(check.state == PENDING for check in checks):
-        return Verdict(waiting=True, problems=())
+    unreported = sorted(required - {check.name for check in checks})
+    pending = [check.name for check in checks if check.state == PENDING]
+    if pending or unreported:
+        return Verdict(
+            waiting=True,
+            problems=(
+                *(f"{name} is pending" for name in pending),
+                *(f"{name} has not reported" for name in unreported),
+            ),
+        )
     problems = [
         f"{check.name} is {check.state}" for check in checks if check.state not in FINISHED_WELL
     ]
-    reported = {check.name for check in checks}
-    problems.extend(f"{name} has not reported" for name in sorted(required - reported))
     return Verdict(waiting=False, problems=tuple(problems))
 
 
@@ -106,7 +112,9 @@ def main(
         sleep(arguments.interval_s)
 
     if current.waiting:
-        print(f"#{number}: checks still pending after {arguments.timeout_s:.0f} s", file=sys.stderr)
+        print(f"#{number}: still waiting after {arguments.timeout_s:.0f} s:", file=sys.stderr)
+        for problem in current.problems:
+            print(f"  {problem}", file=sys.stderr)
         return 1
     if current.problems:
         print(f"#{number} is not green, not merging:", file=sys.stderr)
