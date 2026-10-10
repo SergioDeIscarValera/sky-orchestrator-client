@@ -1,0 +1,41 @@
+# The Python workspace: every Python unit is a member with its own pyproject, and
+# one lockfile pins them all with hashes (ADR-0017, NFR-PORT-02).
+
+[tool.uv.workspace]
+members = ["database", "infra/migrate"]
+
+[dependency-groups]
+dev = [
+  "asyncpg-stubs==0.32.0",
+  "mypy==2.4.0",
+  "pytest==9.1.1",
+  "pytest-asyncio==1.4.0",
+  "ruff==0.16.10",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "RUF", "ASYNC", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S105", "S106", "S108"]
+"database/src/soc_database/harness.py" = ["S603"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["soc_*"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+addopts = "-q --strict-markers --import-mode=importlib"
+markers = ["database: needs Docker and an ephemeral Postgres (the database lane, NFR-TEST-02)"]
