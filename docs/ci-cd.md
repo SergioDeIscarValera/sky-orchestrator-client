@@ -22,8 +22,13 @@ hand:
 | Step | Requirement |
 | --- | --- |
 | Relative Markdown links resolve | Documentation integrity |
+| Traceability matrix equals the requirements | `tools/check_traceability.py` |
 | No file over 512 KB | `NFR-MNT-04` |
 | Tooling gate tests | `NFR-TEST-01` |
+| Python workspace synced from its lockfile, uv 0.12.23 | `NFR-PORT-02` |
+| Python lint, format and strict types | `NFR-MNT-06` |
+| Migration runner gate tests | `NFR-TEST-01` |
+| Database tests against an ephemeral Postgres, when `database/`, `infra/migrate/` or the lockfile change | `NFR-TEST-02` |
 | Secret scan over the full history (gitleaks) | `NFR-SEC-04` |
 
 `pr-policy.yml`, one job named `Pull request policy`: changelog label, branch
