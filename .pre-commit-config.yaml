@@ -132,6 +132,13 @@ repos:
         pass_filenames: false
         files: ^(libs/soc-db/|libs/soc-supervision/|libs/soc-log/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
 
+      - id: soc-cloud-gate
+        name: soc-cloud gate
+        entry: bash -c 'uv run --frozen mypy services/soc-cloud && uv run --frozen pytest services/soc-cloud/tests -m "not database"'
+        language: system
+        pass_filenames: false
+        files: ^(services/soc-cloud/|libs/|contracts/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+
       - id: soc-realtime-gate
         name: soc-realtime gate
         entry: bash -c 'uv run --frozen mypy libs/soc-realtime && uv run --frozen pytest libs/soc-realtime/tests -m "not database"'
