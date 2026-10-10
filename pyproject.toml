@@ -2,7 +2,7 @@
 # one lockfile pins them all with hashes (ADR-0017, NFR-PORT-02).
 
 [tool.uv.workspace]
-members = ["database", "infra/migrate"]
+members = ["database", "infra/migrate", "libs/soc-config"]
 
 [dependency-groups]
 dev = [
