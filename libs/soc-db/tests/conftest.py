@@ -8,11 +8,9 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 import asyncpg
 import pytest
 
-from soc_database.harness import MIGRATIONS, EphemeralPostgres
+from soc_database import harness
+from soc_database.harness import EphemeralPostgres, migrate
 from soc_db import Database, Target
-from soc_migrate.migrations import discover
-from soc_migrate.roles import SERVICE_ROLES, ServiceCredential
-from soc_migrate.runner import Runner
 
 Until = Callable[..., Awaitable[None]]
 Running = Callable[[Database], AbstractAsyncContextManager[asyncio.Task[None]]]
@@ -47,7 +45,7 @@ def running() -> Running:
 
 @pytest.fixture(scope="session")
 def service_passwords() -> dict[str, str]:
-    return {role: secrets.token_hex(20) for role in SERVICE_ROLES}
+    return harness.service_passwords()
 
 
 @pytest.fixture(scope="session")
@@ -64,12 +62,7 @@ def postgres() -> Iterator[EphemeralPostgres]:
 async def migrated(
     postgres: EphemeralPostgres, service_passwords: dict[str, str]
 ) -> EphemeralPostgres:
-    connection = await postgres.connect()
-    try:
-        credentials = [ServiceCredential(role, value) for role, value in service_passwords.items()]
-        await Runner(connection).run(discover(MIGRATIONS), credentials)
-    finally:
-        await connection.close()
+    await migrate(postgres, service_passwords)
     return postgres
 
 

@@ -6,12 +6,16 @@ import shutil
 import subprocess
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import asyncpg
+
+from soc_migrate.migrations import discover
+from soc_migrate.roles import SERVICE_ROLES, ServiceCredential
+from soc_migrate.runner import Runner
 
 DATABASE = Path(__file__).resolve().parents[2]
 FIXTURES = DATABASE / "fixtures"
@@ -30,6 +34,19 @@ def docker(
     )
     result.stdout = result.stdout.strip()
     return result
+
+
+def service_passwords() -> dict[str, str]:
+    return {role: secrets.token_hex(20) for role in SERVICE_ROLES}
+
+
+async def migrate(postgres: EphemeralPostgres, passwords: Mapping[str, str]) -> None:
+    connection = await postgres.connect()
+    try:
+        credentials = [ServiceCredential(role, value) for role, value in passwords.items()]
+        await Runner(connection).run(discover(MIGRATIONS), credentials)
+    finally:
+        await connection.close()
 
 
 @dataclass

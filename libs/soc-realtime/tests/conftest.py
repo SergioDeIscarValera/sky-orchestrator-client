@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import secrets
 import socket
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 
@@ -12,11 +11,8 @@ import asyncpg
 import pytest
 import websockets
 
-from soc_database.harness import MIGRATIONS, Tenancy
+from soc_database.harness import Tenancy, migrate, service_passwords
 from soc_database.realtime import RealtimeStack
-from soc_migrate.migrations import discover
-from soc_migrate.roles import SERVICE_ROLES, ServiceCredential
-from soc_migrate.runner import Runner
 from soc_realtime.socket import Connector
 from soc_realtime.testing import FakePhoenix
 
@@ -71,12 +67,7 @@ def stack() -> Iterator[RealtimeStack]:
 
 @pytest.fixture(scope="session")
 async def migrated(stack: RealtimeStack) -> RealtimeStack:
-    connection = await stack.postgres.connect()
-    try:
-        credentials = [ServiceCredential(role, secrets.token_hex(20)) for role in SERVICE_ROLES]
-        await Runner(connection).run(discover(MIGRATIONS), credentials)
-    finally:
-        await connection.close()
+    await migrate(stack.postgres, service_passwords())
     return stack
 
 
