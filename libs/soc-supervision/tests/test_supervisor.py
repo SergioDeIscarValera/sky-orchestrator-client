@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from functools import partial
 
 import pytest
 
@@ -48,7 +49,7 @@ class Peer:
         self.sleeps.append(delay)
         await asyncio.sleep(0)
 
-    def supervisor(self) -> Supervisor[Link]:
+    def supervisor(self, stable_s: float = 0.0) -> Supervisor[Link]:
         self.watched = Supervisor(
             "probe",
             connect=self.connect,
@@ -56,6 +57,7 @@ class Peer:
             disconnect=self.disconnect,
             transient=(OSError, TimeoutError),
             sleep=self.sleep,
+            stable_s=stable_s,
         )
         return self.watched
 
@@ -110,6 +112,18 @@ async def test_a_lost_link_is_disconnected_and_replaced_with_the_delay_reset() -
     task.cancel()
     assert peer.disconnected == [1]
     assert peer.sleeps == [0.5, 0.5]
+
+
+async def test_a_link_lost_before_it_is_stable_keeps_backing_off() -> None:
+    peer = Peer()
+    supervisor = peer.supervisor(stable_s=60.0)
+    task = asyncio.create_task(supervisor.run())
+    for made in range(1, 5):
+        await until(partial(lambda count: len(peer.links) == count, made))
+        peer.links[-1].lost.set()
+    await until(lambda: len(peer.links) == 5)
+    task.cancel()
+    assert peer.sleeps == [0.5, 1.0, 2.0, 4.0]
 
 
 async def test_a_link_closed_by_the_peer_is_replaced() -> None:

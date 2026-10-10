@@ -12,7 +12,7 @@ RULESETS = WORKFLOWS.parent / "rulesets"
 REPOSITORY = WORKFLOWS.parents[1]
 LANE_STEP = "- name: Database lane against ephemeral Postgres and Realtime"
 LANE_ONLY_UNITS = ("database",)
-SPLIT_BY_MARKER_UNITS = ("libs/soc-db", "libs/soc-realtime")
+SPLIT_BY_MARKER_UNITS = ("libs/soc-db", "libs/soc-realtime", "services/soc-cloud")
 NOT_IN_THE_LANE = '-m "not database"'
 
 
@@ -195,6 +195,16 @@ def hook_files(hooks: str, hook_id: str) -> str | None:
     return match[1] if match else None
 
 
+def lane_filter(ci: str) -> str:
+    match = re.search(r"grep -qE '([^']+)'", ci[ci.index("- id: database-changes") :])
+    assert match is not None
+    return match[1]
+
+
+def a_change_in(directory: str) -> str:
+    return f"{directory}/src/probe.py"
+
+
 class PythonUnits(unittest.TestCase):
     def setUp(self) -> None:
         project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
@@ -211,14 +221,20 @@ class PythonUnits(unittest.TestCase):
                 continue
             for dependency in (unit, *dependencies):
                 with self.subTest(unit=unit, dependency=dependency):
-                    self.assertIn(f"{dependency}/", files)
+                    self.assertRegex(a_change_in(dependency), files)
 
     def test_the_lane_runs_when_a_unit_its_tests_use_changes(self) -> None:
-        detection = self.ci[self.ci.index("- id: database-changes") :].split("\n\n")[0]
+        detection = lane_filter(self.ci)
         for unit in (*LANE_ONLY_UNITS, *SPLIT_BY_MARKER_UNITS):
             for dependency in (unit, *self.dependencies[unit]):
                 with self.subTest(unit=unit, dependency=dependency):
-                    self.assertIn(f"{dependency}/", detection)
+                    self.assertRegex(a_change_in(dependency), detection)
+
+    def test_the_lane_does_not_run_for_documentation(self) -> None:
+        detection = lane_filter(self.ci)
+        for path in ("docs/roadmap.md", "README.md", "tools/check_links.py"):
+            with self.subTest(path=path):
+                self.assertNotRegex(path, detection)
 
     def test_every_unit_is_type_checked_on_its_own(self) -> None:
         for unit in self.units:
@@ -248,12 +264,10 @@ class PythonUnits(unittest.TestCase):
         }
         self.assertEqual(marked, set(SPLIT_BY_MARKER_UNITS))
         lane = self.ci[self.ci.index(LANE_STEP) :]
-        detection = self.ci[self.ci.index("- id: database-changes") :]
         for unit in (*LANE_ONLY_UNITS, *SPLIT_BY_MARKER_UNITS):
             selection = "" if unit in LANE_ONLY_UNITS else " -m database"
             with self.subTest(unit=unit):
                 self.assertIn(f"uv run --frozen pytest {unit}/tests{selection}\n", lane)
-                self.assertIn(f"{unit}/", detection.split("\n\n")[0])
 
 
 class Rulesets(unittest.TestCase):
