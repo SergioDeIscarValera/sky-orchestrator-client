@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import uuid
 
 import websockets
 
 import soc_log
+from soc_cloud.files import FileServer, FlightFiles
 from soc_cloud.link.stack import StackLink
 from soc_cloud.link.telemetry import Sample
 from soc_cloud.settings import SERVICE, Settings
@@ -28,7 +30,7 @@ class CloudService:
         settings: Settings,
         *,
         realtime_connector: Connector = websockets.connect,
-        health_host: str | None = None,
+        bind_host: str | None = None,
     ) -> None:
         self.settings = settings
         self.database = Database(settings.database)
@@ -42,11 +44,22 @@ class CloudService:
         )
         self.wire = WireContract()
         self.latest: dict[str, Sample] = {}
+        self.files = FlightFiles(
+            {stack.name: stack.flight_files_url for stack in settings.tunables.stacks},
+            grace_s=settings.tunables.flight_file_grace_s,
+        )
+        self.file_server = FileServer(self.files)
         self.links = [
-            StackLink(stack, settings.credentials[stack.name], self.wire, on_sample=self._sampled)
+            StackLink(
+                stack,
+                settings.credentials[stack.name],
+                self.wire,
+                on_sample=self._sampled,
+                files=functools.partial(self.files.offer, stack.name),
+            )
             for stack in settings.tunables.stacks
         ]
-        self._health_host = health_host
+        self._bind_host = bind_host
 
     async def run(self) -> None:
         log.info(
@@ -61,6 +74,7 @@ class CloudService:
             {
                 "database": lambda: self.database.health,
                 "realtime": lambda: self.realtime.health,
+                "flight_files": lambda: self.file_server.health,
                 **{f"stack:{link.stack.name}": _health_of(link) for link in self.links},
             },
         )
@@ -69,7 +83,14 @@ class CloudService:
             group.create_task(self.realtime.run())
             for link in self.links:
                 group.create_task(link.run())
-            group.create_task(serve(health, self.settings.health_port, self._health_host))
+            group.create_task(serve(health, self.settings.health_port, self._bind_host))
+            group.create_task(
+                serve(
+                    self.file_server.application(),
+                    self.settings.flight_files_port,
+                    self._bind_host,
+                )
+            )
 
     def _sampled(self, sample: Sample) -> None:
         self.latest[sample.aircraft] = sample
