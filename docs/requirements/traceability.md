@@ -15,7 +15,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | --- | --- | --- | --- | --- | --- |
 | FR-AUT-01 | MUST | soc-web, database | M1 | — | Planned |
 | FR-AUT-02 | MUST | soc-web, database | M1 | — | Planned |
-| FR-AUT-03 | MUST | soc-web, database | M1 | — | Planned |
+| FR-AUT-03 | MUST | soc-web, database | M1 | `database/tests/test_membership.py` | Partial: role ranking and live membership tested; per-table policies arrive with the tables |
 | FR-AUT-04 | MUST | soc-web, database | M1 | — | Planned |
 | FR-SCN-01 | MUST | soc-web | M1 | — | Planned |
 | FR-SCN-02 | MUST | soc-web | M2 | — | Planned |
@@ -96,7 +96,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-REP-01 | COULD | soc-web, database | M6 | — | Planned |
 | FR-REP-02 | COULD | soc-web | M6 | — | Planned |
 | FR-DEP-01 | MUST | infra | M1 | — | Planned |
-| FR-DEP-02 | MUST | infra | M1 | — | Planned |
+| FR-DEP-02 | MUST | infra | M1 | `database/tests/test_ledger_and_roles.py`, `infra/migrate/tests/*` | Done: ledger, checksums, advisory lock, SCRAM passwords; 26 gate tests and the database lane |
 | FR-DEP-03 | MUST | infra | M1 | — | Planned |
 | FR-DEP-04 | MUST | infra | M1 | — | Planned |
 | FR-DEP-05 | MUST | infra | M2 | — | Planned |
@@ -133,7 +133,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-SAF-04 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
 | NFR-SAF-05 | MUST | soc-operations | M4 | — | Planned |
 | NFR-SAF-06 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
-| NFR-SEC-01 | MUST | database, soc-web, soc-cloud, infra | M1 | — | Planned |
+| NFR-SEC-01 | MUST | database, soc-web, soc-cloud, infra | M1 | `database/tests/test_realtime_authorization.py`, `database/tests/test_membership.py` | Partial: live-membership helpers and Realtime authorization tested per role; each table adds its policies |
 | NFR-SEC-02 | MUST | database, soc-web, soc-cloud, infra | M1 | — | Planned |
 | NFR-SEC-03 | MUST | database, soc-web, soc-cloud, infra | M1 | — | Planned |
 | NFR-SEC-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (gitleaks over the full history), `.pre-commit-config.yaml` (gitleaks on what is staged) | Done: secret scan in CI on every pull request and before every commit |
@@ -160,7 +160,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
 | NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*` | Done for the tooling: 113 tests in under 0.1 s, in pre-commit and CI; each unit adds its gate from M1 |
-| NFR-TEST-02 | MUST | database | M1 | — | Planned |
+| NFR-TEST-02 | MUST | database | M1 | `database/tests/*` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |
 | NFR-TEST-05 | MUST | soc-cloud | M2 | — | Planned |
