@@ -37,13 +37,25 @@ route = await broadcaster.send([Message(f"org:{org}:soc:telemetry", "sample", sa
 
 ```bash
 uv run --frozen mypy libs/soc-realtime
-uv run --frozen pytest libs/soc-realtime/tests
+uv run --frozen pytest libs/soc-realtime/tests -m "not database"   # gate
+uv run --frozen pytest libs/soc-realtime/tests -m database         # lane, needs Docker
 ```
 
-Against the fake server: URLs, join frames, broadcast frames, refused joins,
-replacement on close, on a missed heartbeat and on a failed channel, frames that
-are not SOC's ignored; against a local HTTP server: the batch, a refusal, an
-unreachable endpoint; the broadcaster's routes and counts.
+The gate, against the fake server: URLs, join frames, broadcast frames, refused
+joins, replacement on close, on a missed heartbeat and on a failed channel,
+frames that are not SOC's ignored; against a local HTTP server: the batch, a
+refusal, an unreachable endpoint; the broadcaster's routes and counts.
+
+The lane, against Realtime v2.102.3 and the production Postgres image with SOC's
+migrations (`soc_database.realtime.RealtimeStack`): a member receives what the
+service sends by socket, by HTTP and by `realtime.send()` from SQL once its
+transaction commits; a stranger, a member of a deleted organization and an
+anonymous client are refused; a member's own send is dropped; the socket joins
+again after Realtime restarts. `soc_realtime.testing.Subscriber` plays the
+member's browser.
+
+A message sent with `realtime.send()` reaches members with Realtime's message
+`id` added to its payload; the web ignores it.
 
 ## Failure modes
 
@@ -52,5 +64,5 @@ unreachable endpoint; the broadcaster's routes and counts.
 - Realtime counts sends and deliveries against the tenant's
   `max_events_per_second`, shared with Virtual Origen: coalescing per aircraft
   (`broadcast_max_rate_hz`) is the caller's job, before this library.
-- The real Realtime is exercised by the database lane's Realtime tests and the
-  M1 stack check, not here.
+- Only the box shows VO2's tenant settings, its ES256 keys and the latency: the
+  M1 viability session measures them (`DEP-23`).
