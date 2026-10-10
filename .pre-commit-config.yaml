@@ -109,6 +109,13 @@ repos:
         pass_filenames: false
         files: ^(libs/soc-log/|pyproject\.toml$|uv\.lock$)
 
+      - id: soc-db-gate
+        name: soc-db gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-db && uv run --frozen pytest libs/soc-db/tests -m "not database"'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-db/|libs/soc-log/|pyproject\.toml$|uv\.lock$)
+
       - id: tools-gate-tests
         name: tools gate tests
         entry: python3 -m unittest discover -s tools/tests

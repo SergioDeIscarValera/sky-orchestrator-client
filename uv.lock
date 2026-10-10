@@ -6,6 +6,7 @@ requires-python = "==3.14.*"
 members = [
     "soc-config",
     "soc-database",
+    "soc-db",
     "soc-log",
     "soc-migrate",
 ]
@@ -383,6 +384,33 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = "==0.32.0" },
+    { name = "soc-migrate", editable = "infra/migrate" },
+]
+
+[[package]]
+name = "soc-db"
+version = "0.1.0"
+source = { editable = "libs/soc-db" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "soc-log" },
+]
+
+[package.dev-dependencies]
+test = [
+    { name = "soc-database" },
+    { name = "soc-migrate" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = "==0.32.0" },
+    { name = "soc-log", editable = "libs/soc-log" },
+]
+
+[package.metadata.requires-dev]
+test = [
+    { name = "soc-database", editable = "database" },
     { name = "soc-migrate", editable = "infra/migrate" },
 ]
 

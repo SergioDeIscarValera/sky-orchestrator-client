@@ -2,7 +2,7 @@
 # one lockfile pins them all with hashes (ADR-0017, NFR-PORT-02).
 
 [tool.uv.workspace]
-members = ["database", "infra/migrate", "libs/soc-config", "libs/soc-log"]
+members = ["database", "infra/migrate", "libs/soc-config", "libs/soc-log", "libs/soc-db"]
 
 [dependency-groups]
 dev = [
@@ -24,7 +24,7 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "R
 ignore = ["S101"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S105", "S106", "S108"]
+"**/tests/**" = ["S105", "S106", "S108", "ASYNC110"]
 "database/src/soc_database/harness.py" = ["S603"]
 "tools/*.py" = ["S603", "S607"]
 

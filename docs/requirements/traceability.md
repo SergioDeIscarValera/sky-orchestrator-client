@@ -122,7 +122,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-RES-07 | MUST | soc-cloud | M2 | — | Planned |
 | NFR-REL-01 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
 | NFR-REL-02 | MUST | soc-cloud | M4 | — | Planned |
-| NFR-REL-03 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
+| NFR-REL-03 | MUST | soc-cloud, soc-operations | M1 | `libs/soc-db/tests/test_database.py`, `libs/soc-db/tests/test_against_postgres.py::test_a_terminated_backend_is_replaced_listened_and_swept_again` | Partial: the database connection reconnects with backoff capped at 10 s; the broker and Realtime links arrive with their units |
 | NFR-REL-04 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
 | NFR-REL-05 | SHOULD | soc-cloud, soc-operations | M5 | — | Planned |
 | NFR-REL-06 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
@@ -159,8 +159,8 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (no file over 512 KB), `.pre-commit-config.yaml` (large files, private keys) | Done for size and keys; build output kept out by `.gitignore` |
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
-| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*` | Done so far: tooling 116, soc-migrate 26, soc-config 191, soc-log 14 tests, each suite under 0.2 s, per unit in pre-commit and CI |
-| NFR-TEST-02 | MUST | database | M1 | `database/tests/*` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded |
+| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*` | Done so far: tooling 117, soc-migrate 26, soc-config 191, soc-log 14, soc-db 14 tests, each suite under 0.2 s, per unit in pre-commit and CI |
+| NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded; `soc-db` runs its connection tests there too |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |
 | NFR-TEST-05 | MUST | soc-cloud | M2 | — | Planned |
