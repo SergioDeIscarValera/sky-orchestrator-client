@@ -52,3 +52,7 @@ def status_reply(gateway: str) -> str:
 
 def requests_reply(gateway: str) -> str:
     return f"thing/product/{gateway}/requests_reply"
+
+
+def services(gateway: str) -> str:
+    return f"thing/product/{gateway}/services"

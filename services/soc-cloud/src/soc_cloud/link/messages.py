@@ -72,3 +72,15 @@ class AircraftOsd(msgspec.Struct, frozen=True):
 
 class ResourceGet(msgspec.Struct, frozen=True):
     flight_id: str
+
+
+class ReplyData(msgspec.Struct, frozen=True):
+    result: int
+
+
+class ServiceReply(msgspec.Struct, frozen=True):
+    tid: str
+    bid: str
+    timestamp: int
+    method: str
+    data: ReplyData

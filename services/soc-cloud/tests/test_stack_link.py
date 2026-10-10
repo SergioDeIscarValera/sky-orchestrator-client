@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import socket
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -255,6 +256,7 @@ async def test_the_link_opens_a_persistent_v5_session_and_subscribes() -> None:
     assert client.options["protocol"] is aiomqtt.ProtocolVersion.V5
     assert client.options["clean_start"] is False
     assert client.options["properties"].SessionExpiryInterval == 3600
+    assert client.options["socket_options"] == [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)]
     assert client.subscriptions == list(topics.SUBSCRIPTIONS)
     assert client.closed
 

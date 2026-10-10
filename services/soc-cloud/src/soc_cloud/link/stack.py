@@ -5,6 +5,9 @@ waits for it. Every reply leaves only after passing its vendored schema
 (FR-LNK-10). A session taken over by another client is reported as
 `link_displaced` and backs off before taking it back.
 
+The socket sends at once (TCP_NODELAY): with Nagle's algorithm, a command
+published while replies arrive waited up to 80 ms for a delayed ACK.
+
 Mosquitto 2.0.22, Sky Orchestrator's broker, ends a taken-over session with a
 server DISCONNECT whose reason is "normal"; MQTT 5 names reason 142 for it. A
 lost broker sends neither. Both are read as a takeover; everything else is a
@@ -15,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import socket
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -34,6 +38,7 @@ from soc_cloud.link.messages import (
     DockOsd,
     Envelope,
     ResourceGet,
+    ServiceReply,
     UpdateTopo,
 )
 from soc_cloud.link.telemetry import Sample, sample
@@ -59,6 +64,10 @@ class LinkDisplacedError(aiomqtt.MqttError):
     pass
 
 
+class LinkDownError(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class FileOffer:
     url: str
@@ -67,6 +76,14 @@ class FileOffer:
 
 def no_files(_flight_id: str) -> FileOffer | None:
     return None
+
+
+def no_replies(_tid: str, _result: int) -> None:
+    pass
+
+
+def no_announcements(_gateway: str) -> None:
+    pass
 
 
 def displaced(error: BaseException) -> bool:
@@ -85,6 +102,8 @@ class StackLink:
         *,
         on_sample: Callable[[Sample], None],
         files: Callable[[str], FileOffer | None] = no_files,
+        on_reply: Callable[[str, int], None] = no_replies,
+        on_announced: Callable[[str], None] = no_announcements,
         client_factory: ClientFactory = aiomqtt.Client,
         backoff: Backoff | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
@@ -96,6 +115,9 @@ class StackLink:
         self._wire = wire
         self._on_sample = on_sample
         self._files = files
+        self._on_reply = on_reply
+        self._on_announced = on_announced
+        self._client: aiomqtt.Client | None = None
         self._client_factory = client_factory
         self._clock = clock
         self._supervisor = Supervisor(
@@ -115,6 +137,17 @@ class StackLink:
     async def run(self) -> None:
         await self._supervisor.run()
 
+    def serves(self, gateway: str) -> bool:
+        return self._client is not None and gateway in self.topology.gateways()
+
+    async def send_service(self, gateway: str, message: dict[str, Any]) -> None:
+        client = self._client
+        if client is None:
+            raise LinkDownError(f"stack {self.stack.name} is not connected")
+        await self._publish(
+            client, f"services/{message['method']}", topics.services(gateway), message
+        )
+
     async def _open(self) -> aiomqtt.Client:
         session = Properties(PacketTypes.CONNECT)
         session.SessionExpiryInterval = SESSION_EXPIRY_S
@@ -130,6 +163,7 @@ class StackLink:
             properties=session,
             keepalive=KEEPALIVE_S,
             timeout=CONNECT_TIMEOUT_S,
+            socket_options=[(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
         )
         await client.__aenter__()
         try:
@@ -138,6 +172,7 @@ class StackLink:
         except BaseException:
             await self._close(client)
             raise
+        self._client = client
         return client
 
     async def _serve(self, client: aiomqtt.Client) -> None:
@@ -151,6 +186,7 @@ class StackLink:
             raise
 
     async def _close(self, client: aiomqtt.Client) -> None:
+        self._client = None
         with contextlib.suppress(aiomqtt.MqttError, OSError):
             await client.__aexit__(None, None, None)
 
@@ -166,6 +202,9 @@ class StackLink:
                 self._osd(parsed.sn, body)
             elif parsed.kind is topics.Inbound.REQUESTS:
                 await self._request(client, parsed.sn, body)
+            elif parsed.kind is topics.Inbound.SERVICES_REPLY:
+                reply = msgspec.json.decode(body, type=ServiceReply)
+                self._on_reply(reply.tid, reply.data.result)
         except (msgspec.DecodeError, msgspec.ValidationError) as error:
             log.warning("message_unreadable", stack=self.stack.name, topic=topic, error=str(error))
         except WireRefusedError as refusal:
@@ -187,6 +226,7 @@ class StackLink:
                 announcement.tid, announcement.bid, UPDATE_TOPO, {"result": ACCEPTED}
             )
             await self._publish(client, "sys/status_reply", topics.status_reply(gateway), reply)
+        self._on_announced(gateway)
 
     def _osd(self, serial: str, payload: bytes) -> None:
         envelope = msgspec.json.decode(payload, type=Envelope)

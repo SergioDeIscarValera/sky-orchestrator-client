@@ -181,6 +181,7 @@ class FakeClient:
         self.options = options
         self.subscriptions: list[str] = []
         self.published: list[tuple[str, dict[str, Any]]] = []
+        self.publish_error: BaseException | None = None
         self.closed = False
         self._inbox: asyncio.Queue[FakeMessage | BaseException] = asyncio.Queue()
 
@@ -194,6 +195,8 @@ class FakeClient:
         self.subscriptions.append(topic)
 
     async def publish(self, topic: str, payload: bytes, qos: int = 0) -> None:
+        if self.publish_error is not None:
+            raise self.publish_error
         self.published.append((topic, json.loads(payload)))
 
     def deliver(self, topic: str, message: dict[str, Any]) -> None:
