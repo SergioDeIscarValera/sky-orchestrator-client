@@ -109,12 +109,26 @@ repos:
         pass_filenames: false
         files: ^(libs/soc-log/|pyproject\.toml$|uv\.lock$)
 
+      - id: soc-supervision-gate
+        name: soc-supervision gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-supervision && uv run --frozen pytest libs/soc-supervision/tests'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-supervision/|libs/soc-log/|pyproject\.toml$|uv\.lock$)
+
       - id: soc-db-gate
         name: soc-db gate
         entry: bash -c 'uv run --frozen mypy libs/soc-db && uv run --frozen pytest libs/soc-db/tests -m "not database"'
         language: system
         pass_filenames: false
-        files: ^(libs/soc-db/|libs/soc-log/|pyproject\.toml$|uv\.lock$)
+        files: ^(libs/soc-db/|libs/soc-supervision/|libs/soc-log/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-realtime-gate
+        name: soc-realtime gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-realtime && uv run --frozen pytest libs/soc-realtime/tests'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-realtime/|libs/soc-supervision/|libs/soc-log/|pyproject\.toml$|uv\.lock$)
 
       - id: tools-gate-tests
         name: tools gate tests

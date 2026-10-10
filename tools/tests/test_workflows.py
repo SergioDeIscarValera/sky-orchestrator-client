@@ -167,12 +167,56 @@ class PullRequestPolicy(unittest.TestCase):
                     self.assertNotIn("${{", script)
 
 
+def workspace_dependencies(units: list[str]) -> dict[str, set[str]]:
+    projects = {
+        unit: tomllib.loads((REPOSITORY / unit / "pyproject.toml").read_text(encoding="utf-8"))
+        for unit in units
+    }
+    directory = {project["project"]["name"]: unit for unit, project in projects.items()}
+    direct = {
+        unit: {
+            directory[name]
+            for name, source in project.get("tool", {}).get("uv", {}).get("sources", {}).items()
+            if source.get("workspace")
+        }
+        for unit, project in projects.items()
+    }
+    closure = {unit: set(dependencies) for unit, dependencies in direct.items()}
+    for _ in units:
+        for dependencies in closure.values():
+            dependencies.update(*(closure[dependency] for dependency in list(dependencies)))
+    return closure
+
+
+def hook_files(hooks: str, hook_id: str) -> str | None:
+    match = re.search(rf"- id: {re.escape(hook_id)}\n(?:.*\n)*?\s+files: (.+)", hooks)
+    return match[1] if match else None
+
+
 class PythonUnits(unittest.TestCase):
     def setUp(self) -> None:
         project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
         self.units = project["tool"]["uv"]["workspace"]["members"]
         self.ci = read("ci.yml")
         self.hooks = (REPOSITORY / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+        self.dependencies = workspace_dependencies(self.units)
+
+    def test_a_units_hook_runs_when_a_unit_it_uses_changes(self) -> None:
+        for unit, dependencies in self.dependencies.items():
+            name = tomllib.loads((REPOSITORY / unit / "pyproject.toml").read_text())["project"]
+            files = hook_files(self.hooks, f"{name['name']}-gate")
+            if files is None:
+                continue
+            for dependency in (unit, *dependencies):
+                with self.subTest(unit=unit, dependency=dependency):
+                    self.assertIn(f"{dependency}/", files)
+
+    def test_the_lane_runs_when_a_unit_its_tests_use_changes(self) -> None:
+        detection = self.ci[self.ci.index("- id: database-changes") :].split("\n\n")[0]
+        for unit in (*LANE_ONLY_UNITS, *SPLIT_BY_MARKER_UNITS):
+            for dependency in (unit, *self.dependencies[unit]):
+                with self.subTest(unit=unit, dependency=dependency):
+                    self.assertIn(f"{dependency}/", detection)
 
     def test_every_unit_is_type_checked_on_its_own(self) -> None:
         for unit in self.units:

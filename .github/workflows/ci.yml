@@ -104,11 +104,23 @@ jobs:
           uv run --frozen mypy libs/soc-log
           uv run --frozen pytest libs/soc-log/tests
 
+      - name: soc-supervision gate
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: |
+          uv run --frozen mypy libs/soc-supervision
+          uv run --frozen pytest libs/soc-supervision/tests
+
       - name: soc-db gate
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
         run: |
           uv run --frozen mypy libs/soc-db
           uv run --frozen pytest libs/soc-db/tests -m "not database"
+
+      - name: soc-realtime gate
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: |
+          uv run --frozen mypy libs/soc-realtime
+          uv run --frozen pytest libs/soc-realtime/tests
 
       # The database lane (NFR-TEST-02): an ephemeral Postgres from the production
       # image, so it costs a pull and about ten seconds. It runs when a pull request
@@ -121,7 +133,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$BASE_REF" ] || git diff --name-only "origin/$BASE_REF...HEAD" \
-              | grep -qE '^(database/|infra/migrate/|libs/soc-db/|libs/soc-log/|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)'; then
+              | grep -qE '^(database/|infra/migrate/|libs/soc-db/|libs/soc-log/|libs/soc-supervision/|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
