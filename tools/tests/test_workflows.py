@@ -112,16 +112,25 @@ class ContinuousIntegration(unittest.TestCase):
             "tools/check_traceability.py",
             "-size +512k",
             "unittest discover -s tools/tests",
+            "uv sync --frozen --all-packages",
+            "ruff check database infra/migrate",
+            "mypy database/src",
+            "pytest infra/migrate/tests",
+            "pytest database/tests",
             "gitleaks detect",
         )
         for check in checks:
             with self.subTest(check=check):
                 self.assertIn(check, self.text)
 
-    def test_checks_report_independently(self) -> None:
-        steps_with_a_guard = self.text.count("!cancelled()")
-        named_steps = len(re.findall(r"^      - name: ", self.text, re.MULTILINE))
-        self.assertEqual(steps_with_a_guard, named_steps)
+    def test_every_step_after_the_setup_reports_independently(self) -> None:
+        steps = re.split(r"^      - ", self.text, flags=re.MULTILINE)[1:]
+        unguarded = [step.splitlines()[0] for step in steps if "!cancelled()" not in step]
+        self.assertEqual(unguarded, ["id: checkout", "id: python"])
+
+    def test_the_database_lane_runs_only_when_what_it_tests_changes(self) -> None:
+        step = self.text[self.text.index("- name: Database tests against an ephemeral Postgres") :]
+        self.assertIn("steps.database-changes.outputs.changed == 'true'", step.splitlines()[1])
 
 
 class PullRequestPolicy(unittest.TestCase):

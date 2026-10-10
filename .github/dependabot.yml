@@ -10,5 +10,14 @@ updates:
       prefix: "ci(repo)"
     open-pull-requests-limit: 5
 
+  # The Python workspace: one lockfile for every Python unit (ADR-0017).
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "build(repo)"
+    open-pull-requests-limit: 5
+
   # Each unit's ecosystem joins this file with its manifest. Versions are pinned
   # on purpose (NFR-PORT-02): Dependabot proposes, review decides.
