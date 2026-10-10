@@ -7,6 +7,7 @@ import uuid
 import websockets
 
 import soc_log
+from soc_cloud.commands import CHANNEL, Commands, PostgresCommandStore
 from soc_cloud.files import FileServer, FlightFiles
 from soc_cloud.link.stack import StackLink
 from soc_cloud.link.telemetry import Sample
@@ -33,7 +34,11 @@ class CloudService:
         bind_host: str | None = None,
     ) -> None:
         self.settings = settings
-        self.database = Database(settings.database)
+        self.database = Database(
+            settings.database,
+            listeners={CHANNEL: self._announced},
+            on_connected=self._connected,
+        )
         self.realtime = RealtimeSocket(
             settings.realtime,
             [
@@ -56,9 +61,18 @@ class CloudService:
                 self.wire,
                 on_sample=self._sampled,
                 files=functools.partial(self.files.offer, stack.name),
+                on_reply=self._replied,
+                on_announced=self._dock_announced,
             )
             for stack in settings.tunables.stacks
         ]
+        self.commands = Commands(
+            PostgresCommandStore(self.database),
+            self.links,
+            self.wire,
+            ttl_s=settings.tunables.command_intent_ttl_s,
+            reply_timeout_s=settings.tunables.command_reply_timeout_s,
+        )
         self._bind_host = bind_host
 
     async def run(self) -> None:
@@ -94,6 +108,18 @@ class CloudService:
 
     def _sampled(self, sample: Sample) -> None:
         self.latest[sample.aircraft] = sample
+
+    async def _announced(self, payload: str) -> None:
+        await self.commands.announced(payload)
+
+    async def _connected(self) -> None:
+        await self.commands.sweep()
+
+    def _replied(self, tid: str, result: int) -> None:
+        self.commands.replied(tid, result)
+
+    def _dock_announced(self, gateway: str) -> None:
+        self.commands.announced_gateway(gateway)
 
 
 def _health_of(link: StackLink) -> HealthSource:

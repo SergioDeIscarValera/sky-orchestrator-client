@@ -34,6 +34,9 @@ class Topology:
     def online(self) -> set[str]:
         return {sn for gateway in self._gateways.values() for sn in gateway.online()}
 
+    def gateways(self) -> set[str]:
+        return set(self._gateways)
+
     def gateway_of(self, aircraft: str) -> str | None:
         return next(
             (sn for sn, gateway in self._gateways.items() if aircraft in gateway.listed), None

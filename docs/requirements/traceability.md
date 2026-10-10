@@ -37,7 +37,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-LNK-03 | MUST | soc-cloud | M1 | `services/soc-cloud/tests/test_stack_link.py::test_a_value_the_osd_lacks_is_unavailable_not_remembered`, `services/soc-cloud/tests/test_against_broker.py::test_aircraft_osd_becomes_samples` | Done for the ingest: one sample per aircraft OSD at its own timestamp, a missing field unavailable; the fan-out arrives in M2 |
 | FR-LNK-04 | MUST | soc-cloud | M1 | `services/soc-cloud/tests/test_stack_link.py`, `services/soc-cloud/tests/test_against_broker.py::test_file_requests_are_answered_within_half_a_second_at_p99`, `services/soc-cloud/tests/test_against_platform.py::test_the_dock_asks_for_a_flight_file_and_downloads_its_exact_bytes` | Done: answered on `requests_reply` from memory with the flight's URL and MD5, an unknown flight with a non-zero result and its reason, p99 under 500 ms over 100 requests |
 | FR-LNK-05 | MUST | soc-cloud | M1 | `services/soc-cloud/tests/test_files.py`, `services/soc-cloud/tests/test_against_platform.py::test_the_dock_asks_for_a_flight_file_and_downloads_its_exact_bytes` | Partial: served byte for byte at `/files/<128-bit token>.kmz`, the downloaded MD5 equal to the offered fingerprint, every other path the same 404; no published port arrives with the compose stack |
-| FR-LNK-06 | MUST | soc-cloud | M4 | — | Planned |
+| FR-LNK-06 | MUST | soc-cloud | M4 | `services/soc-cloud/tests/test_commands.py`, `services/soc-cloud/tests/test_against_platform.py::test_commands_reach_the_wire_through_pg_notify_within_50_ms_at_p95` | Partial: every verb's intent published on `services` with tid = intent and bid = flight, its reply recorded with its result, no reply timed out after `command_reply_timeout_s`; against Sky Orchestrator's fake bridge stack in the stack check |
 | FR-LNK-07 | MUST | soc-cloud | M4 | — | Planned |
 | FR-LNK-08 | MUST | soc-cloud | M4 | — | Planned |
 | FR-LNK-09 | MUST | soc-cloud | M4 | — | Planned |
@@ -107,7 +107,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | ID | Priority | Unit | Milestone | Test | Status |
 | --- | --- | --- | --- | --- | --- |
 | NFR-PERF-01 | MUST | soc-cloud, soc-web | M2 | — | Planned |
-| NFR-PERF-02 | MUST | soc-web, database, soc-cloud | M4 | — | Planned |
+| NFR-PERF-02 | MUST | soc-web, database, soc-cloud | M4 | `services/soc-cloud/tests/test_against_platform.py::test_commands_reach_the_wire_through_pg_notify_within_50_ms_at_p95` | Partial: from commit to claim p95 under 50 ms over 100 commands on the container lane; the click and the console arrive in M4, the box measurement in the viability session |
 | NFR-PERF-03 | MUST | soc-cloud | M1 | — | Planned |
 | NFR-PERF-04 | MUST | soc-cloud, libs | M4 | — | Planned |
 | NFR-PERF-05 | MUST | soc-web | M1 | — | Planned |
@@ -120,8 +120,8 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-RES-05 | MUST | soc-web, soc-cloud, soc-operations, infra | M1 | — | Planned |
 | NFR-RES-06 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
 | NFR-RES-07 | MUST | soc-cloud | M2 | — | Planned |
-| NFR-REL-01 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
-| NFR-REL-02 | MUST | soc-cloud | M4 | `database/tests/test_command_intents.py::test_a_claim_runs_once`, `database/tests/test_command_intents.py::test_a_reply_is_recorded_once_with_its_result` | Partial: claiming an intent is one conditional update, so a second claim returns nothing whatever announced it; `soc-cloud`'s consumer arrives next |
+| NFR-REL-01 | MUST | soc-cloud, soc-operations | M4 | `services/soc-cloud/tests/test_commands.py::test_the_sweep_runs_what_was_missed_and_settles_what_was_left_sent`, `services/soc-cloud/tests/test_against_platform.py::test_a_command_committed_while_soc_cloud_was_away_runs_once_or_expires` | Partial: across a `soc-cloud` restart no command is sent twice or dropped; the flight state arrives in M4 |
+| NFR-REL-02 | MUST | soc-cloud | M4 | `services/soc-cloud/tests/test_commands.py::test_an_intent_announced_three_times_runs_once`, `database/tests/test_command_intents.py::test_a_claim_runs_once` | Done: an intent announced three times is published once; the claim is one conditional update |
 | NFR-REL-03 | MUST | soc-cloud, soc-operations | M1 | `libs/soc-supervision/tests/test_supervisor.py`, `libs/soc-db/tests/test_against_postgres.py::test_a_terminated_backend_is_replaced_listened_and_swept_again`, `libs/soc-realtime/tests/test_socket.py`, `services/soc-cloud/tests/test_against_platform.py`, `services/soc-cloud/tests/test_against_broker.py::test_the_link_returns_after_the_broker_restarts` | Partial: one supervisor, backoff capped at 10 s and reset only after a stable link, under the database connection and the Realtime socket; `soc-cloud` comes up ready on the platform and its stack, and its broker link returns after Mosquitto restarts |
 | NFR-REL-04 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
 | NFR-REL-05 | SHOULD | soc-cloud, soc-operations | M5 | — | Planned |
@@ -159,7 +159,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (no file over 512 KB), `.pre-commit-config.yaml` (large files, private keys) | Done for size and keys; build output kept out by `.gitignore` |
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
-| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*` | Done so far: tooling 134, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 52 tests, each suite under 0.3 s, per unit in pre-commit and CI |
+| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*` | Done so far: tooling 134, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 63 tests, each suite under 0.3 s, per unit in pre-commit and CI |
 | NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py`, `services/soc-cloud/tests/test_against_broker.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, the real Realtime v2.102.3 beside it, and Mosquitto 2.0.22 configured as Sky Orchestrator's broker; `soc-db`, `soc-realtime` and `soc-cloud` run their end-to-end tests there |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |
