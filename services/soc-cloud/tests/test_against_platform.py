@@ -272,9 +272,9 @@ async def test_commands_reach_the_wire_through_pg_notify_within_50_ms_at_p95(
         await until(lambda: service.links[0].serves(DOCK), 10)
         intents = []
         for _ in range(100):
-            intents.append(await operations.fetchval(INSERT_INTENT, organization, DOCK, 0))
-            await asyncio.sleep(0.01)
-        await until_accepted(operations, intents)
+            intent = await operations.fetchval(INSERT_INTENT, organization, DOCK, 0)
+            intents.append(intent)
+            await until_accepted(operations, [intent])
         p95_ms = await operations.fetchval(
             "select percentile_cont(0.95) within group"
             " (order by extract(epoch from sent_at - requested_at) * 1000)"
@@ -310,7 +310,7 @@ async def test_a_command_committed_while_soc_cloud_was_away_runs_once_or_expires
 async def until_accepted(connection: asyncpg.Connection, intents: list[uuid.UUID]) -> None:
     async with asyncio.timeout(30):
         while (await statuses(connection, intents)).get("accepted", 0) < len(intents):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.005)
 
 
 async def until(condition: Callable[[], bool], within_s: float) -> None:
