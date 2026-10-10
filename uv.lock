@@ -716,11 +716,15 @@ name = "soc-supervision"
 version = "0.1.0"
 source = { editable = "libs/soc-supervision" }
 dependencies = [
+    { name = "aiohttp" },
     { name = "soc-log" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "soc-log", editable = "libs/soc-log" }]
+requires-dist = [
+    { name = "aiohttp", specifier = "==3.14.4" },
+    { name = "soc-log", editable = "libs/soc-log" },
+]
 
 [[package]]
 name = "structlog"
