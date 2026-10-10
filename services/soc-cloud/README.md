@@ -38,8 +38,8 @@ contract version.
 
 ```bash
 uv run --frozen mypy services/soc-cloud
-uv run --frozen pytest services/soc-cloud/tests -m "not database"   # gate
-uv run --frozen pytest services/soc-cloud/tests -m database         # lane, needs Docker
+uv run --frozen pytest services/soc-cloud/tests -m "not lane"   # gate
+uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Docker
 ```
 
 - The settings read exactly the keys the contract gives `soc-cloud`, nested
@@ -48,7 +48,7 @@ uv run --frozen pytest services/soc-cloud/tests -m database         # lane, need
   refused with the reason; the envelope is enforced through its reference.
 - A refused configuration stops the process with exit status 2 and one
   `configuration_refused` line naming every problem.
-- On the database lane, the service starts from a written file and environment
+- On the container lane, the service starts from a written file and environment
   against Postgres and Realtime v2.102.3 with SOC's migrations, and answers
   `/ready` with both links up.
 

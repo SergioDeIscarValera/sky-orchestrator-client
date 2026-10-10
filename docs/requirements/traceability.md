@@ -96,7 +96,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-REP-01 | COULD | soc-web, database | M6 | — | Planned |
 | FR-REP-02 | COULD | soc-web | M6 | — | Planned |
 | FR-DEP-01 | MUST | infra | M1 | — | Planned |
-| FR-DEP-02 | MUST | infra | M1 | `database/tests/test_ledger_and_roles.py`, `infra/migrate/tests/*` | Done: ledger, checksums, advisory lock, SCRAM passwords; 26 gate tests and the database lane |
+| FR-DEP-02 | MUST | infra | M1 | `database/tests/test_ledger_and_roles.py`, `infra/migrate/tests/*` | Done: ledger, checksums, advisory lock, SCRAM passwords; 26 gate tests and the container lane |
 | FR-DEP-03 | MUST | contracts, soc-config | M1 | `libs/soc-config/tests/test_contract.py`, `libs/soc-config/tests/test_configuration.py`, `services/soc-cloud/tests/test_settings.py` | Partial: every key and variable declared once with unit, range and default, validated at start (ADR-0019); `soc-cloud` reads exactly its keys; `soc-operations` and `soc-web` arrive next |
 | FR-DEP-04 | MUST | infra | M1 | — | Planned |
 | FR-DEP-05 | MUST | infra | M2 | — | Planned |
