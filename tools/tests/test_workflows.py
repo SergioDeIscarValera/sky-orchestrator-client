@@ -337,6 +337,25 @@ class Release(unittest.TestCase):
         self.assertIn('source="backmerge/$VERSION"', self.text)
         self.assertNotIn("--head main", self.text)
 
+    def test_every_service_image_is_published_from_its_own_dockerfile(self) -> None:
+        declared = re.search(r'SERVICES: "([^"]+)"', self.text)
+        assert declared is not None
+        published = dict(entry.split("=") for entry in declared[1].split())
+        compose = (REPOSITORY / "infra" / "compose" / "compose.yaml").read_text(encoding="utf-8")
+        self.assertEqual(set(published), set(re.findall(r"/([a-z-]+):\$\{SOC_VERSION", compose)))
+        for service, dockerfile in published.items():
+            with self.subTest(service=service):
+                self.assertTrue((REPOSITORY / dockerfile).is_file())
+
+    def test_only_the_images_job_may_write_packages(self) -> None:
+        self.assertEqual(self.text.count("packages: write"), 1)
+        images = self.text[self.text.index("  images:") : self.text.index("  back_merge:")]
+        self.assertIn("packages: write", images)
+        self.assertIn("needs: tag", images)
+
+    def test_an_image_tag_is_never_moved(self) -> None:
+        self.assertIn("Image tags are never moved", self.text)
+
 
 if __name__ == "__main__":
     unittest.main()
