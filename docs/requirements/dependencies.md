@@ -11,8 +11,9 @@ Sources: the integration exchange with both projects' maintainers on
 
 SOC vendors Sky Orchestrator's wire contracts at a pinned commit,
 [`contracts/sky-orchestrator/`](../../contracts/sky-orchestrator/README.md),
-currently `v0.4.0-27-gd76dc14`. SO PR #117 bumps `flighttask_prepare` and
-`flighttask_progress` to 1.1.0; the pin moves to the v0.4.1 tag when it exists.
+pinned to Sky Orchestrator's v0.4.1 tag, the release that publishes `DEP-01` to
+`DEP-06`, `DEP-12` and `DEP-13`. Its images run SOC's stack check
+(`SO_VERSION=v0.4.1`).
 
 | ID | SO item | SO milestone | What it gives SOC | SOC requirements waiting on it | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -21,7 +22,7 @@ currently `v0.4.0-27-gd76dc14`. SO PR #117 bumps `flighttask_prepare` and
 | `DEP-03` | FR-WAY-11 | M4 | `GET /v1/envelope`: the active device envelope, with its fingerprint | `FR-OPS-08`, `FR-WAY-08`, `FR-GEO-04` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
 | `DEP-04` | FR-WAY-12 | M4 | `POST /v1/validations`: dry-run validation of a flight file | `FR-LNK-09`, `PF-SO-DRYRUN`, `NFR-COMP-02` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
 | `DEP-05` | FR-FLT-12 | M4 | The cause of a pause in `break_point.break_reason`, as DJI's `FlighttaskBreakReasonEnum` | `FR-LOG-02` | **Delivered**, SO PR #112 |
-| `DEP-06` | NFR-TEST-07 | M4 | The fake bridge image on GHCR, test only | `NFR-TEST-03` | **Delivered**, SO PR #111; published from v0.4.1, proposed right after SO PR #117 |
+| `DEP-06` | NFR-TEST-07 | M4 | The fake bridge image on GHCR, test only | `NFR-TEST-03` | **Delivered**, SO PR #111; published in v0.4.1 (`ghcr.io/sergiodeiscarvalera/sky-orchestrator/fake-bridge:v0.4.1`) |
 | `DEP-07` | FR-TEL-01 at 5 Hz | M4 | OSD at 5 Hz measured on the phone | `NFR-PERF-01` in the field, `FR-SAF-01` reaction distance | Requested |
 | `DEP-08` | FR-TEL-07 | M5, possibly earlier | Horizontal and vertical speed, pitch, roll, remaining flight time | `FR-TEL-03` | Requested |
 | `DEP-09` | FR-TEL-08 | M5 | Remote controller link quality, once verified on the Mavic Air 2 | `FR-TEL-03` | Requested |
