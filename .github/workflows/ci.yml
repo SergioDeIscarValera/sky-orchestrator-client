@@ -132,6 +132,12 @@ jobs:
           uv run --frozen mypy services/soc-cloud
           uv run --frozen pytest services/soc-cloud/tests -m "not lane"
 
+      - name: soc-operations gate
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: |
+          uv run --frozen mypy services/soc-operations
+          uv run --frozen pytest services/soc-operations/tests -m "not lane"
+
       # The container lane (NFR-TEST-02): Postgres, Realtime and Mosquitto from the
       # production images, so it costs their pulls and about a minute. It runs when
       # a pull request changes what it tests, and on every manual run.
@@ -143,7 +149,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$BASE_REF" ] || git diff --name-only "origin/$BASE_REF...HEAD" \
-              | grep -qE '^(database/|infra/migrate/|libs/|services/soc-cloud/|contracts/|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)'; then
+              | grep -qE '^(database/|infra/migrate/|libs/|services/|contracts/|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -156,6 +162,7 @@ jobs:
           uv run --frozen pytest libs/soc-db/tests -m lane
           uv run --frozen pytest libs/soc-realtime/tests -m lane
           uv run --frozen pytest services/soc-cloud/tests -m lane
+          uv run --frozen pytest services/soc-operations/tests -m lane
 
       # The binary, not the action: the action needs a licence on organization
       # accounts, and a scan that stops the day the repository moves is no gate.

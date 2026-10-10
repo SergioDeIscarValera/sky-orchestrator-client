@@ -12,7 +12,12 @@ RULESETS = WORKFLOWS.parent / "rulesets"
 REPOSITORY = WORKFLOWS.parents[1]
 LANE_STEP = "- name: Container lane against Postgres, Realtime and Mosquitto"
 LANE_ONLY_UNITS = ("database",)
-SPLIT_BY_MARKER_UNITS = ("libs/soc-db", "libs/soc-realtime", "services/soc-cloud")
+SPLIT_BY_MARKER_UNITS = (
+    "libs/soc-db",
+    "libs/soc-realtime",
+    "services/soc-cloud",
+    "services/soc-operations",
+)
 NOT_IN_THE_LANE = '-m "not lane"'
 
 
