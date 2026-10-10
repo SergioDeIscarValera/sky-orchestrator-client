@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import uuid
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
+import aiomqtt
+import asyncpg
 import pytest
 
 from soc_cloud import settings
@@ -18,11 +21,14 @@ from soc_cloud.service import CloudService
 from soc_cloud.testing import CLOUD_CLIENT, EphemeralMosquitto
 from soc_cloud.wire import MQTT
 from soc_config import Contract
+from soc_database.harness import Tenancy
 from soc_database.realtime import RealtimeStack
 from soc_realtime import Endpoint
 from soc_realtime.socket import Connector
 
 pytestmark = pytest.mark.lane
+
+DOCK = "SOTESTDOCK01"
 
 
 def stack_on(broker: EphemeralMosquitto, files_port: int) -> dict[str, Any]:
@@ -164,3 +170,150 @@ async def test_the_dock_asks_for_a_flight_file_and_downloads_its_exact_bytes(
     assert reply["data"]["result"] == 0
     assert hashlib.md5(downloaded, usedforsecurity=False).hexdigest() == offered["fingerprint"]
     assert downloaded == kmz
+
+
+INSERT_INTENT = """
+insert into soc.command_intents
+  (client_request_id, organization_id, operation_id, flight_id, gateway_sn, verb, requested_at)
+values (gen_random_uuid(), $1, gen_random_uuid(), gen_random_uuid(), $2, 'return_home',
+        now() - make_interval(secs => $3))
+returning id
+"""
+
+
+class Dock:
+    """so-gateway's side: announces itself, and answers every service with result 0."""
+
+    def __init__(self, client: aiomqtt.Client, serial: str) -> None:
+        self.client = client
+        self.serial = serial
+        self.received: list[str] = []
+
+    async def serve(self) -> None:
+        await self.client.subscribe(f"thing/product/{self.serial}/services", qos=1)
+        announcer = asyncio.create_task(self._announce())
+        try:
+            async for message in self.client.messages:
+                assert isinstance(message.payload, bytes)
+                service = json.loads(message.payload)
+                self.received.append(service["tid"])
+                reply = {
+                    "tid": service["tid"],
+                    "bid": service["bid"],
+                    "timestamp": service["timestamp"],
+                    "method": service["method"],
+                    "data": {"result": 0},
+                }
+                await self.client.publish(
+                    f"thing/product/{self.serial}/services_reply", json.dumps(reply), qos=1
+                )
+        finally:
+            announcer.cancel()
+
+    async def _announce(self) -> None:
+        announcement = json.loads((MQTT / "examples" / "sys.update_topo.json").read_text())
+        while True:
+            message = {**announcement, "tid": str(uuid.uuid4())}
+            await self.client.publish(
+                f"sys/product/{self.serial}/status", json.dumps(message), qos=1
+            )
+            await asyncio.sleep(0.5)
+
+
+@asynccontextmanager
+async def dock_answering(broker: EphemeralMosquitto, serial: str) -> AsyncIterator[Dock]:
+    async with broker.dock() as client:
+        dock = Dock(client, serial)
+        task = asyncio.create_task(dock.serve())
+        try:
+            yield dock
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+
+@asynccontextmanager
+async def requester(
+    platform: RealtimeStack, passwords: dict[str, str]
+) -> AsyncIterator[tuple[asyncpg.Connection, uuid.UUID]]:
+    admin = await platform.postgres.connect("supabase_admin")
+    operations = await platform.postgres.connect("soc_operations", passwords["soc_operations"])
+    try:
+        member = await Tenancy(admin).member()
+        yield operations, member.organization_id
+    finally:
+        await operations.close()
+        await admin.close()
+
+
+async def statuses(connection: asyncpg.Connection, intents: list[uuid.UUID]) -> dict[str, int]:
+    rows = await connection.fetch(
+        "select status::text, count(*) from soc.command_intents where id = any($1) group by 1",
+        intents,
+    )
+    return {row["status"]: row["count"] for row in rows}
+
+
+async def test_commands_reach_the_wire_through_pg_notify_within_50_ms_at_p95(
+    platform: RealtimeStack,
+    broker: EphemeralMosquitto,
+    passwords: dict[str, str],
+    connector: Connector,
+    tmp_path: Path,
+    unused_tcp_port_factory: Callable[[], int],
+) -> None:
+    ports = [unused_tcp_port_factory(), unused_tcp_port_factory()]
+    async with (
+        requester(platform, passwords) as (operations, organization),
+        running_service(platform, broker, passwords, connector, tmp_path, ports) as (service, _),
+        dock_answering(broker, DOCK) as dock,
+    ):
+        await until(lambda: service.links[0].serves(DOCK), 10)
+        intents = []
+        for _ in range(100):
+            intents.append(await operations.fetchval(INSERT_INTENT, organization, DOCK, 0))
+            await asyncio.sleep(0.01)
+        await until_accepted(operations, intents)
+        p95_ms = await operations.fetchval(
+            "select percentile_cont(0.95) within group"
+            " (order by extract(epoch from sent_at - requested_at) * 1000)"
+            " from soc.command_intents where id = any($1)",
+            intents,
+        )
+    assert sorted(dock.received) == sorted(str(intent) for intent in intents)
+    assert p95_ms < 50, f"p95 from commit to claim was {p95_ms:.1f} ms"
+
+
+async def test_a_command_committed_while_soc_cloud_was_away_runs_once_or_expires(
+    platform: RealtimeStack,
+    broker: EphemeralMosquitto,
+    passwords: dict[str, str],
+    connector: Connector,
+    tmp_path: Path,
+    unused_tcp_port_factory: Callable[[], int],
+) -> None:
+    ports = [unused_tcp_port_factory(), unused_tcp_port_factory()]
+    async with requester(platform, passwords) as (operations, organization):
+        fresh = await operations.fetchval(INSERT_INTENT, organization, DOCK, 0)
+        stale = await operations.fetchval(INSERT_INTENT, organization, DOCK, 11)
+        async with (
+            running_service(platform, broker, passwords, connector, tmp_path, ports),
+            dock_answering(broker, DOCK) as dock,
+        ):
+            await until_accepted(operations, [fresh])
+            await asyncio.sleep(0.5)
+        assert await statuses(operations, [fresh, stale]) == {"accepted": 1, "expired": 1}
+    assert dock.received == [str(fresh)]
+
+
+async def until_accepted(connection: asyncpg.Connection, intents: list[uuid.UUID]) -> None:
+    async with asyncio.timeout(30):
+        while (await statuses(connection, intents)).get("accepted", 0) < len(intents):
+            await asyncio.sleep(0.05)
+
+
+async def until(condition: Callable[[], bool], within_s: float) -> None:
+    async with asyncio.timeout(within_s):
+        while not condition():
+            await asyncio.sleep(0.05)
