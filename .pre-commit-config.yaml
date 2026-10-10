@@ -146,6 +146,13 @@ repos:
         pass_filenames: false
         files: ^(services/soc-operations/|libs/|contracts/config/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
 
+      - id: soc-check-gate
+        name: soc-check gate
+        entry: bash -c 'uv run --frozen mypy infra/check && uv run --frozen pytest infra/check/tests -m "not lane"'
+        language: system
+        pass_filenames: false
+        files: ^(infra/check/|libs/soc-config/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+
       - id: soc-realtime-gate
         name: soc-realtime gate
         entry: bash -c 'uv run --frozen mypy libs/soc-realtime && uv run --frozen pytest libs/soc-realtime/tests -m "not lane"'

@@ -95,7 +95,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-LOG-03 | MUST | soc-operations, soc-cloud, database, soc-web | M4 | — | Planned |
 | FR-REP-01 | COULD | soc-web, database | M6 | — | Planned |
 | FR-REP-02 | COULD | soc-web | M6 | — | Planned |
-| FR-DEP-01 | MUST | infra | M1 | — | Planned |
+| FR-DEP-01 | MUST | infra | M1 | `tools/tests/test_compose.py`, `infra/check/tests/test_images.py` | Partial: one compose project runs `soc-migrate`, `soc-cloud` and `soc-operations` with health checks on both networks, valid for `docker compose config`; `soc-web` and the timed bring-up arrive with the stack check |
 | FR-DEP-02 | MUST | infra | M1 | `database/tests/test_ledger_and_roles.py`, `infra/migrate/tests/*` | Done: ledger, checksums, advisory lock, SCRAM passwords; 26 gate tests and the container lane |
 | FR-DEP-03 | MUST | contracts, soc-config | M1 | `libs/soc-config/tests/test_contract.py`, `libs/soc-config/tests/test_configuration.py`, `services/soc-cloud/tests/test_settings.py`, `services/soc-operations/tests/test_settings.py` | Partial: every key and variable declared once with unit, range and default, validated at start (ADR-0019); `soc-cloud` and `soc-operations` read exactly their keys; `soc-web` arrives next |
 | FR-DEP-04 | MUST | infra | M1 | — | Planned |
@@ -116,8 +116,8 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-RES-01 | MUST | soc-web | M1 | — | Planned |
 | NFR-RES-02 | MUST | soc-web | M2 | — | Planned |
 | NFR-RES-03 | MUST | soc-web | M2 | — | Planned |
-| NFR-RES-04 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
-| NFR-RES-05 | MUST | soc-web, soc-cloud, soc-operations, infra | M1 | — | Planned |
+| NFR-RES-04 | MUST | soc-cloud, soc-operations | M1 | `infra/check/tests/test_images.py::test_soc_operations_is_healthy_read_only_within_its_memory_at_rest` | Partial: `soc-operations` 37.9 MiB at rest in its image, held under 64 MiB on the container lane; `soc-cloud` and the load figures in the stack check |
+| NFR-RES-05 | MUST | soc-web, soc-cloud, soc-operations, infra | M1 | `tools/tests/test_compose.py` | Partial: every backend container declares memory and CPU limits, 352 MB in all, held at 512 MB at most by a gate test; `soc-web` joins the compose project with the web |
 | NFR-RES-06 | MUST | soc-cloud, soc-operations | M4 | — | Planned |
 | NFR-RES-07 | MUST | soc-cloud | M2 | — | Planned |
 | NFR-REL-01 | MUST | soc-cloud, soc-operations | M4 | `services/soc-cloud/tests/test_commands.py::test_the_sweep_runs_what_was_missed_and_settles_what_was_left_sent`, `services/soc-cloud/tests/test_against_platform.py::test_a_command_committed_while_soc_cloud_was_away_runs_once_or_expires` | Partial: across a `soc-cloud` restart no command is sent twice or dropped; the flight state arrives in M4 |
@@ -159,7 +159,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (no file over 512 KB), `.pre-commit-config.yaml` (large files, private keys) | Done for size and keys; build output kept out by `.gitignore` |
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
-| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*` | Done so far: tooling 134, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 63, soc-operations 15 tests, each suite under 0.3 s, per unit in pre-commit and CI |
+| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*` | Done so far: tooling 155, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 63, soc-operations 15, soc-check 7 tests, each suite under 0.3 s, per unit in pre-commit and CI |
 | NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py`, `services/soc-cloud/tests/test_against_broker.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, the real Realtime v2.102.3 beside it, and Mosquitto 2.0.22 configured as Sky Orchestrator's broker; `soc-db`, `soc-realtime` and `soc-cloud` run their end-to-end tests there |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |
@@ -170,7 +170,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-OBS-03 | MUST | repository | M0 | `.github/PULL_REQUEST_TEMPLATE.md`, `pr-policy.yml` (description present) | Done: every pull request names its evidence |
 | NFR-OBS-04 | MUST | soc-cloud | M2 | — | Planned |
 | NFR-OBS-05 | SHOULD | soc-web | M2 | — | Planned |
-| NFR-PORT-01 | MUST | infra, soc-web | M1 | — | Planned |
+| NFR-PORT-01 | MUST | infra, soc-web | M1 | `infra/compose/compose.yaml`, `infra/check/tests/test_images.py` | Partial: the backend as a compose project of read-only images; on the mini-PC with the viability session |
 | NFR-PORT-02 | MUST | repository | M0 | ADR-0016, ADR-0017 | Partial: every version chosen and argued; lockfiles and digests arrive with each unit in M1 |
 | NFR-PORT-03 | MUST | infra | M5 | — | Planned |
 | NFR-PORT-04 | MUST | infra, soc-web | M1 | — | Planned |
