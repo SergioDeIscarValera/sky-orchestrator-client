@@ -118,25 +118,25 @@ jobs:
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
         run: |
           uv run --frozen mypy libs/soc-db
-          uv run --frozen pytest libs/soc-db/tests -m "not database"
+          uv run --frozen pytest libs/soc-db/tests -m "not lane"
 
       - name: soc-realtime gate
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
         run: |
           uv run --frozen mypy libs/soc-realtime
-          uv run --frozen pytest libs/soc-realtime/tests -m "not database"
+          uv run --frozen pytest libs/soc-realtime/tests -m "not lane"
 
       - name: soc-cloud gate
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
         run: |
           uv run --frozen mypy services/soc-cloud
-          uv run --frozen pytest services/soc-cloud/tests -m "not database"
+          uv run --frozen pytest services/soc-cloud/tests -m "not lane"
 
-      # The database lane (NFR-TEST-02): Postgres and Realtime from the production
-      # images, so it costs two pulls and under a minute. It runs when a pull request
-      # changes what it tests, and on every manual run.
-      - id: database-changes
-        name: Detect database changes
+      # The container lane (NFR-TEST-02): Postgres, Realtime and Mosquitto from the
+      # production images, so it costs their pulls and about a minute. It runs when
+      # a pull request changes what it tests, and on every manual run.
+      - id: lane-changes
+        name: Detect what the container lane tests
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -149,13 +149,13 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Database lane against ephemeral Postgres and Realtime
-        if: ${{ !cancelled() && steps.workspace.outcome == 'success' && steps.database-changes.outputs.changed == 'true' }}
+      - name: Container lane against Postgres, Realtime and Mosquitto
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' && steps.lane-changes.outputs.changed == 'true' }}
         run: |
           uv run --frozen pytest database/tests
-          uv run --frozen pytest libs/soc-db/tests -m database
-          uv run --frozen pytest libs/soc-realtime/tests -m database
-          uv run --frozen pytest services/soc-cloud/tests -m database
+          uv run --frozen pytest libs/soc-db/tests -m lane
+          uv run --frozen pytest libs/soc-realtime/tests -m lane
+          uv run --frozen pytest services/soc-cloud/tests -m lane
 
       # The binary, not the action: the action needs a licence on organization
       # accounts, and a scan that stops the day the repository moves is no gate.

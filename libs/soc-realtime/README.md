@@ -37,8 +37,8 @@ route = await broadcaster.send([Message(f"org:{org}:soc:telemetry", "sample", sa
 
 ```bash
 uv run --frozen mypy libs/soc-realtime
-uv run --frozen pytest libs/soc-realtime/tests -m "not database"   # gate
-uv run --frozen pytest libs/soc-realtime/tests -m database         # lane, needs Docker
+uv run --frozen pytest libs/soc-realtime/tests -m "not lane"   # gate
+uv run --frozen pytest libs/soc-realtime/tests -m lane         # lane, needs Docker
 ```
 
 The gate, against the fake server: URLs, join frames, broadcast frames, refused

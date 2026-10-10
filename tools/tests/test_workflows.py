@@ -10,10 +10,10 @@ from typing import Any
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 RULESETS = WORKFLOWS.parent / "rulesets"
 REPOSITORY = WORKFLOWS.parents[1]
-LANE_STEP = "- name: Database lane against ephemeral Postgres and Realtime"
+LANE_STEP = "- name: Container lane against Postgres, Realtime and Mosquitto"
 LANE_ONLY_UNITS = ("database",)
 SPLIT_BY_MARKER_UNITS = ("libs/soc-db", "libs/soc-realtime", "services/soc-cloud")
-NOT_IN_THE_LANE = '-m "not database"'
+NOT_IN_THE_LANE = '-m "not lane"'
 
 
 def read(name: str) -> str:
@@ -146,7 +146,7 @@ class ContinuousIntegration(unittest.TestCase):
 
     def test_the_database_lane_runs_only_when_what_it_tests_changes(self) -> None:
         step = self.text[self.text.index(LANE_STEP) :]
-        self.assertIn("steps.database-changes.outputs.changed == 'true'", step.splitlines()[1])
+        self.assertIn("steps.lane-changes.outputs.changed == 'true'", step.splitlines()[1])
 
 
 class PullRequestPolicy(unittest.TestCase):
@@ -196,7 +196,7 @@ def hook_files(hooks: str, hook_id: str) -> str | None:
 
 
 def lane_filter(ci: str) -> str:
-    match = re.search(r"grep -qE '([^']+)'", ci[ci.index("- id: database-changes") :])
+    match = re.search(r"grep -qE '([^']+)'", ci[ci.index("- id: lane-changes") :])
     assert match is not None
     return match[1]
 
@@ -258,14 +258,14 @@ class PythonUnits(unittest.TestCase):
             unit
             for unit in self.units
             if any(
-                "pytest.mark.database" in path.read_text(encoding="utf-8")
+                "pytest.mark.lane" in path.read_text(encoding="utf-8")
                 for path in (REPOSITORY / unit).rglob("test_*.py")
             )
         }
         self.assertEqual(marked, set(SPLIT_BY_MARKER_UNITS))
         lane = self.ci[self.ci.index(LANE_STEP) :]
         for unit in (*LANE_ONLY_UNITS, *SPLIT_BY_MARKER_UNITS):
-            selection = "" if unit in LANE_ONLY_UNITS else " -m database"
+            selection = "" if unit in LANE_ONLY_UNITS else " -m lane"
             with self.subTest(unit=unit):
                 self.assertIn(f"uv run --frozen pytest {unit}/tests{selection}\n", lane)
 

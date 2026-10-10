@@ -43,4 +43,4 @@ from the environment, never from arguments.
 
 `tests/` are gate tests (`NFR-TEST-01`): discovery, planning and the SCRAM verifier
 against one Postgres computed. The runner against a real database is tested in
-the database lane, [`database/tests`](../../database/README.md).
+the container lane, [`database/tests`](../../database/README.md).

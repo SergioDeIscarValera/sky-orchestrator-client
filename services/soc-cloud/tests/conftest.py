@@ -6,6 +6,7 @@ from collections.abc import Iterator
 import pytest
 import websockets
 
+from soc_cloud.testing import EphemeralMosquitto
 from soc_database.harness import migrate, service_passwords
 from soc_database.realtime import RealtimeStack
 from soc_realtime.socket import Connector
@@ -35,3 +36,13 @@ async def platform(stack: RealtimeStack, passwords: dict[str, str]) -> RealtimeS
 @pytest.fixture
 def connector(stack: RealtimeStack) -> Connector:
     return functools.partial(websockets.connect, host="127.0.0.1", port=stack.port)
+
+
+@pytest.fixture(scope="session")
+def broker() -> Iterator[EphemeralMosquitto]:
+    mosquitto = EphemeralMosquitto()
+    mosquitto.start()
+    try:
+        yield mosquitto
+    finally:
+        mosquitto.stop()

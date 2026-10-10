@@ -26,6 +26,7 @@ ignore = ["S101"]
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S105", "S106", "S108", "ASYNC110"]
 "database/src/soc_database/harness.py" = ["S603"]
+"services/soc-cloud/src/soc_cloud/testing.py" = ["S603"]
 "tools/*.py" = ["S603", "S607"]
 
 [tool.ruff.lint.isort]
@@ -35,10 +36,14 @@ known-first-party = ["soc_*"]
 python_version = "3.14"
 strict = true
 warn_unreachable = true
+# paho-mqtt ships no annotations on Properties, which an MQTT v5 session needs.
+untyped_calls_exclude = ["paho.mqtt.properties"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 addopts = "-q --strict-markers --import-mode=importlib"
-markers = ["database: needs Docker and an ephemeral Postgres (the database lane, NFR-TEST-02)"]
+markers = [
+  "lane: needs Docker, containers from the production images (the container lane, NFR-TEST-02)",
+]

@@ -17,7 +17,7 @@ from soc_realtime.socket import Connector
 from soc_realtime.testing import Subscriber
 from soc_supervision import Backoff
 
-pytestmark = pytest.mark.database
+pytestmark = pytest.mark.lane
 
 Until = Callable[..., Awaitable[None]]
 

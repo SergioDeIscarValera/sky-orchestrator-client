@@ -11,7 +11,7 @@ import pytest
 from soc_db import Database, Target
 from soc_supervision import Backoff
 
-pytestmark = pytest.mark.database
+pytestmark = pytest.mark.lane
 
 Until = Callable[..., Awaitable[None]]
 Running = Callable[[Database], AbstractAsyncContextManager[asyncio.Task[None]]]

@@ -8,7 +8,7 @@ requirements enforceable. A convention nothing checks is a preference.
 | Lane | When | Cost | Bound |
 | --- | --- | --- | --- |
 | **Gate** | Every commit (pre-commit) and every pull request | Free locally, seconds in CI | Under 2 s per unit (`NFR-TEST-01`) |
-| **Database** | Pull requests touching `database/`, `infra/migrate/` or a library whose tests use it | Ephemeral Postgres and Realtime from the production images | About a minute (`NFR-TEST-02`) |
+| **Container lane** | Pull requests touching `database/`, `infra/migrate/`, `libs/`, `contracts/` or a service whose tests use it | Ephemeral Postgres, Realtime and Mosquitto from the production images | About a minute (`NFR-TEST-02`) |
 | **End to end** | Pull requests touching what it runs, and every release | Supabase and Sky Orchestrator in containers | Minutes (`NFR-TEST-03`) |
 | **Field sessions** | Before a release is flown | The aircraft and the operator | A runbook, recorded |
 
@@ -29,8 +29,8 @@ hand:
 | Python workspace synced from its lockfile, uv 0.12.23 | `NFR-PORT-02` |
 | Python lint and format over the whole repository | `NFR-MNT-06` |
 | Strict types for `tools/` at Python 3.12, and for `database` | `NFR-MNT-06` |
-| One gate per Python unit, its strict types then its tests: `soc-migrate`, `soc-config`, `soc-log`, `soc-supervision`, `soc-db`, `soc-realtime` and `soc-cloud` (without their `database` tests) | `NFR-MNT-06`, `NFR-TEST-01` |
-| Database lane: `database`'s tests and the `database`-marked tests of `soc-db`, `soc-realtime` and `soc-cloud`, against Postgres and Realtime v2.102.3, when `database/`, `infra/migrate/`, `libs/`, `contracts/`, `services/soc-cloud/` or the lockfile change | `NFR-TEST-02` |
+| One gate per Python unit, its strict types then its tests: `soc-migrate`, `soc-config`, `soc-log`, `soc-supervision`, `soc-db`, `soc-realtime` and `soc-cloud` (without their `lane` tests) | `NFR-MNT-06`, `NFR-TEST-01` |
+| Container lane: `database`'s tests and the `lane`-marked tests of `soc-db`, `soc-realtime` and `soc-cloud`, against Postgres 17.6.1.136, Realtime v2.102.3 and Mosquitto 2.0.22, when `database/`, `infra/migrate/`, `libs/`, `contracts/`, `services/soc-cloud/` or the lockfile change | `NFR-TEST-02` |
 | Secret scan over the full history (gitleaks) | `NFR-SEC-04` |
 
 `pr-policy.yml`, one job named `Pull request policy`: changelog label, branch
@@ -43,7 +43,7 @@ linted, description present.
 Each unit adds its gate as a step of `Gate` when it arrives: `soc-web` (type
 check, lint, unit tests, bundle budget), each Python unit (type check and gate
 tests in its locked environment, one unit at a time, so two units never share a
-module namespace), `database` (migration and policy tests, in the database lane).
+module namespace), `database` (migration and policy tests, in the container lane).
 `tools/tests/test_workflows.py` fails while a workspace member has no gate in CI
 and in the hooks, or while a unit's hook or the lane's path filter misses a
 workspace unit it depends on.

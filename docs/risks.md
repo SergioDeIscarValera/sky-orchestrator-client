@@ -120,7 +120,7 @@ dropping settings.
 container, before anything depends on it (`DEP-23`); fallback design: telemetry
 through `postgres_changes` on a narrow table, at a higher database cost.
 
-**Status, 2026-10-10**: reduced. The database lane runs Realtime v2.102.3 against
+**Status, 2026-10-10**: reduced. The container lane runs Realtime v2.102.3 against
 the production Postgres image with SOC's migrations on every relevant pull
 request: the service role joins private SOC topics and its broadcasts reach
 members, by socket, by the HTTP endpoint and by `realtime.send()` from SQL;

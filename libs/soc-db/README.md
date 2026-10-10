@@ -45,8 +45,8 @@ await database.copy_records("telemetry_samples", rows, COLUMNS)
 
 ```bash
 uv run --frozen mypy libs/soc-db
-uv run --frozen pytest libs/soc-db/tests -m "not database"   # gate: a fake server
-uv run --frozen pytest libs/soc-db/tests -m database         # lane: a real Postgres
+uv run --frozen pytest libs/soc-db/tests -m "not lane"   # gate: a fake server
+uv run --frozen pytest libs/soc-db/tests -m lane         # lane: a real Postgres
 ```
 
 The gate drives the supervisor against a fake server: backoff, listen before the
