@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { sampler } from './sampler'
+import { CARD } from '../app/styles'
 
 const REFRESH_MS = 500
 
@@ -41,7 +42,7 @@ export function StatsOverlay() {
   return (
     <dl
       aria-label="Scene statistics"
-      className="rounded-card bg-surface shadow-card text-muted pointer-events-none absolute bottom-4 left-24 grid grid-cols-[auto_auto] gap-x-3 px-4 py-3 text-xs tabular-nums"
+      className={`${CARD} text-muted pointer-events-none absolute bottom-4 left-24 grid grid-cols-[auto_auto] gap-x-3 px-4 py-3 text-xs tabular-nums`}
     >
       <dt>frames</dt>
       <dd>{reading.frames}</dd>
