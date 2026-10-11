@@ -129,7 +129,8 @@ last one (`FR-TEL-02`).
 - Frames only when something changed: the camera, data, or an animation in
   progress (`NFR-RES-01`).
 - Device pixel ratio capped at 1.5.
-- No post-processing pass.
+- No post-processing pass, and no tone mapping: a colour on screen is its
+  token's.
 - Terrain grid of at most 256 × 256 vertices; imagery at most 2048 × 2048,
   single channel.
 - One draw per kind of repeated part (instancing) for aircraft and waypoints.

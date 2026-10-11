@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
-import { consoleRules } from './lint-rules.js'
+import { cameraModuleRules, consoleRules } from './lint-rules.js'
 
 export default defineConfig([
   globalIgnores(['dist', 'node_modules']),
@@ -22,6 +22,10 @@ export default defineConfig([
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
     rules: consoleRules,
+  },
+  {
+    files: ['src/scene/camera.ts'],
+    rules: cameraModuleRules,
   },
   {
     files: ['src/test/lint.test.ts'],
