@@ -9,6 +9,7 @@ import { z } from '../schema'
 
 import type { RuntimeConfiguration } from '../config/runtime'
 import { fleetOperations, type ChannelFactory } from './supabaseFleets'
+import { telemetryOperations } from './supabaseTelemetry'
 import {
   BackendError,
   type Account,
@@ -71,6 +72,7 @@ export function supabaseBackend(
   return {
     address: configuration.supabaseUrl,
     ...fleetOperations(client, channel),
+    ...telemetryOperations(channel),
 
     onAccountChange(listener) {
       const { data } = client.auth.onAuthStateChange((_event, session) => {

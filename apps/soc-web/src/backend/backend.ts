@@ -1,3 +1,5 @@
+import type { TelemetrySample } from '../telemetry/sample'
+
 export interface Account {
   readonly userId: string
   readonly email: string
@@ -58,6 +60,11 @@ export interface AircraftModel {
 }
 
 export type LinkState = 'connected' | 'connecting' | 'displaced' | 'unreachable'
+
+/** One aircraft on the wire: its gateway's serial and its own (IR-DEV's key). */
+export function aircraftKey(gatewaySn: string, aircraftSn: string): string {
+  return `${gatewaySn}/${aircraftSn}`
+}
 
 /** An aircraft a stack of the organization has announced (IR-DEV). */
 export interface Device {
@@ -135,4 +142,5 @@ export interface Backend {
   changeFleet(fleetId: string, changes: FleetChanges): Promise<Fleet>
   retireFleet(fleetId: string): Promise<void>
   onState(organizationId: string, listener: (event: StateEvent) => void): () => void
+  onTelemetry(organizationId: string, listener: (sample: TelemetrySample) => void): () => void
 }
