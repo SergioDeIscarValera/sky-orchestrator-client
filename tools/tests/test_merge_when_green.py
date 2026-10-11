@@ -28,15 +28,22 @@ RED = checks(
 
 
 class FakeGh:
-    def __init__(self, *answers: str) -> None:
+    def __init__(self, *answers: str, states: Sequence[str] = ("MERGED",)) -> None:
         self.answers = list(answers)
+        self.states = list(states)
         self.calls: list[list[str]] = []
 
     def __call__(self, arguments: Sequence[str]) -> str:
         self.calls.append(list(arguments))
         if arguments[:2] == ["pr", "checks"]:
             return self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
+        if arguments[:2] == ["pr", "view"]:
+            return (self.states.pop(0) if len(self.states) > 1 else self.states[0]) + "\n"
         return ""
+
+    @property
+    def merges(self) -> int:
+        return sum(call[:2] == ["pr", "merge"] for call in self.calls)
 
     @property
     def merged(self) -> bool:
@@ -107,6 +114,19 @@ class Merging(unittest.TestCase):
             ["pr", "merge", "31", "--repo", mwg.REPOSITORY, "--merge", "--delete-branch"], gh.calls
         )
         self.assertIn("#31 merged", output)
+
+    def test_a_merge_is_believed_only_once_github_reports_it(self) -> None:
+        gh = FakeGh(GREEN, states=["OPEN", "MERGED"])
+        status, output = run(gh)
+        self.assertEqual((status, gh.merges), (0, 2))
+        self.assertIn("#31 merged", output)
+
+    def test_a_merge_github_never_reports_is_a_failure(self) -> None:
+        gh = FakeGh(GREEN, states=["OPEN"])
+        status, output = run(gh)
+        self.assertEqual((status, gh.merges), (1, mwg.MERGE_ATTEMPTS))
+        self.assertNotIn("#31 merged", output)
+        self.assertIn("#31 is green but was not merged: GitHub reports it OPEN", output)
 
     def test_a_red_pull_request_is_never_merged(self) -> None:
         gh = FakeGh(PENDING, RED)

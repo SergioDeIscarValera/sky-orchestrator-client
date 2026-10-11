@@ -176,7 +176,9 @@ merges after it.
 Merge with `python3 tools/merge_when_green.py <number>`: it waits for the checks
 and merges only when every check passed and every check the rulesets require
 reported. The free private plan does not enforce the rulesets, so nothing else
-stops a red pull request from merging.
+stops a red pull request from merging. It reports a merge only once GitHub says
+the pull request is merged, trying again while GitHub is still working out
+whether it can merge; on 2026-10-11 it once reported #63 merged when it was not.
 
 The template asks for the requirements, the evidence and the failure modes.
 Since commits are one line, the description is where the reasoning lives.
