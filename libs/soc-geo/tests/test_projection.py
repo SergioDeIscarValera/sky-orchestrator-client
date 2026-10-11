@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from soc_geo.projection import EastNorth, Geodetic, east_north
+from soc_geo.projection import EastNorth, Geodetic, east_north, geodetic_at
 
 VECTORS = Path(__file__).resolve().parents[3] / "contracts" / "geometry" / "projection.json"
 GOLDEN: dict[str, Any] = json.loads(VECTORS.read_text(encoding="utf-8"))
@@ -63,3 +63,13 @@ def test_the_origin_is_the_frame_s_zero_and_east_is_east() -> None:
     assert east_north(farm, farm) == EastNorth(0.0, 0.0)
     eastward = east_north(farm, Geodetic(41.6523, -4.7235))
     assert eastward.east_m > 0 and abs(eastward.north_m) < 0.01
+
+
+@pytest.mark.parametrize("case", GOLDEN["cases"], ids=lambda case: case["name"])
+def test_the_inverse_finds_every_golden_point_again(case: dict[str, Any]) -> None:
+    found = geodetic_at(geodetic(case["origin"]), EastNorth(case["east_m"], case["north_m"]))
+    placed = east_north(geodetic(case["origin"]), found)
+    assert math.hypot(placed.east_m - case["east_m"], placed.north_m - case["north_m"]) < 1e-6
+    assert found.latitude_deg == pytest.approx(case["point"]["latitude_deg"], abs=1e-9)
+    longitude_off = (found.longitude_deg - case["point"]["longitude_deg"] + 180) % 360 - 180
+    assert abs(longitude_off) < 1e-9

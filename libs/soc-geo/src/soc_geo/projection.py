@@ -55,3 +55,35 @@ def east_north(origin: Geodetic, point: Geodetic) -> EastNorth:
         east_m=-sin_lon * dx + cos_lon * dy,
         north_m=-sin_lat * cos_lon * dx - sin_lat * sin_lon * dy + cos_lat * dz,
     )
+
+
+def geodetic_at(origin: Geodetic, place: EastNorth, tolerance_m: float = 1e-7) -> Geodetic:
+    """The point at the ellipsoid's surface that `east_north` puts at `place`.
+
+    Newton's method on the closed form, from the radii of curvature at the origin:
+    within the site's extent it converges in three or four steps.
+    """
+    latitude = math.radians(origin.latitude_deg)
+    sine = math.sin(latitude)
+    meridian = (
+        SEMI_MAJOR_AXIS_M
+        * (1 - ECCENTRICITY_SQUARED)
+        / (1 - ECCENTRICITY_SQUARED * sine * sine) ** 1.5
+    )
+    prime_vertical = SEMI_MAJOR_AXIS_M / math.sqrt(1 - ECCENTRICITY_SQUARED * sine * sine)
+    metres_per_degree_north = math.radians(1) * meridian
+    metres_per_degree_east = math.radians(1) * prime_vertical * math.cos(latitude)
+    guess = Geodetic(
+        origin.latitude_deg + place.north_m / metres_per_degree_north,
+        origin.longitude_deg + place.east_m / metres_per_degree_east,
+    )
+    for _ in range(12):
+        placed = east_north(origin, guess)
+        miss_east, miss_north = place.east_m - placed.east_m, place.north_m - placed.north_m
+        if math.hypot(miss_east, miss_north) <= tolerance_m:
+            return guess
+        guess = Geodetic(
+            guess.latitude_deg + miss_north / metres_per_degree_north,
+            guess.longitude_deg + miss_east / metres_per_degree_east,
+        )
+    raise ValueError(f"{place} does not converge from {origin}")
