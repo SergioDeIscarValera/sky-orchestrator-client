@@ -41,8 +41,9 @@ docker build -f services/soc-cloud/Dockerfile -t soc-cloud:local .
 for secrets run in the image build) and served by
 `nginxinc/nginx-unprivileged:1.30.5-alpine3.24-slim`, both pinned by digest, as
 user 10001:10001. It writes `/config.json` and its security headers into a 4 MB
-`/tmp` at start, from `SOC_WEB_SUPABASE_URL` and `SOC_WEB_SUPABASE_KEY`, and
-refuses to start on a bad address or any key but the public one. 19.5 MB, 2.3
+`/tmp` at start, from `SOC_WEB_SUPABASE_URL`, `SOC_WEB_SUPABASE_KEY` and its own
+configuration file (`SOC_CONFIG_FILE`, ADR-0023), and refuses to start on a bad
+address, any key but the public one, or a file it cannot read. 19.5 MB, 2.3
 MiB at rest.
 
 ## Deploying on the mini-PC
@@ -56,6 +57,7 @@ cp soc-operations.env.example soc-operations.env
 cp soc-web.env.example soc-web.env                 # the address browsers reach Supabase at
 uv run soc-config example soc-cloud > soc-cloud.json             # fill the blanks
 uv run soc-config example soc-operations > soc-operations.json
+uv run soc-config example soc-web > soc-web.json                 # the console's thresholds
 uv run soc-config check soc-cloud soc-cloud.json
 docker compose up -d
 ```
@@ -63,4 +65,6 @@ docker compose up -d
 The console then answers on the mini-PC's LAN address, port 8088. The filled
 files are ignored by git. `soc-migrate` runs first and the services
 start only once it has succeeded; never run it during Virtual Origen's own
-deploy.
+deploy. The console starts only once `soc-web-check` has accepted
+`soc-web.json` with `soc-config check soc-web` (ADR-0023); `docker compose logs
+soc-web-check` names every problem of a file it refused.

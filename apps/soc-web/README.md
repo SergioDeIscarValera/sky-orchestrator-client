@@ -105,14 +105,18 @@ Node 24.21.0 and pnpm 12.10.1 (through corepack, as `packageManager` says):
 cd apps/soc-web
 corepack enable
 pnpm install
+uv run soc-config example soc-web > soc-web.json
 SOC_WEB_SUPABASE_URL=http://192.168.1.40:8000 \
 SOC_WEB_SUPABASE_KEY=<the anon or publishable key> \
+SOC_CONFIG_FILE=$PWD/soc-web.json \
 pnpm dev          # http://localhost:5173
 ```
 
-In development, Vite serves `/config.json` from those two variables, as the
-image writes it when its container starts. Without them the console starts on
-the page that names what is missing. Schema `soc` must be in Supabase's
+In development, Vite serves `/config.json` from those two variables and the
+console's own file, named by `SOC_CONFIG_FILE` (`uv run soc-config example
+soc-web > soc-web.json` starts one), as the image writes it when its container
+starts (ADR-0023). Without them the console starts on the page that names what
+is missing. Schema `soc` must be in Supabase's
 `PGRST_DB_SCHEMAS` for the organizations to load (`DEP-21`).
 
 | Script                          | What it checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -133,12 +137,14 @@ the built files) and serves it with an unprivileged nginx, as user
 ```bash
 docker build -f apps/soc-web/Dockerfile -t soc-web:local .
 docker run --rm --read-only --tmpfs /tmp:size=4m -p 8088:8080 \
+  -v $PWD/soc-web.json:/etc/soc/soc-web.json:ro -e SOC_CONFIG_FILE=/etc/soc/soc-web.json \
   -e SOC_WEB_SUPABASE_URL=http://192.168.1.40:8000 \
   -e SOC_WEB_SUPABASE_KEY=<the anon or publishable key> soc-web:local
 ```
 
-At start, `nginx/soc-web.sh` checks both variables as the web does, writes
-`/config.json` and the security headers into `/tmp/soc-web`, logs one
+At start, `nginx/soc-web.sh` checks both variables as the web does and that the
+console's file can be read, writes `/config.json` (the address, the key and the
+file as it is) and the security headers into `/tmp/soc-web`, logs one
 `service_started` line and hands over to nginx (`FR-DEP-04`). The headers
 (`NFR-SEC-07`): a Content Security Policy that loads scripts and styles from the
 console only and connects only to the configured Supabase (HTTP and WebSocket),
@@ -163,31 +169,32 @@ on the page colour.
 
 ## Failure modes
 
-| Failure                                                        | What happens                                                                                                               |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Local storage unavailable (a private window, blocked storage)  | The theme follows the system; the session and the organization are not remembered across reloads                           |
-| A colour written outside the token file                        | `pnpm lint` fails, in the hooks and in CI                                                                                  |
-| A token change that drops text below 4.5:1                     | `pnpm test` fails, naming the pair and the theme                                                                           |
-| An API that needs a secure context                             | `pnpm lint` fails: the console is served over plain HTTP on the LAN                                                        |
-| `/config.json` missing, not JSON, or refused                   | The console does not start; one page names every problem, nothing talks to Supabase                                        |
-| The service role key given as the key                          | Refused at start, before any request: it must never reach a browser                                                        |
-| Supabase does not answer at sign-in                            | The sign-in names the address it tried                                                                                     |
-| Wrong email or password, too many attempts, unconfirmed email  | The sign-in says which, also when CORS hides GoTrue's error code from the browser                                          |
-| Schema `soc` not served by PostgREST (`DEP-21`)                | The organizations page names the missing setting, with a button to try again                                               |
-| `soc.member_organizations` missing                             | The organizations page says SOC's migrations are not applied                                                               |
-| The account has no live organization                           | A page says so and offers sign-out; nothing opens                                                                          |
-| The remembered organization is no longer the user's            | The picker opens again                                                                                                     |
-| The session ends on the server (revoked, refresh expired)      | The console returns to sign-in and forgets everything it fetched                                                           |
-| An organization's time zone unknown to the browser             | The clock shows the device's zone and says so on hover                                                                     |
-| A browser without WebGL 2                                      | The scene's place says so; the panels keep working                                                                         |
-| The scene fails while drawing                                  | Its place says what stopped and asks for a reload; the panels keep working                                                 |
-| A camera move that skips the camera's limits                   | `pnpm lint` refuses it outside `src/scene/camera.ts`; `flyTo` constrains it                                                |
-| The container's address or key missing or refused              | It exits with status 2 and one `configuration_refused` line naming each problem, never the key; compose shows it down      |
-| A modal menu or another inline style                           | The policy blocks it in the browser; `pnpm lint` refuses modal menus before that                                           |
-| A module mock in a test                                        | `pnpm lint` refuses it: test files share their worker's modules, so it would leak into the next file (ADR-0022)            |
-| A stack out of reach, displaced or still connecting            | Its aircraft read as the stack's state, never as the online flag it last reported                                          |
-| A link to a fleet retired, unknown, or of another organization | The inspector says so and offers to clear the selection                                                                    |
-| The state topic drops and rejoins                              | Everything the console read of the organization is read again on the rejoin                                                |
-| A viewer's change or retirement of a fleet                     | Row security leaves the row untouched without an error; the console counts the rows returned and says nothing changed      |
-| A fleet's write the database refuses                           | The refusal names the field its constraint is about: the name, the model, the airframe serial, the aircraft, its stack     |
-| A viewer opens a fleet or an aircraft seen                     | Edit, Retire and Register stay focusable, say why they do nothing, and open nothing; the database refuses the write anyway |
+| Failure                                                                | What happens                                                                                                                                     |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Local storage unavailable (a private window, blocked storage)          | The theme follows the system; the session and the organization are not remembered across reloads                                                 |
+| A colour written outside the token file                                | `pnpm lint` fails, in the hooks and in CI                                                                                                        |
+| A token change that drops text below 4.5:1                             | `pnpm test` fails, naming the pair and the theme                                                                                                 |
+| An API that needs a secure context                                     | `pnpm lint` fails: the console is served over plain HTTP on the LAN                                                                              |
+| `/config.json` missing, not JSON, or refused                           | The console does not start; one page names every problem, nothing talks to Supabase                                                              |
+| The console's file missing a key, out of range, or breaking a relation | `soc-web-check` refuses it and the console does not start; served anyway, the browser refuses it on the startup page, naming each key (ADR-0023) |
+| The service role key given as the key                                  | Refused at start, before any request: it must never reach a browser                                                                              |
+| Supabase does not answer at sign-in                                    | The sign-in names the address it tried                                                                                                           |
+| Wrong email or password, too many attempts, unconfirmed email          | The sign-in says which, also when CORS hides GoTrue's error code from the browser                                                                |
+| Schema `soc` not served by PostgREST (`DEP-21`)                        | The organizations page names the missing setting, with a button to try again                                                                     |
+| `soc.member_organizations` missing                                     | The organizations page says SOC's migrations are not applied                                                                                     |
+| The account has no live organization                                   | A page says so and offers sign-out; nothing opens                                                                                                |
+| The remembered organization is no longer the user's                    | The picker opens again                                                                                                                           |
+| The session ends on the server (revoked, refresh expired)              | The console returns to sign-in and forgets everything it fetched                                                                                 |
+| An organization's time zone unknown to the browser                     | The clock shows the device's zone and says so on hover                                                                                           |
+| A browser without WebGL 2                                              | The scene's place says so; the panels keep working                                                                                               |
+| The scene fails while drawing                                          | Its place says what stopped and asks for a reload; the panels keep working                                                                       |
+| A camera move that skips the camera's limits                           | `pnpm lint` refuses it outside `src/scene/camera.ts`; `flyTo` constrains it                                                                      |
+| The container's address or key missing or refused                      | It exits with status 2 and one `configuration_refused` line naming each problem, never the key; compose shows it down                            |
+| A modal menu or another inline style                                   | The policy blocks it in the browser; `pnpm lint` refuses modal menus before that                                                                 |
+| A module mock in a test                                                | `pnpm lint` refuses it: test files share their worker's modules, so it would leak into the next file (ADR-0022)                                  |
+| A stack out of reach, displaced or still connecting                    | Its aircraft read as the stack's state, never as the online flag it last reported                                                                |
+| A link to a fleet retired, unknown, or of another organization         | The inspector says so and offers to clear the selection                                                                                          |
+| The state topic drops and rejoins                                      | Everything the console read of the organization is read again on the rejoin                                                                      |
+| A viewer's change or retirement of a fleet                             | Row security leaves the row untouched without an error; the console counts the rows returned and says nothing changed                            |
+| A fleet's write the database refuses                                   | The refusal names the field its constraint is about: the name, the model, the airframe serial, the aircraft, its stack                           |
+| A viewer opens a fleet or an aircraft seen                             | Edit, Retire and Register stay focusable, say why they do nothing, and open nothing; the database refuses the write anyway                       |
