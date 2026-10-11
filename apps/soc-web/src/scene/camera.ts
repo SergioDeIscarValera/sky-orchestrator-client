@@ -86,3 +86,31 @@ function boundary(site: Site): Box3 {
     new Vector3(site.halfSizeM, CEILING_M, site.halfSizeM),
   )
 }
+
+/** How far from an aircraft the camera stops when it flies to frame it. */
+export const FRAME_DISTANCE_M = 140
+/** The inspector's width and its gutters, which the framed aircraft keeps clear of. */
+export const INSPECTOR_SPAN_PX = 360 + 32
+
+/**
+ * The pose that frames `subject` beside the inspector: the camera keeps the angle
+ * the user chose and comes to FRAME_DISTANCE_M, with its target moved right by half
+ * the inspector, so the subject sits in the middle of the view the inspector leaves.
+ */
+export function framePose(
+  subject: Vector3,
+  camera: { readonly position: Vector3; readonly target: Vector3 },
+  viewportPx: { readonly width: number; readonly height: number },
+): Pose {
+  const direction = camera.position.clone().sub(camera.target)
+  if (direction.lengthSq() === 0) direction.set(0, 1, 1)
+  direction.normalize()
+  const right = new Vector3(0, 1, 0).cross(direction).normalize()
+  const metresPerPixel =
+    (2 * FRAME_DISTANCE_M * Math.tan(MathUtils.degToRad(FIELD_OF_VIEW_DEG) / 2)) /
+    Math.max(1, viewportPx.height)
+  const shiftM =
+    viewportPx.width > INSPECTOR_SPAN_PX * 2 ? (INSPECTOR_SPAN_PX / 2) * metresPerPixel : 0
+  const target = subject.clone().addScaledVector(right, shiftM)
+  return { target, position: target.clone().addScaledVector(direction, FRAME_DISTANCE_M) }
+}

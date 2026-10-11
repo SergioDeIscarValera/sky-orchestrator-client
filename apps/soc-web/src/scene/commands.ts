@@ -1,16 +1,34 @@
 import { create } from 'zustand'
 
-export type CameraCommand = 'overview' | 'closer' | 'farther'
+export type CameraCommand = 'overview' | 'closer' | 'farther' | 'frame'
 
-interface Commands {
-  readonly last: { readonly command: CameraCommand; readonly sequence: number } | null
-  readonly send: (command: CameraCommand) => void
+/** A point of the scene, x east, y up, z south, in metres. */
+export interface ScenePoint {
+  readonly x: number
+  readonly y: number
+  readonly z: number
 }
 
-/** The map tools, outside the canvas, ask; the controls, inside it, act. */
+interface Commands {
+  readonly last: {
+    readonly command: CameraCommand
+    readonly sequence: number
+    /** What `frame` frames. */
+    readonly subject?: ScenePoint
+  } | null
+  readonly send: (command: CameraCommand, subject?: ScenePoint) => void
+}
+
+/** The map tools and the scene's entities ask; the controls, inside the canvas, act. */
 export const useCameraCommands = create<Commands>()((set) => ({
   last: null,
-  send: (command) => {
-    set(({ last }) => ({ last: { command, sequence: (last?.sequence ?? 0) + 1 } }))
+  send: (command, subject) => {
+    set(({ last }) => ({
+      last: {
+        command,
+        sequence: (last?.sequence ?? 0) + 1,
+        ...(subject === undefined ? {} : { subject }),
+      },
+    }))
   },
 }))

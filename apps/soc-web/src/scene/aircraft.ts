@@ -12,8 +12,10 @@ import {
   LineBasicMaterial,
   LineSegments,
   MathUtils,
+  Mesh,
   MeshBasicMaterial,
   Object3D,
+  RingGeometry,
 } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
@@ -154,13 +156,15 @@ export function screenScale(distanceM: number, fovDeg: number, viewportPx: numbe
   return Math.max(1, (MIN_SPAN_PX * metresPerPixel) / SPAN_M)
 }
 
-/** The instanced parts every aircraft of the organization is drawn with: four draws in all. */
+/** The instanced parts every aircraft of the organization is drawn with: four draws, five with a selection. */
 export interface AircraftParts {
   readonly group: Group
   readonly bodies: InstancedMesh<BufferGeometry, MeshBasicMaterial>
   readonly casings: InstancedMesh<BufferGeometry, MeshBasicMaterial>
   readonly discs: InstancedMesh<BufferGeometry, MeshBasicMaterial>
   readonly stalks: LineSegments<BufferGeometry, LineBasicMaterial>
+  /** The soft ring on the ground under the selected aircraft. */
+  readonly ring: Mesh<BufferGeometry, MeshBasicMaterial>
   /** The aircraft each body instance draws, by `aircraftKey`, for picking. */
   readonly keys: string[]
 }
@@ -184,21 +188,30 @@ export function createAircraftParts(capacity: number): AircraftParts {
     new LineBasicMaterial(),
   )
   stalks.name = 'aircraft-stalk'
+  const ring = new Mesh(
+    new RingGeometry(SPAN_M * 0.75, SPAN_M * 1.05, 48).rotateX(-Math.PI / 2),
+    new MeshBasicMaterial({ transparent: true, opacity: 0.85, depthWrite: false }),
+  )
+  ring.name = 'aircraft-selection'
+  ring.visible = false
   const group = new Group()
   group.name = 'aircraft-parts'
-  for (const part of [bodies, casings, discs, stalks]) {
+  for (const part of [bodies, casings, discs, stalks, ring]) {
     // Instances spread over the whole site; the geometry's own bounds would cull them wrongly.
     part.frustumCulled = false
     group.add(part)
   }
+  // Only an aircraft is picked: the discs, the stalks and the ring do not take the pointer.
+  for (const part of [discs, stalks, ring]) part.raycast = () => undefined
   for (const mesh of [bodies, casings, discs]) mesh.count = 0
   stalks.geometry.setDrawRange(0, 0)
-  return { group, bodies, casings, discs, stalks, keys: [] }
+  return { group, bodies, casings, discs, stalks, ring, keys: [] }
 }
 
 export function paintAircraft(parts: AircraftParts, palette: ScenePalette): void {
   parts.casings.material.color.set(palette.casing)
   parts.stalks.material.color.set(palette.casing)
+  parts.ring.material.color.set(palette.accent)
 }
 
 const pose = new Object3D()
@@ -216,8 +229,10 @@ export function writeAircraft(
   fovDeg: number,
   viewportPx: number,
   palette: ScenePalette,
+  selected: string | null = null,
 ): void {
   const stalk = parts.stalks.geometry.getAttribute('position') as Float32BufferAttribute
+  parts.ring.visible = false
   let bodies = 0
   let discs = 0
   let stalks = 0
@@ -240,6 +255,11 @@ export function writeAircraft(
     parts.discs.setMatrixAt(discs, pose.matrix)
     parts.discs.setColorAt(discs, tint.set(current ? colour : palette.gridMajor))
     discs += 1
+    if (key === selected) {
+      parts.ring.position.set(x, 0.03, z)
+      parts.ring.scale.setScalar(scale)
+      parts.ring.visible = true
+    }
     if (!current) continue
 
     pose.position.set(x, y + 0.04 * scale, z)
@@ -268,13 +288,18 @@ export function writeAircraft(
   }
   stalk.needsUpdate = true
   parts.stalks.geometry.setDrawRange(0, stalks * 2)
+  // A ray tests an instanced mesh's bounding sphere first, which three computes once:
+  // computed again here, an aircraft that has flown away from it can still be picked.
+  parts.bodies.computeBoundingSphere()
+  parts.casings.computeBoundingSphere()
 }
 
 export function disposeAircraft(parts: AircraftParts): void {
   parts.bodies.geometry.dispose()
   parts.discs.geometry.dispose()
   parts.stalks.geometry.dispose()
-  for (const part of [parts.bodies, parts.casings, parts.discs, parts.stalks]) {
+  parts.ring.geometry.dispose()
+  for (const part of [parts.bodies, parts.casings, parts.discs, parts.stalks, parts.ring]) {
     part.material.dispose()
   }
   parts.bodies.dispose()

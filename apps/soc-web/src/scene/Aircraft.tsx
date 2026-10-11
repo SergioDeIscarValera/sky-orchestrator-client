@@ -1,9 +1,15 @@
-import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo } from 'react'
+import { Html } from '@react-three/drei'
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import type { Group } from 'three'
 
+import { aircraftKey, type Fleet } from '../backend/backend'
+import { useSelect, useSelection, type Selection } from '../app/router'
 import { useSettings } from '../config/settings'
+import { useFleets } from '../fleets/data'
 import type { Geodetic } from '../geometry/projection'
-import { useTelemetryStore } from '../telemetry/context'
+import { useTelemetryStore, useTrack } from '../telemetry/context'
+import { useFreshness } from '../telemetry/freshness'
 import {
   createAircraftParts,
   disposeAircraft,
@@ -11,24 +17,46 @@ import {
   paintAircraft,
   writeAircraft,
   type Drawn,
+  type Placement,
 } from './aircraft'
 import { FIELD_OF_VIEW_DEG } from './camera'
+import { useCameraCommands } from './commands'
+import { labelLines, richLabels } from './labels'
 import { usePalette } from './palette'
 
 /** More aircraft than a farm flies at once. */
 const CAPACITY = 32
 
+type Placed = ReadonlyMap<string, Placement>
+
+function selectedKey(selection: Selection | null, fleets: readonly Fleet[] | undefined) {
+  if (selection === null) return null
+  if (selection.kind === 'device') return aircraftKey(selection.gatewaySn, selection.aircraftSn)
+  const fleet = fleets?.find(({ id }) => id === selection.fleetId)
+  return fleet === undefined ? null : aircraftKey(fleet.gatewaySn, fleet.aircraftSn)
+}
+
 /**
  * The organization's aircraft, gliding from sample to sample (FR-SCN-04,
- * FR-TEL-02). A frame is drawn when a sample arrives, when one crosses a
- * freshness threshold, and while an aircraft glides; none otherwise (NFR-RES-01).
+ * FR-TEL-02). A click selects one, as its row in the fleet panel does, and the
+ * camera flies to frame it beside the inspector (FR-SCN-05); the selected, the
+ * hovered and the alerting carry a label (FR-SCN-06). A frame is drawn when a
+ * sample arrives, when one crosses a freshness threshold, and while an aircraft
+ * glides; none otherwise (NFR-RES-01).
  */
 export function Aircraft({ origin }: { readonly origin: Geodetic | null }) {
   const store = useTelemetryStore()
   const settings = useSettings()
   const palette = usePalette()
+  const fleets = useFleets()
+  const selection = useSelection()
+  const select = useSelect()
   const invalidate = useThree((state) => state.invalidate)
   const parts = useMemo(() => createAircraftParts(CAPACITY), [])
+  const placed = useRef<Placed>(new Map())
+  const [hovered, setHovered] = useState<string | null>(null)
+  const [labelled, setLabelled] = useState<readonly string[]>([])
+  const selected = selectedKey(selection, fleets.data)
 
   useEffect(
     () => () => {
@@ -64,14 +92,31 @@ export function Aircraft({ origin }: { readonly origin: Geodetic | null }) {
     }
   }, [store, settings, invalidate])
 
+  // A new selection flies the camera to it once, where it is when first drawn: a shared
+  // link may select it before its telemetry arrives. Following it is pinning's.
+  const toFrame = useRef<string | null>(null)
+  useEffect(() => {
+    toFrame.current = selected
+    invalidate()
+  }, [selected, invalidate])
+
   useFrame((state) => {
     const now = performance.now()
     const aircraft: { key: string; drawn: Drawn }[] = []
+    const positions = new Map<string, Placement>()
     if (origin !== null) {
       for (const [key, track] of store.getState().tracks) {
         const drawn = drawnAt(track, origin, now, settings)
-        if (drawn !== null) aircraft.push({ key, drawn })
+        if (drawn === null) continue
+        aircraft.push({ key, drawn })
+        positions.set(key, drawn.placement)
       }
+    }
+    placed.current = positions
+    const subject = toFrame.current === null ? undefined : positions.get(toFrame.current)
+    if (subject !== undefined) {
+      toFrame.current = null
+      useCameraCommands.getState().send('frame', subject)
     }
     writeAircraft(
       parts,
@@ -80,9 +125,118 @@ export function Aircraft({ origin }: { readonly origin: Geodetic | null }) {
       FIELD_OF_VIEW_DEG,
       state.size.height,
       palette,
+      selected,
     )
+    const rich = richLabels(
+      aircraft.map(({ key, drawn }) => ({ key, freshness: drawn.freshness })),
+      selected,
+      hovered,
+    )
+    if (rich.join('|') !== labelled.join('|')) setLabelled(rich)
     if (aircraft.some(({ drawn }) => drawn.gliding)) invalidate()
   })
 
-  return <primitive object={parts.group} />
+  // Only the bodies and their casings are picked; their instances share the keys' order.
+  const picked = (event: ThreeEvent<PointerEvent | MouseEvent>) =>
+    event.instanceId === undefined ? undefined : parts.keys[event.instanceId]
+
+  const choose = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation()
+    const key = picked(event)
+    if (key === undefined) return
+    const [gatewaySn = '', aircraftSn = ''] = key.split('/')
+    const fleet = fleets.data?.find(
+      (candidate) => candidate.gatewaySn === gatewaySn && candidate.aircraftSn === aircraftSn,
+    )
+    select(
+      fleet === undefined
+        ? { kind: 'device', gatewaySn, aircraftSn }
+        : { kind: 'fleet', fleetId: fleet.id },
+    )
+  }
+
+  return (
+    <>
+      <primitive
+        object={parts.group}
+        onClick={choose}
+        onPointerOver={(event: ThreeEvent<PointerEvent>) => {
+          event.stopPropagation()
+          setHovered(picked(event) ?? null)
+          document.body.style.cursor = 'pointer'
+          invalidate()
+        }}
+        onPointerOut={() => {
+          setHovered(null)
+          document.body.style.cursor = ''
+          invalidate()
+        }}
+      />
+      {labelled.map((key) => (
+        <AircraftLabel
+          key={key}
+          aircraft={key}
+          name={nameOf(key, fleets.data)}
+          placed={placed}
+          selected={key === selected}
+        />
+      ))}
+    </>
+  )
+}
+
+function nameOf(key: string, fleets: readonly Fleet[] | undefined): string {
+  const [gatewaySn, aircraftSn] = key.split('/')
+  const fleet = fleets?.find(
+    (candidate) => candidate.gatewaySn === gatewaySn && candidate.aircraftSn === aircraftSn,
+  )
+  return fleet?.name ?? aircraftSn ?? key
+}
+
+/** A pill above the aircraft with a pointer down to it, never over it (FR-SCN-06). */
+function AircraftLabel({
+  aircraft,
+  name,
+  placed,
+  selected,
+}: {
+  readonly aircraft: string
+  readonly name: string
+  readonly placed: RefObject<Placed>
+  readonly selected: boolean
+}) {
+  const [gatewaySn = '', aircraftSn = ''] = aircraft.split('/')
+  const track = useTrack(gatewaySn, aircraftSn)
+  const { freshness } = useFreshness(track?.latest.receivedAt ?? null)
+  const anchor = useRef<Group>(null)
+
+  useFrame(() => {
+    const position = placed.current.get(aircraft)
+    if (position === undefined || anchor.current === null) return
+    anchor.current.position.set(position.x, position.y, position.z)
+  })
+
+  if (track === undefined || freshness === null) return null
+  const { title, detail } = labelLines(name, track.latest.sample, freshness)
+  return (
+    <group ref={anchor}>
+      <Html zIndexRange={[20, 0]} className="pointer-events-none">
+        <div className="flex -translate-x-1/2 -translate-y-[calc(100%+22px)] flex-col items-center">
+          <div
+            className={`rounded-pill shadow-card dark:border-border flex flex-col items-center px-3 py-1 whitespace-nowrap dark:border ${
+              selected ? 'bg-primary text-on-primary' : 'bg-surface text-heading'
+            }`}
+          >
+            <span className="font-heading text-xs font-semibold">{title}</span>
+            <span className="text-[11px] tabular-nums">{detail}</span>
+          </div>
+          <div
+            className={`size-0 border-x-[6px] border-t-[7px] border-x-transparent ${
+              selected ? 'border-t-primary' : 'border-t-surface'
+            }`}
+          />
+        </div>
+      </Html>
+    </group>
+  )
 }
