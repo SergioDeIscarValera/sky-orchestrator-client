@@ -16,5 +16,11 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "lint-rules.d.ts", "scripts/secrets.d.mts"]
+  "include": [
+    "vite.config.ts",
+    "lint-rules.d.ts",
+    "scripts/secrets.d.mts",
+    "scripts/demo/fake-supabase.d.mts",
+    "scripts/demo/run.d.mts"
+  ]
 }
