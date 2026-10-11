@@ -131,6 +131,7 @@ class ContinuousIntegration(unittest.TestCase):
             "tools/check_links.py",
             "tools/check_traceability.py",
             "tools/vendor_sky_orchestrator.py --check",
+            "tools/catalogue_migration.py --check",
             "-size +512k",
             "unittest discover -s tools/tests",
             "uv sync --frozen --all-packages",
