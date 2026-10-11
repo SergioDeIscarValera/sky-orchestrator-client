@@ -526,18 +526,26 @@ prepare with `simulate_mission` (`is_enable` 1, with the latitude and longitude
 SO requires and does not apply), then execute. `ok` leads to
 `simulated`; anything else back to `preparing` with the reason
 ([ADR-0011](../architecture/decisions/0011-simulate-then-fly-the-same-file.md)).
+The pass records the phone's `config_fingerprint` from the stack's status: the
+phone judges the file against its own envelope at load, in the simulator too,
+so the pass proves the phone accepts the file under that configuration.
 
 **Acceptance**: against the fake bridge stack, a simulated pass reaches
 `simulated`; an aborted one returns to `preparing` with its end reason.
 
 ### FR-OPS-07 — Ready · MUST
 An operation is `ready` while: its simulation of this exact file ended `ok`, the
-stack reports real mode, and every blocking check passes. A change to the
+stack reports real mode, the phone's `config_fingerprint` is the one recorded at
+that simulation, and every blocking check passes. A different or unknown
+fingerprint means the phone's configuration changed since the pass, envelope
+included: simulate again. A change to the
 wayline, the geofence or the fleet makes a new file and returns the operation to
 `planned`.
 
 **Acceptance**: editing the wayline of a `simulated` operation returns it to
-`planned` and discards the readiness.
+`planned` and discards the readiness; a stack status with another
+`config_fingerprint` than the pass's keeps the operation from `ready`, naming
+both.
 
 ### FR-OPS-08 — Inside the device envelope · MUST
 The geofence, at its ceiling, lies inside the stack's device envelope: its
