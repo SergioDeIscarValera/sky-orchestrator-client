@@ -24,6 +24,7 @@ SPLIT_BY_MARKER_UNITS = (
     "services/soc-cloud",
     "services/soc-operations",
     "infra/check",
+    "infra/e2e",
 )
 NOT_IN_THE_LANE = '-m "not lane"'
 WEB_SOURCE = "apps/soc-web"

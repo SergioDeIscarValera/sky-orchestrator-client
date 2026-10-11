@@ -163,6 +163,13 @@ repos:
         pass_filenames: false
         files: ^(infra/check/|libs/soc-config/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
 
+      - id: soc-e2e-gate
+        name: soc-e2e gate
+        entry: bash -c 'uv run --frozen mypy infra/e2e && uv run --frozen pytest infra/e2e/tests -m "not lane"'
+        language: system
+        pass_filenames: false
+        files: ^(infra/(e2e|check|migrate)/|libs/|services/soc-cloud/|database/|contracts/sky-orchestrator/|pyproject\.toml$|uv\.lock$)
+
       - id: soc-web-gate
         name: soc-web gate
         entry: bash -c 'cd apps/soc-web && pnpm typecheck && pnpm lint && pnpm format:check && pnpm test'

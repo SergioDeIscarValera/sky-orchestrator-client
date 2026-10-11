@@ -9,6 +9,7 @@ members = [
     "soc-config",
     "soc-database",
     "soc-db",
+    "soc-e2e",
     "soc-geo",
     "soc-log",
     "soc-migrate",
@@ -829,6 +830,33 @@ requires-dist = [
 test = [
     { name = "soc-database", editable = "database" },
     { name = "soc-migrate", editable = "infra/migrate" },
+]
+
+[[package]]
+name = "soc-e2e"
+version = "0.1.0"
+source = { editable = "infra/e2e" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "aiomqtt" },
+    { name = "soc-check" },
+    { name = "soc-cloud" },
+    { name = "soc-config" },
+    { name = "soc-database" },
+    { name = "soc-geo" },
+    { name = "soc-realtime" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = "==3.14.4" },
+    { name = "aiomqtt", specifier = "==2.5.1" },
+    { name = "soc-check", editable = "infra/check" },
+    { name = "soc-cloud", editable = "services/soc-cloud" },
+    { name = "soc-config", editable = "libs/soc-config" },
+    { name = "soc-database", editable = "database" },
+    { name = "soc-geo", editable = "libs/soc-geo" },
+    { name = "soc-realtime", editable = "libs/soc-realtime" },
 ]
 
 [[package]]

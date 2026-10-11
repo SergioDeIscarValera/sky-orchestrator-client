@@ -1,0 +1,27 @@
+[project]
+name = "soc-e2e"
+version = "0.1.0"
+description = "The console end to end: Virtual Origen's platform, soc-cloud, a dock on the wire, Chrome"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+  "aiohttp==3.14.4",
+  "aiomqtt==2.5.1",
+  "soc-check",
+  "soc-cloud",
+  "soc-config",
+  "soc-database",
+  "soc-geo",
+  "soc-realtime",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+soc-check = { workspace = true }
+soc-cloud = { workspace = true }
+soc-config = { workspace = true }
+soc-database = { workspace = true }
+soc-geo = { workspace = true }
+soc-realtime = { workspace = true }
