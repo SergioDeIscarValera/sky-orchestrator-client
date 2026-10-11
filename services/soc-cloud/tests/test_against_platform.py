@@ -4,6 +4,8 @@ import asyncio
 import contextlib
 import hashlib
 import json
+import statistics
+import time
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -25,10 +27,14 @@ from soc_database.harness import Tenancy
 from soc_database.realtime import RealtimeStack
 from soc_realtime import Endpoint
 from soc_realtime.socket import Connector
+from soc_realtime.testing import Subscriber
 
 pytestmark = pytest.mark.lane
 
 DOCK = "SOTESTDOCK01"
+AIRCRAFT = "SOTESTUAV001"
+FARM = uuid.UUID("6f1c2b9e-4d2a-4c1e-9a7b-2f3e4d5c6b7a")
+SAMPLES = 50
 
 
 def stack_on(broker: EphemeralMosquitto, files_port: int) -> dict[str, Any]:
@@ -318,3 +324,62 @@ async def until(condition: Callable[[], bool], within_s: float) -> None:
     async with asyncio.timeout(within_s):
         while not condition():
             await asyncio.sleep(0.05)
+
+
+async def farm_member_and_stranger(platform: RealtimeStack) -> tuple[uuid.UUID, uuid.UUID]:
+    admin = await platform.postgres.connect("supabase_admin")
+    try:
+        tenancy = Tenancy(admin)
+        member = await tenancy.user()
+        await admin.execute(
+            "insert into public.organizations (id, name, owner_id) values ($1, 'Farm', $2)"
+            " on conflict (id) do nothing",
+            FARM,
+            member,
+        )
+        await tenancy.join(member, FARM, "viewer")
+        stranger = (await tenancy.member("owner")).user_id
+    finally:
+        await admin.close()
+    return member, stranger
+
+
+async def test_every_sample_reaches_the_farms_members_in_order_and_no_one_else(
+    platform: RealtimeStack,
+    broker: EphemeralMosquitto,
+    passwords: dict[str, str],
+    connector: Connector,
+    tmp_path: Path,
+    unused_tcp_port_factory: Callable[[], int],
+) -> None:
+    member, stranger = await farm_member_and_stranger(platform)
+    topic = f"org:{FARM}:soc:telemetry"
+    ports = [unused_tcp_port_factory(), unused_tcp_port_factory()]
+    published: dict[int, float] = {}
+    received: list[tuple[int, float]] = []
+    async with (
+        running_service(platform, broker, passwords, connector, tmp_path, ports),
+        Subscriber(platform.base, platform.member_token(member), topic, connector) as browser,
+        Subscriber(platform.base, platform.member_token(stranger), topic, connector) as outsider,
+        broker.dock(identifier="telemetry-dock") as dock,
+    ):
+        assert browser.joined and not outsider.joined
+
+        async def receive() -> None:
+            while len(received) < SAMPLES:
+                frame = await browser.broadcast(within_s=10)
+                received.append((frame["payload"]["taken_at_ms"], time.monotonic()))
+
+        reader = asyncio.create_task(receive())
+        osd = json.loads((MQTT / "examples" / "osd.aircraft.json").read_text())
+        for index in range(SAMPLES):
+            osd["timestamp"] = 1_790_800_000_000 + index * 200
+            published[osd["timestamp"]] = time.monotonic()
+            await dock.publish(f"thing/product/{AIRCRAFT}/osd", json.dumps(osd), qos=1)
+            await asyncio.sleep(0.2)
+        await asyncio.wait_for(reader, 10)
+    assert [taken for taken, _ in received] == sorted(published)
+    latencies_ms = sorted((at - published[taken]) * 1000 for taken, at in received)
+    p95_ms = statistics.quantiles(latencies_ms, n=20)[-1]
+    print(f"telemetry p95 {p95_ms:.1f} ms, max {latencies_ms[-1]:.1f} ms")
+    assert p95_ms <= 150, f"p95 from the dock to a member was {p95_ms:.1f} ms"
