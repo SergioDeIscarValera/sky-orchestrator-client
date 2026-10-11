@@ -42,10 +42,11 @@ How the parts fit. The reasons live in the
 
 | Unit | Role | Talks to |
 | --- | --- | --- |
-| `soc-web` | The console: one persistent 3D scene and its panels | Supabase only ([ADR-0006](decisions/0006-the-web-talks-to-supabase-and-commands-are-intents.md)) |
+| `soc-web` | The console: one persistent 3D scene and its panels; serves each organization's baked site model read-only at `/site/<organization>/` | Supabase only ([ADR-0006](decisions/0006-the-web-talks-to-supabase-and-commands-are-intents.md)) |
 | `soc-cloud` | The DJI cloud party for every SO stack ([ADR-0004](decisions/0004-soc-is-the-dji-cloud-party.md)) | SO's broker and HTTP surfaces; Supabase |
 | `soc-operations` | Operation lifecycle, checks, flight files | Supabase only |
 | `database` | Schema `soc` in VO2's database ([ADR-0005](decisions/0005-one-database-shared-with-virtual-origen.md)) | — |
+| `soc-site` | Bakes an organization's terrain and imagery once, by hand ([ADR-0018](decisions/0018-the-site-model-is-baked-once.md)) | IGN's elevation and imagery services, at `fetch` only; writes the model `soc-web` serves |
 
 `soc-cloud` is the only process that speaks to Sky Orchestrator; `soc-web` and
 `soc-operations` never do. Units meet through the database and `contracts/`.
@@ -92,7 +93,8 @@ draft ─► planned ─► preparing ─► simulating ─► simulated ─► 
    downloads the file from `soc-cloud` on SO's network
    ([ADR-0008](decisions/0008-flight-files-served-on-sky-orchestrators-network.md)),
    and again at execute through `flighttask_resource_get`.
-4. A simulated flight ending `ok` makes the operation `simulated`. The operator
+4. A simulated flight ending `ok` makes the operation `simulated`, recording the
+   phone's `config_fingerprint`; a real launch needs the same one. The operator
    turns SO's two keys; with SO in real mode and the checks green, the operation is
    `ready`, and a pilot launches the same file.
 5. Progress, the flight mode and the cloud geofence feed the operation's log
@@ -125,7 +127,9 @@ cache, which is rebuilt from `soc.flight_files` when `soc-cloud` starts.
 ## Deployment
 
 One compose project, `sky-orchestrator-client`, on the mini-PC: `soc-web`,
-`soc-cloud`, `soc-operations`, each with memory and CPU limits. `soc-cloud` joins
+`soc-cloud`, `soc-operations`, each with memory and CPU limits, and two one-shot
+jobs before them: `soc-migrate` and `soc-web-check`, which checks the console's
+configuration file before `soc-web` starts ([ADR-0023](decisions/0023-the-console-reads-its-own-configuration-file.md)). `soc-cloud` joins
 Virtual Origen's network (`supabase-local_default`, for Kong) and Sky
 Orchestrator's (`sky-orchestrator_default`, for its broker and so that its dock
 can download files). `soc-web` publishes one port on the LAN address; nothing

@@ -93,6 +93,10 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
   50 ms from commit to claim**, each published once and accepted; a command
   committed while `soc-cloud` was away runs once when it returns, and a stale one
   expires.
+- In the console end to end (`infra/e2e`), the service runs in its process on
+  one stack behind Kong, as on the mini-PC, while a dock announces and flies an
+  aircraft: the console shows it within 2 s and every sample reaches Chrome in
+  order, 28 ms at p95 from the dock's publish.
 
 ## Failure modes
 

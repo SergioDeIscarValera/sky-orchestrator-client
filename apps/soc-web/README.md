@@ -10,7 +10,9 @@ The console: one persistent 3D scene of the farm with floating panels
 - **Its configuration, read at start** (`FR-DEP-04`): `/config.json` gives the
   Supabase address and the public key. A missing file, an address with a path,
   or a key for any role but `anon` (the service role key above all,
-  `NFR-SEC-02`) stops the console on a page naming every problem.
+  `NFR-SEC-02`) stops the console on a page naming every problem. The console's
+  own file, with its telemetry thresholds and geometry limits, named by
+  `SOC_CONFIG_FILE`, is checked the same way before it starts (ADR-0023).
 - **Sign-in with a Virtual Origen account** (`FR-AUT-01`): email and password,
   and nothing to create an account with; a lint rule refuses `signUp`,
   `signInAnonymously` and `signInWithOtp` anywhere in the source. The session
@@ -144,10 +146,11 @@ The other panels' content arrives with their milestones ([roadmap](../../docs/ro
 | `src/backend`       | `Backend`, everything the web asks of Supabase, and its Supabase implementation; components see only the interface                                                                                                                |
 | `src/account`       | The session (`useAccountState`), sign-in, sign-out, the account menu                                                                                                                                                              |
 | `src/organizations` | The organization gate, the picker, the switcher, the per-device choice, and `organizationKey`, which every organization's query key starts with                                                                                   |
-| `src/telemetry`     | The telemetry sample and its contract, the console's store of each aircraft's latest samples, their freshness and their words                                                                                                     |
+| `src/telemetry`     | The telemetry sample and its contract, the console's store of each aircraft's latest samples and takeoff point, their freshness and their words, the development replay (`replay.ts`)                                             |
 | `src/fleets`        | The catalogue's, devices' and fleets' queries and writes; `useLiveState`, which keeps the open organization's queries current from its state topic; the fleet panel, the fleet's and the aircraft's details, and their formatting |
 | `src/app`           | The application, the shell, the scene's region (loaded lazily), the shared card layout and styles                                                                                                                                 |
-| `src/scene`         | The scene: the site, the camera and its limits (`flyTo`), the ground, the palette from the tokens, the frame sampler, the map tools                                                                                               |
+| `src/scene`         | The scene: the site and its ground, the baked terrain, the camera and its limits (`flyTo`), the aircraft and their labels, the palette from the tokens, the frame sampler and the statistics overlay, the map tools               |
+| `src/geometry`      | The local frame (ADR-0009, ADR-0014): the projection at the organization's position and its inverse, held to `contracts/geometry/projection.json`                                                                                 |
 | `src/theme`         | The tokens, the theme switch and the favicon drawn from them                                                                                                                                                                      |
 | `src/test`          | The fakes the tests use: `FakeBackend` for components, `FakeSupabase` behind `fetch` for the Supabase implementation                                                                                                              |
 
@@ -183,8 +186,9 @@ aircraft on stack `lab`: one online in a fleet, one online in no fleet, and one 
 `unreachable`. It has one fleet, which can be edited and retired, and the aircraft in no fleet can
 be registered. Almendral (viewer) has no aircraft and no fleets. Fleets change in memory, and a
 restart resets them. Realtime is not faked: there is no live telemetry, and a change made elsewhere
-shows once the console reads again; `http://localhost:5199/?replay` flies a synthetic aircraft
-around Finca Norte, listed under Seen on the wire as REPLAYUAV, to select, follow or register. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
+shows once the console reads again; `http://localhost:5199/?replay` flies the development replay
+around Finca Norte, idle for 2 s, then taking off and circling, listed under Seen on the wire as
+REPLAYUAV, to select, follow or register; `?replay=2` flies two. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
 
 **Measuring the frame time (`NFR-PERF-06`).** `pnpm measure` does the following:
 
@@ -214,6 +218,7 @@ Measuring on `pnpm dev` overstates the frame time. React's development mode adds
 | `pnpm test`                     | Vitest on happy-dom ([ADR-0020](../../docs/architecture/decisions/0020-web-tests-on-happy-dom-and-zod-mini.md)), its files sharing their worker's modules ([ADR-0022](../../docs/architecture/decisions/0022-web-test-files-share-their-workers-modules.md)), under 2 s on mains power: sign-in, organization first, sign-out, the scene's ground, palette, sampler and region, a 2,000-step fuzz of the camera's limits, the configuration's checks, the Supabase implementation against a fake GoTrue, PostgREST and Realtime channel, the fleets' queries, writes and live invalidation, the fleet panel, the inspector and the fleet forms, the telemetry's contract, store, freshness and words, the aircraft's placement on the golden vectors, their glide and a 2,000-case fuzz that none is drawn past its latest sample, the contrast of every text token on every surface in both themes (`NFR-UX-02`), the lint rules themselves |
 | `pnpm build` then `pnpm budget` | The initial JavaScript ≤ 250 KB gzip and the 3D chunk ≤ 450 KB (`NFR-PERF-05`), read from Vite's manifest                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `pnpm measure`                  | The frame time ≤ 20 ms at p95 (`NFR-PERF-06`) on the production build, along the scripted 60 s path; it needs Chrome and a GPU, so it runs by hand, not in CI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `pnpm secrets`                  | No secret in the built files: no JWT, no Supabase secret key and no service's secret variable (`NFR-SEC-02`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## The image
 

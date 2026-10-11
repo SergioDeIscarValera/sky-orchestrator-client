@@ -64,5 +64,7 @@ A message sent with `realtime.send()` reaches members with Realtime's message
 - Realtime counts sends and deliveries against the tenant's
   `max_events_per_second`, shared with Virtual Origen: coalescing per aircraft
   (`broadcast_max_rate_hz`) is the caller's job, before this library.
-- Only the box shows VO2's tenant settings, its ES256 keys and the latency: the
-  M1 viability session measures them (`DEP-23`).
+- Only the box shows VO2's tenant settings, its ES256 keys and the latency on
+  its LAN: the M1 viability session measures them (`DEP-23`). On the same
+  versions behind Kong, the console end to end measures a sample's delivery at
+  28 ms at p95 from the dock's publish to Chrome (`infra/e2e`, 2026-10-11).

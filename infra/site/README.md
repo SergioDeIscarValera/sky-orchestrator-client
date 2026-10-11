@@ -1,7 +1,9 @@
 # soc-site
 
 Bakes an organization's site model once: its terrain and its imagery, from IGN,
-into the assets the console loads (ADR-0018, `FR-DEP-05`).
+into the assets the console loads (ADR-0018, `FR-DEP-05`). Copied into the
+compose project's `site/<organization>/`, the model is served read-only by
+`soc-web` at `/site/<organization>/`; how is in [infra](../README.md).
 
 ```bash
 uv run soc-site fetch --latitude 41.6523 --longitude -4.7245 --half-size-m 1000 --sources site/sources
