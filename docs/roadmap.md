@@ -92,8 +92,8 @@ The MVP is M5: **a first real flight commanded from SOC**
 | Aircraft catalogue: the sourced JSON, its schema and its loading migration | `feature/contracts/aircraft-models`, merged (#45), 38 models |
 | Fleets, devices and stacks in the database, with their policies and RPCs | `feature/database/fleets`, merged (#48) |
 | Live telemetry: Broadcast fan-out, presence, stack status, latency instruments | `feature/libs/stack-organization`, merged (#50); `feature/cloud/presence`, merged (#51); `feature/cloud/live-telemetry`, merged (#52); `feature/cloud/latency`, merged (#53) |
-| Fleet panels: catalogue, devices seen, registration, detail, retirement | `feature/web/panels` (the view in the URL); `feature/web/fleet-panels` |
-| Aircraft in the scene: model, stalk, labels, selection, pin and follow, fly-to | `feature/web/aircraft-in-the-scene` |
+| Fleet panels: catalogue, devices seen, registration, detail, retirement | `feature/web/panels`, merged (#54, the view in the URL); `feature/web/fleet-data`, merged (#55); `feature/web/fleet-panel`, merged (#56); `feature/web/fleet-forms`, merged (#60) |
+| Aircraft in the scene: model, stalk, labels, selection, pin and follow, fly-to | `feature/web/settings`, merged (#61, the console's thresholds); `feature/web/live-telemetry` (#62, the browser's telemetry and the inspector's live values); `feature/web/aircraft-in-the-scene` |
 | Site model: the baking tool, stylised terrain, contours, markers | `feature/infra/site-model` |
 
 **Exit criteria**
@@ -154,7 +154,7 @@ dependency register of the requirements.
 
 | Step | Pull request |
 | --- | --- |
-| The field session runbook | `feature/repo/first-flight-runbook` |
+| The field session runbook, with the phone's envelope compared to so-wayline's | `feature/repo/first-flight-runbook` |
 | Session one: the phone in DJI's simulator through SO, commanded from SOC | `feature/repo/simulator-session` |
 | Session two: the real aircraft, the operator on the controller | `feature/repo/first-real-flight` |
 | Fixes found in the sessions, each with its regression test | `bugfix/<scope>/<slug>` |

@@ -19,7 +19,7 @@ pinned to Sky Orchestrator's v0.4.1 tag, the release that publishes `DEP-01` to
 | --- | --- | --- | --- | --- | --- |
 | `DEP-01` | FR-DEV-07, ADR-0038 | M4 | The stack's state over HTTP: simulator mode, link and its reason, aircraft connected, armed and seconds left, clock offset | `FR-LNK-08`, `FR-OPS-05` (`PF-MODE`, `PF-SIMULATOR`, `PF-ARMED`, `PF-CLOCK`), `FR-OPS-06`, `FR-OPS-07`, `FR-SAF-04` | **Delivered**, SO PR #113: `GET /v1/status`, so-wayline API 1.3.0 |
 | `DEP-02` | FR-FLT-11, NFR-SAF-07, ADR-0037 | M4 | `simulate_mission` (all three fields) must agree with the stack's mode; a real prepare only for a file flown to `ok` in simulation; refusals `319015`, `325001`, `314010`, `319004` | `FR-OPS-06`, `FR-OPS-09`, `NFR-SAF-05` | **Delivered**, SO PR #109 |
-| `DEP-03` | FR-WAY-11 | M4 | `GET /v1/envelope`: the active device envelope, with its fingerprint | `FR-OPS-08`, `FR-WAY-08`, `FR-GEO-04` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
+| `DEP-03` | FR-WAY-11 | M4 | `GET /v1/envelope`: so-wayline's envelope, the server's check of every flight file, with its fingerprint; the phone enforces its own, set equal to it by hand (see below) | `FR-OPS-08`, `FR-WAY-08`, `FR-GEO-04` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
 | `DEP-04` | FR-WAY-12 | M4 | `POST /v1/validations`: dry-run validation of a flight file | `FR-LNK-09`, `PF-SO-DRYRUN`, `NFR-COMP-02` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
 | `DEP-05` | FR-FLT-12 | M4 | The cause of a pause in `break_point.break_reason`, as DJI's `FlighttaskBreakReasonEnum` | `FR-LOG-02` | **Delivered**, SO PR #112 |
 | `DEP-06` | NFR-TEST-07 | M4 | The fake bridge image on GHCR, test only | `NFR-TEST-03` | **Delivered**, SO PR #111; published in v0.4.1 (`ghcr.io/sergiodeiscarvalera/sky-orchestrator/fake-bridge:v0.4.1`) |
@@ -27,7 +27,7 @@ pinned to Sky Orchestrator's v0.4.1 tag, the release that publishes `DEP-01` to
 | `DEP-08` | FR-TEL-07 | M5, possibly earlier | Horizontal and vertical speed, pitch, roll, remaining flight time | `FR-TEL-03` | Requested |
 | `DEP-09` | FR-TEL-08 | M5 | Remote controller link quality, once verified on the Mavic Air 2 | `FR-TEL-03` | Requested |
 | `DEP-10` | FR-FLT-13 | M5 | `break_point` honoured after `return_home` | `FR-CMD-08` | Requested |
-| `DEP-11` | M4 exit: first real flight | M4 | The aircraft cleared for real flight through SO | SOC's M5 | Pending in SO |
+| `DEP-11` | M4 exit: first real flight | M4 | The aircraft cleared for real flight through SO | SOC's M5 | Pending in SO: the real-flight ground check passed on the phone with the propellers off (SO PR #127); the first real flight waits for SOC's MVP |
 | `DEP-12` | FR-SAF-06, bridge contract 1.6.0 | M4 | An execute while the operator holds the aircraft from the phone's console is refused `314010`, as an unarmed phone is: the operator acts on the phone, then SOC retries | `FR-OPS-09` | **Delivered**, SO PR #114 |
 | `DEP-13` | FR-BRG-09 | M4 | `takePhoto` and `gimbalRotate` run once per waypoint visit, and a resume does not repeat a photo already taken; `flighttask_progress.ext.media_count` stays 0 | `FR-WAY-12` | **Delivered**, SO PR #115 |
 | `DEP-26` | ADR-0040, bridge contract 1.8.0 | M4 | The phone's readiness for a real execute in `/v1/status` (real flight confirmed on the phone, build cleared by a simulator pass, simulator off), so SOC can check it before an execute instead of learning it from a `314010` | `FR-OPS-05`, `FR-OPS-09` | Not before the MVP (SO, 2026-10-11): the operator sees both on the phone's screen, and SOC's MVP does without them; Sergio's call if it ever needs them (bridge contract 1.9.0, wayline API 1.4.0) |
@@ -92,6 +92,29 @@ changes in simulator mode. In real mode (`simulator_mode: false` in
 
 The first real flight waits for SOC's MVP, Sergio's call; SO's runbook for it is
 `docs/first-real-flight.md` in SO's repository (`DEP-11`).
+
+### Two envelopes, set equal by hand (SO, 2026-10-11)
+
+`GET /v1/envelope` is not what the phone enforces:
+
+- **so-wayline's envelope**, which `/v1/envelope` returns, is the server's check
+  of every uploaded flight file and of `/v1/validations`.
+- **The phone's device envelope** comes from its own `so-config.json`: its
+  geofence centre, radius and heights (SO's FR-SAF-01, ADR-0012). The phone
+  refuses a plan outside it, whatever the server judged; the prepare then
+  answers `314010` and the phone's record names the distance. That is what
+  refused SO's reference wayline, 1,103 km from the farm, on 2026-10-11.
+- **SO cannot compare the two.** `application_in_force` in `/v1/envelope` is
+  always null, because so-wayline never hears the phone's configuration, and
+  the two fingerprints are computed differently. Today they differ:
+  so-wayline's default centre is the synthetic 45.0/7.0, the phone's is the
+  farm. SO's first-flight runbook sets so-wayline's centre, radius and maximum
+  height to the phone's.
+
+For SOC, `/v1/envelope` is necessary and not sufficient. `PF-ENVELOPE` and
+`FR-WAY-08` check against it. Only the phone's own refusal can show a mismatch,
+so SOC's first-flight runbook compares the two by hand before the session
+(`FR-OPS-08`). `FR-OPS-09` reads a `314010` on a prepare as either cause.
 
 A stack whose status cannot be read has an unknown mode, and SOC refuses to
 prepare (`FR-SAF-04`). With SO's link down, its status still carries the
