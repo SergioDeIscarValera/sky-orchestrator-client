@@ -322,6 +322,42 @@ class Dependencies(unittest.TestCase):
         )
 
 
+class BaseImages(unittest.TestCase):
+    def setUp(self) -> None:
+        text = (REPOSITORY / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        start = text.index("package-ecosystem: docker")
+        self.docker = text[start : text.index("package-ecosystem: npm")]
+
+    def test_node_stays_on_the_lts_line_of_adr_0016(self) -> None:
+        dockerfile = (REPOSITORY / "apps" / "soc-web" / "Dockerfile").read_text()
+        self.assertIn("FROM node:24.", dockerfile)
+        self.assertRegex(
+            self.docker,
+            r'- dependency-name: "node"\n\s+update-types: \["version-update:semver-major"\]',
+        )
+
+    def test_python_stays_on_the_line_of_adr_0017(self) -> None:
+        for unit in ("services/soc-cloud", "services/soc-operations", "infra/migrate"):
+            with self.subTest(unit=unit):
+                self.assertIn("FROM python:3.14.", (REPOSITORY / unit / "Dockerfile").read_text())
+        self.assertRegex(
+            self.docker,
+            r'- dependency-name: "python"\n\s+update-types: '
+            r'\["version-update:semver-major", "version-update:semver-minor"\]',
+        )
+
+    def test_nginx_stays_on_its_stable_line(self) -> None:
+        dockerfile = (REPOSITORY / "apps" / "soc-web" / "Dockerfile").read_text()
+        minor = re.search(r"nginx-unprivileged:1\.(\d+)\.", dockerfile)
+        assert minor is not None
+        self.assertEqual(int(minor[1]) % 2, 0, "an odd nginx minor is the mainline")
+        self.assertRegex(
+            self.docker,
+            r'- dependency-name: "nginxinc/nginx-unprivileged"\n\s+update-types: '
+            r'\["version-update:semver-major", "version-update:semver-minor"\]',
+        )
+
+
 class Rulesets(unittest.TestCase):
     def setUp(self) -> None:
         self.branch_rulesets = [
