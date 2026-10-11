@@ -67,9 +67,12 @@ The console: one persistent 3D scene of the farm with floating panels
   with their stack's link; the live fleets; registering, changing (the wire
   identity too) and retiring a fleet, each settled once the fleets were read
   again. A refusal names the field the database's constraint is about.
-- **The fleet panel** (`FR-FLE-02`): the organization's fleets with their model
-  and presence, and apart, under _Seen on the wire_, the aircraft its stacks
-  announced that are in no fleet; a row selects, a second click lets go. An
+- **The fleet panel** (`FR-FLE-02`): the organization's aircraft in one list,
+  each with its colour: its fleets first, with their model and presence, then the
+  aircraft its stacks announced that are in no fleet, marked _Not registered_. An
+  editor's actions are on the row: _Register_ opens an aircraft's registration
+  and the pencil a fleet's edit, in the inspector, the form kept in the URL. A
+  row selects, a second click lets go. An
   aircraft is _Online_ or _Offline_ only while its stack is connected: otherwise
   it reads as the stack's state, since a stack out of reach says nothing about
   now (`FR-LNK-02`).
@@ -193,7 +196,7 @@ aircraft on stack `lab`: one online in a fleet, one online in no fleet, and one 
 be registered. Almendral (viewer) has no aircraft and no fleets. Fleets change in memory, and a
 restart resets them. Realtime is not faked: there is no live telemetry, and a change made elsewhere
 shows once the console reads again; `http://localhost:5199/?replay` flies the development replay
-around Finca Norte, idle for 2 s, then taking off and circling, listed under Seen on the wire as
+around Finca Norte, idle for 2 s, then taking off and circling, listed in the fleet panel as
 REPLAYUAV, to select, follow or register; `?replay=2` flies two, both listed there. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
 
 **Measuring the frame time (`NFR-PERF-06`).** `pnpm measure` does the following:

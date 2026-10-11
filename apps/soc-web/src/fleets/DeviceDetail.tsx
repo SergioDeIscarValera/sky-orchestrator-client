@@ -1,6 +1,6 @@
-import { useId, useState } from 'react'
+import { useId } from 'react'
 
-import { useSelect } from '../app/router'
+import { useForm, useSelect } from '../app/router'
 import { ALERT, PRIMARY_BUTTON, UNAVAILABLE } from '../app/styles'
 import { useOrganization } from '../organizations/context'
 import { useDevices, useFleets, useRegisterFleet } from './data'
@@ -27,7 +27,7 @@ export function DeviceDetail({
   const fleets = useFleets()
   const register = useRegisterFleet()
   const select = useSelect()
-  const [registering, setRegistering] = useState(false)
+  const [form, setForm] = useForm()
   const heading = useId()
   const colourOf = useAircraftColours()
   const reason = useId()
@@ -57,7 +57,8 @@ export function DeviceDetail({
   const writes = changesFleets(organization.role)
   const zone = organization.timeZone
 
-  if (registering && fleet === undefined) {
+  // Registering lives in the URL, so the fleet panel's Register opens it here.
+  if (form === 'register' && writes && fleet === undefined) {
     return (
       <FleetForm
         title={`Register ${device.aircraftSn}`}
@@ -74,7 +75,7 @@ export function DeviceDetail({
           select({ kind: 'fleet', fleetId: registered.id })
         }}
         onCancel={() => {
-          setRegistering(false)
+          setForm(null)
         }}
       />
     )
@@ -113,7 +114,7 @@ export function DeviceDetail({
             aria-disabled={!writes}
             aria-describedby={writes ? undefined : reason}
             onClick={() => {
-              if (writes) setRegistering(true)
+              if (writes) setForm('register')
             }}
           >
             Register as a fleet

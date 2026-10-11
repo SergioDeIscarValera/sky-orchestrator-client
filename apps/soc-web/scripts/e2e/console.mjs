@@ -5,7 +5,7 @@
 //
 //   → {"event": "ready"}                       signed in, the fleet panel open
 //   ← {"announced_at_ms": <wall ms>}           the dock has started announcing
-//   → {"event": "device", "appeared_after_ms"} the aircraft under Seen on the wire
+//   → {"event": "device", "appeared_after_ms"} the aircraft in the fleet panel
 //   → {"event": "fleet", "name"}               registered through the form, shown
 //   ← {"flying_since_ms": <wall ms>}           the dock has started its OSD
 //   → {"event": "telemetry", ...}              SOC_E2E_SAMPLES samples, measured
@@ -125,8 +125,8 @@ async function main() {
     await page.getByLabel('Email').fill(required('SOC_E2E_EMAIL'))
     await page.getByLabel('Password').fill(required('SOC_E2E_PASSWORD'))
     await page.getByRole('button', { name: 'Sign in' }).click()
-    await page.getByText('Seen on the wire').first().waitFor({ timeout: WAIT_MS })
-    const row = page.getByRole('button', { name: new RegExp(aircraft) })
+    await page.getByRole('region', { name: /^Aircraft/ }).waitFor({ timeout: WAIT_MS })
+    const row = page.getByRole('button', { name: new RegExp(`^${aircraft}`) })
     const appearing = row.waitFor({ timeout: WAIT_MS }).then(() => Date.now())
     trace('signed in, waiting for the aircraft')
     emit({ event: 'ready' })
@@ -134,8 +134,8 @@ async function main() {
     const { announced_at_ms: announcedAtMs } = await nextLine()
     emit({ event: 'device', appeared_after_ms: (await appearing) - announcedAtMs })
 
-    await row.click()
-    await page.getByRole('button', { name: 'Register as a fleet' }).click()
+    // Registered as an operator does, from the aircraft's row in the fleet panel.
+    await page.getByRole('button', { name: `Register ${aircraft}` }).click()
     const form = page.getByRole('form', { name: `Register ${aircraft}` })
     await form.getByLabel('Name').fill(FLEET.name)
     await form.getByLabel('Model').selectOption(FLEET.model)

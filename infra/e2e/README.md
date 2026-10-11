@@ -38,9 +38,9 @@ user created through its admin API, with a profile, and owns Finca Norte.
 
 1. The pilot signs in through GoTrue, and the console opens their only
    organization with the fleet panel.
-2. The dock starts announcing. The aircraft appears under Seen on the wire
+2. The dock starts announcing. The aircraft appears in the fleet panel
    within **2 s** (`FR-FLE-02`).
-3. The pilot registers it through the form as _Norte 1_, and the database holds
+3. The pilot registers it from its row's _Register_, through the form, as _Norte 1_, and the database holds
    that fleet with its gateway and aircraft (`FR-FLE-03`).
 4. The dock flies. Every sample reaches the browser in order and the
    inspector's position changes. The scene draws frames

@@ -126,7 +126,7 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
         f" soc-cloud hold {hold}; console's delivery p95 {telemetry['console_delivery_p95_ms']} ms;"
         f" stale {stale['after_last_ms']} ms after the last sample"
     )
-    # FR-FLE-02: an aircraft announced shows under Seen on the wire within 2 s.
+    # FR-FLE-02: an aircraft announced shows in the fleet panel within 2 s.
     assert device["appeared_after_ms"] <= 2000
     # FR-FLE-03: registered through the console's form, as the database holds it.
     assert registered == [("Norte 1", GATEWAY, AIRCRAFT)]

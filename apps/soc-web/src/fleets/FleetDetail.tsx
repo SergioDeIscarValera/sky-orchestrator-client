@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 
-import { useSelect } from '../app/router'
+import { useForm, useSelect } from '../app/router'
 import { ALERT, DANGER_BUTTON, QUIET_BUTTON, UNAVAILABLE } from '../app/styles'
 import { useOrganization } from '../organizations/context'
 import { useAircraftModels, useChangeFleet, useDevices, useFleets, useRetireFleet } from './data'
@@ -24,7 +24,8 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
   const change = useChangeFleet()
   const retire = useRetireFleet()
   const select = useSelect()
-  const [mode, setMode] = useState<'reading' | 'editing' | 'retiring'>('reading')
+  const [mode, setMode] = useState<'reading' | 'retiring'>('reading')
+  const [form, setForm] = useForm()
   const [refusal, setRefusal] = useState<string | null>(null)
   const heading = useId()
   const colourOf = useAircraftColours()
@@ -54,7 +55,8 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
   const writes = changesFleets(organization.role)
   const zone = organization.timeZone
 
-  if (mode === 'editing') {
+  // Editing lives in the URL, so the fleet panel's Edit opens it here.
+  if (form === 'edit' && writes) {
     const before = readValues(valuesOf(fleet))
     return (
       <FleetForm
@@ -67,10 +69,10 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
           if (Object.keys(changes).length > 0) {
             await change.mutateAsync({ id: fleet.id, changes })
           }
-          setMode('reading')
+          setForm(null)
         }}
         onCancel={() => {
-          setMode('reading')
+          setForm(null)
         }}
       />
     )
@@ -140,7 +142,7 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
               aria-disabled={!writes}
               aria-describedby={writes ? undefined : reason}
               onClick={() => {
-                if (writes) setMode('editing')
+                if (writes) setForm('edit')
               }}
             >
               Edit
