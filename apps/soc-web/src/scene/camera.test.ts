@@ -28,6 +28,7 @@ import {
   keepAboveTerrain,
   lowestCameraHeightM,
   overviewPose,
+  unpinsOn,
 } from './camera'
 import { replaySample } from '../telemetry/replay'
 import { takeoffAfter } from '../telemetry/store'
@@ -203,104 +204,164 @@ describe('the camera (FR-SCN-03)', () => {
   })
 })
 
+/** Real camera-controls on a camera of the viewport's aspect, started at the overview. */
+function lensOver(viewport: {
+  width: number
+  height: number
+}): [CameraControls, PerspectiveCamera] {
+  const camera = new PerspectiveCamera(FIELD_OF_VIEW_DEG, viewport.width / viewport.height, 1, 2e4)
+  const controls = new CameraControls(camera, document.createElement('div'))
+  configureControls(controls, FLAT_SITE, true)
+  void flyTo(controls, overviewPose(FLAT_SITE), FLAT_SITE, false)
+  controls.update(0)
+  return [controls, camera]
+}
+
+/** Where `point` lands on the screen, in pixels from the top left. */
+function onScreen(
+  point: Vector3,
+  camera: PerspectiveCamera,
+  viewport: { width: number; height: number },
+): { x: number; y: number } {
+  camera.updateMatrixWorld()
+  const seen = point.clone().project(camera)
+  return { x: ((seen.x + 1) / 2) * viewport.width, y: ((1 - seen.y) / 2) * viewport.height }
+}
+
+const VIEWPORT = { width: 1440, height: 900 }
+const FREE_MIDDLE = (RAIL_SPAN_PX + VIEWPORT.width - INSPECTOR_SPAN_PX) / 2
+
 describe('flying to an aircraft (FR-SCN-05)', () => {
   it('frames it in the middle of the view the cards leave free, at the angle the user chose', () => {
-    const viewport = { width: 1440, height: 900 }
-    const camera = { position: new Vector3(200, 400, 600), target: new Vector3(0, 0, 0) }
+    const [controls, camera] = lensOver(VIEWPORT)
+    const chosen = controls.getPosition(new Vector3()).sub(controls.getTarget(new Vector3()))
     const subject = new Vector3(320, 40, -150)
-    const pose = framePose(subject, camera, viewport)
-
+    const pose = framePose(
+      subject,
+      { position: controls.getPosition(new Vector3()), target: controls.getTarget(new Vector3()) },
+      VIEWPORT,
+    )
+    // The camera orbits the subject itself; the view, not the target, is shifted aside.
+    expect(pose.target.toArray()).toEqual(subject.toArray())
     expect(pose.position.distanceTo(pose.target)).toBeCloseTo(FRAME_DISTANCE_M, 6)
-    const chosen = camera.position.clone().sub(camera.target).normalize()
     const kept = pose.position.clone().sub(pose.target).normalize()
-    expect(kept.distanceTo(chosen)).toBeLessThan(1e-9)
+    expect(kept.distanceTo(chosen.normalize())).toBeLessThan(1e-9)
 
-    const lens = new PerspectiveCamera(FIELD_OF_VIEW_DEG, viewport.width / viewport.height, 1, 1e5)
-    lens.position.copy(pose.position)
-    lens.lookAt(pose.target)
-    lens.updateMatrixWorld()
-    const seen = subject.clone().project(lens)
-    const pixelX = ((seen.x + 1) / 2) * viewport.width
-    const pixelY = ((1 - seen.y) / 2) * viewport.height
-    expect(pixelX).toBeCloseTo((RAIL_SPAN_PX + viewport.width - INSPECTOR_SPAN_PX) / 2, 0)
-    expect(pixelY).toBeCloseTo(viewport.height / 2, 0)
+    void flyTo(controls, pose, FLAT_SITE, false)
+    controls.update(0)
+    const seen = onScreen(subject, camera, VIEWPORT)
+    expect(seen.x).toBeCloseTo(FREE_MIDDLE, 0)
+    expect(seen.y).toBeCloseTo(VIEWPORT.height / 2, 0)
 
-    const beside = framePose(subject, camera, viewport, coveredBy(true))
-    lens.position.copy(beside.position)
-    lens.lookAt(beside.target)
-    lens.updateMatrixWorld()
-    const besidePanel = ((subject.clone().project(lens).x + 1) / 2) * viewport.width
-    expect(besidePanel).toBeCloseTo((PANEL_SPAN_PX + viewport.width - INSPECTOR_SPAN_PX) / 2, 0)
+    const beside = framePose(
+      subject,
+      { position: controls.getPosition(new Vector3()), target: controls.getTarget(new Vector3()) },
+      VIEWPORT,
+      coveredBy(true),
+    )
+    void flyTo(controls, beside, FLAT_SITE, false)
+    controls.update(0)
+    expect(onScreen(subject, camera, VIEWPORT).x).toBeCloseTo(
+      (PANEL_SPAN_PX + VIEWPORT.width - INSPECTOR_SPAN_PX) / 2,
+      0,
+    )
   })
 
   it('centres it on a view too narrow to leave room between the cards', () => {
     const camera = { position: new Vector3(0, 300, 300), target: new Vector3(0, 0, 0) }
     const pose = framePose(new Vector3(10, 0, 10), camera, { width: 600, height: 900 })
     expect(pose.target.toArray()).toEqual([10, 0, 10])
+    expect(pose.sideM).toBe(0)
+  })
+
+  it('goes back to a straight view for the overview', () => {
+    const [controls, camera] = lensOver(VIEWPORT)
+    const subject = new Vector3(100, 30, 100)
+    const camera0 = {
+      position: controls.getPosition(new Vector3()),
+      target: controls.getTarget(new Vector3()),
+    }
+    void flyTo(controls, framePose(subject, camera0, VIEWPORT), FLAT_SITE, false)
+    void flyTo(controls, overviewPose(FLAT_SITE), FLAT_SITE, false)
+    controls.update(0)
+    expect(controls.getFocalOffset(new Vector3()).toArray()).toEqual([0, 0, 0])
+    expect(onScreen(new Vector3(0, 0, 0), camera, VIEWPORT).x).toBeCloseTo(VIEWPORT.width / 2, 0)
   })
 })
 
 describe('following a pinned aircraft (FR-SCN-05)', () => {
-  it('keeps one flying at 15 m/s in the central fifth of the view for a 60 s replayed track', () => {
-    const viewport = { width: 1440, height: 900 }
-    const farm = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
-    const thresholds = { telemetryStaleAfterMs: 3000, telemetryLostAfterMs: 10000 }
-    const camera = new PerspectiveCamera(
-      FIELD_OF_VIEW_DEG,
-      viewport.width / viewport.height,
-      1,
-      2e4,
-    )
-    const controls = new CameraControls(camera, document.createElement('div'))
-    configureControls(controls, FLAT_SITE, true)
-    void flyTo(controls, overviewPose(FLAT_SITE), FLAT_SITE, false)
-    controls.update(0)
+  const farm = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
+  const thresholds = { telemetryStaleAfterMs: 3000, telemetryLostAfterMs: 10000 }
 
-    // Samples at 5 Hz, received as taken; frames at 30 Hz, the aircraft drawn as the scene draws it.
-    const at = (ms: number) => {
-      const index = Math.floor(ms / 200)
-      const track = {
-        latest: { sample: replaySample(farm, index, 0), receivedAt: index * 200 },
-        previous:
-          index === 0
-            ? null
-            : { sample: replaySample(farm, index - 1, 0), receivedAt: index * 200 - 200 },
-        // The replay stands idle where its circle starts, and takes off there.
-        takeoff: takeoffAfter(null, replaySample(farm, 0, 0)),
-      }
-      const drawn = drawnAt(track, farm, ms, thresholds)
-      if (drawn === null) throw new Error('nothing drawn')
-      return new Vector3(drawn.placement.x, drawn.placement.y, drawn.placement.z)
+  // Samples at 5 Hz, received as taken; frames at 30 Hz, the aircraft drawn as the scene draws it.
+  const at = (ms: number) => {
+    const index = Math.floor(ms / 200)
+    const track = {
+      latest: { sample: replaySample(farm, index, 0), receivedAt: index * 200 },
+      previous:
+        index === 0
+          ? null
+          : { sample: replaySample(farm, index - 1, 0), receivedAt: index * 200 - 200 },
+      // The replay stands idle where its circle starts, and takes off there.
+      takeoff: takeoffAfter(null, replaySample(farm, 0, 0)),
     }
-    const pose = framePose(
-      at(0),
-      {
-        position: controls.getPosition(new Vector3()),
-        target: controls.getTarget(new Vector3()),
-      },
-      viewport,
-    )
-    void flyTo(controls, pose, FLAT_SITE, false)
-    controls.update(0)
+    const drawn = drawnAt(track, farm, ms, thresholds)
+    if (drawn === null) throw new Error('nothing drawn')
+    return new Vector3(drawn.placement.x, drawn.placement.y, drawn.placement.z)
+  }
 
-    const visible = viewport.width - RAIL_SPAN_PX - INSPECTOR_SPAN_PX
-    const middle = RAIL_SPAN_PX + visible / 2
+  /** Flies a pinned replay for `seconds`, `gesture` acting on the camera every frame. */
+  function fly(seconds: number, gesture: (controls: CameraControls, frame: number) => void) {
+    const [controls, camera] = lensOver(VIEWPORT)
+    const start = {
+      position: controls.getPosition(new Vector3()),
+      target: controls.getTarget(new Vector3()),
+    }
+    void flyTo(controls, framePose(at(0), start, VIEWPORT), FLAT_SITE, false)
+    controls.update(0)
+    const visible = VIEWPORT.width - RAIL_SPAN_PX - INSPECTOR_SPAN_PX
     const worst = { x: 0, y: 0 }
     let previous = at(0)
-    for (let ms = 1000 / 30; ms <= 60_000; ms += 1000 / 30) {
+    let frame = 0
+    for (let ms = 1000 / 30; ms <= seconds * 1000; ms += 1000 / 30) {
       const subject = at(ms)
-      void follow(controls, previous, subject, FLAT_SITE)
+      gesture(controls, frame)
+      follow(controls, previous, subject, FLAT_SITE, VIEWPORT, coveredBy(false))
       controls.update(1 / 30)
       previous = subject
-      camera.updateMatrixWorld()
-      const seen = subject.clone().project(camera)
-      const x = ((seen.x + 1) / 2) * viewport.width - middle
-      const y = ((1 - seen.y) / 2) * viewport.height - viewport.height / 2
-      worst.x = Math.max(worst.x, Math.abs(x))
-      worst.y = Math.max(worst.y, Math.abs(y))
+      const seen = onScreen(subject, camera, VIEWPORT)
+      worst.x = Math.max(worst.x, Math.abs(seen.x - FREE_MIDDLE))
+      worst.y = Math.max(worst.y, Math.abs(seen.y - VIEWPORT.height / 2))
+      frame += 1
     }
+    return { worst, visible }
+  }
+
+  it('keeps one flying at 15 m/s in the central fifth of the view for a 60 s replayed track', () => {
+    const { worst, visible } = fly(60, () => undefined)
     // The central fifth of the view the cards leave free: a tenth either side of its middle.
     expect(worst.x).toBeLessThanOrEqual(visible / 10)
-    expect(worst.y).toBeLessThanOrEqual(viewport.height / 10)
+    expect(worst.y).toBeLessThanOrEqual(VIEWPORT.height / 10)
+  })
+
+  it('lets the user orbit it and come closer while it flies, keeping it in the middle', () => {
+    // Half a turn round it, tilting down, and closer, over 20 s: the user's own gestures.
+    const { worst, visible } = fly(20, (controls, frame) => {
+      void controls.rotate(Math.PI / 600, frame % 2 === 0 ? 0.001 : -0.0005, true)
+      if (frame % 30 === 0) void controls.dolly(5, true)
+    })
+    expect(worst.x).toBeLessThanOrEqual(visible / 10)
+    expect(worst.y).toBeLessThanOrEqual(VIEWPORT.height / 10)
+  })
+
+  it('lets go when the map is panned, and only then', () => {
+    const { ACTION } = CameraControls
+    expect(unpinsOn(ACTION.ROTATE)).toBe(false)
+    expect(unpinsOn(ACTION.DOLLY)).toBe(false)
+    expect(unpinsOn(ACTION.TOUCH_ROTATE)).toBe(false)
+    expect(unpinsOn(ACTION.NONE)).toBe(false)
+    expect(unpinsOn(ACTION.TRUCK)).toBe(true)
+    expect(unpinsOn(ACTION.SCREEN_PAN)).toBe(true)
+    expect(unpinsOn(ACTION.TOUCH_DOLLY_TRUCK)).toBe(true)
   })
 })

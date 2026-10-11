@@ -176,7 +176,7 @@ export function Aircraft({
         if (arrived) pin.current.arriving = false
         invalidate()
       } else if (pin.current.at !== null) {
-        void follow(controls, pin.current.at, at, site)
+        follow(controls, pin.current.at, at, site, state.size, coveredBy(panel !== undefined))
       }
       pin.current.at = at
     }
