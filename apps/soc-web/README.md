@@ -34,8 +34,9 @@ The console: one persistent 3D scene of the farm with floating panels
   reduced motion it cuts instead of flying (ADR-0021). It renders only when
   something changes: no frame while idle (`NFR-RES-01`).
 - **The view in the URL** (`NFR-UX-03`): the rail opens and closes a panel
-  beside it, kept as `?panel=` with the selection, so a link shared on the LAN
-  opens the same view; a value the console cannot read is left out, and Escape
+  beside it, kept as `?panel=` with the selection (`?fleet=<id>`, or an
+  aircraft as `?gateway=<sn>&aircraft=<sn>`), so a link shared on the LAN opens
+  the same view; a value the console cannot read is left out, and Escape
   closes the open panel (`NFR-UX-04`). The panels' content arrives with their
   milestones, each saying when.
 - **The organization kept live** (ADR-0007): while an organization is open,
@@ -48,27 +49,40 @@ The console: one persistent 3D scene of the farm with floating panels
   read once a session; the devices the organization's stacks have announced,
   with their stack's link; the live fleets; registering, changing (the wire
   identity too) and retiring a fleet, each settled once the fleets were read
-  again. A refusal names the field the database's constraint is about. The
-  panels that show them arrive next.
+  again. A refusal names the field the database's constraint is about.
+- **The fleet panel** (`FR-FLE-02`): the organization's fleets with their model
+  and presence, and apart, under _Seen on the wire_, the aircraft its stacks
+  announced that are in no fleet; a row selects, a second click lets go. An
+  aircraft is _Online_ or _Offline_ only while its stack is connected: otherwise
+  it reads as the stack's state, since a stack out of reach says nothing about
+  now (`FR-LNK-02`).
+- **The inspector** follows the selection and fades it in. A fleet: its
+  identity, what its stack last said of it (stack, wire model, firmware, last
+  seen), and its model's published figures, each linked to the DJI page it was
+  read on, _Not published_ where DJI does not say (`FR-FLE-04`). An aircraft
+  seen: its gateway, wire model, stack, firmware, when it was first and last
+  seen, and its fleet if it has one. Times are in the organization's time zone.
+  A link to a fleet retired or of another organization says so and offers to
+  clear the selection. Registering, editing and retiring arrive next.
 - **The scene's statistics** with `?stats` (`NFR-OBS-05`): frames rendered, the
   frame time at p95 while it moves, draw calls, triangles, geometries and
   textures; the sampler is then `window.socScene`.
 
-The panels' content arrives next ([roadmap](../../docs/roadmap.md)).
+The other panels' content arrives with their milestones ([roadmap](../../docs/roadmap.md)).
 
 ## How it is built
 
-| Directory           | What it holds                                                                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/config`        | The runtime configuration and its checks                                                                                                               |
-| `src/backend`       | `Backend`, everything the web asks of Supabase, and its Supabase implementation; components see only the interface                                     |
-| `src/account`       | The session (`useAccountState`), sign-in, sign-out, the account menu                                                                                   |
-| `src/organizations` | The organization gate, the picker, the switcher, the per-device choice, and `organizationKey`, which every organization's query key starts with        |
-| `src/fleets`        | The catalogue's, devices' and fleets' queries and writes, and `useLiveState`, which keeps the open organization's queries current from its state topic |
-| `src/app`           | The application, the shell, the scene's region (loaded lazily), the shared card layout and styles                                                      |
-| `src/scene`         | The scene: the site, the camera and its limits (`flyTo`), the ground, the palette from the tokens, the frame sampler, the map tools                    |
-| `src/theme`         | The tokens and the theme switch                                                                                                                        |
-| `src/test`          | The fakes the tests use: `FakeBackend` for components, `FakeSupabase` behind `fetch` for the Supabase implementation                                   |
+| Directory           | What it holds                                                                                                                                                                                                                     |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/config`        | The runtime configuration and its checks                                                                                                                                                                                          |
+| `src/backend`       | `Backend`, everything the web asks of Supabase, and its Supabase implementation; components see only the interface                                                                                                                |
+| `src/account`       | The session (`useAccountState`), sign-in, sign-out, the account menu                                                                                                                                                              |
+| `src/organizations` | The organization gate, the picker, the switcher, the per-device choice, and `organizationKey`, which every organization's query key starts with                                                                                   |
+| `src/fleets`        | The catalogue's, devices' and fleets' queries and writes; `useLiveState`, which keeps the open organization's queries current from its state topic; the fleet panel, the fleet's and the aircraft's details, and their formatting |
+| `src/app`           | The application, the shell, the scene's region (loaded lazily), the shared card layout and styles                                                                                                                                 |
+| `src/scene`         | The scene: the site, the camera and its limits (`flyTo`), the ground, the palette from the tokens, the frame sampler, the map tools                                                                                               |
+| `src/theme`         | The tokens and the theme switch                                                                                                                                                                                                   |
+| `src/test`          | The fakes the tests use: `FakeBackend` for components, `FakeSupabase` behind `fetch` for the Supabase implementation                                                                                                              |
 
 A query about one organization's data uses `organizationKey(id, ...)`, so that
 switching organization drops it (`FR-AUT-02`).
@@ -91,13 +105,13 @@ image writes it when its container starts. Without them the console starts on
 the page that names what is missing. Schema `soc` must be in Supabase's
 `PGRST_DB_SCHEMAS` for the organizations to load (`DEP-21`).
 
-| Script                          | What it checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm typecheck`                | Strict TypeScript, app and tests apart (tests may use Node's API, the app may not)                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `pnpm lint`                     | Type-aware rules, the hooks rules, and SOC's five in `lint-rules.js`: no colour literal outside the tokens (`NFR-UX-01`), no API plain HTTP lacks (`NFR-PORT-04`), no way to create an account (`FR-AUT-01`), no modal menu (`NFR-SEC-07`), no camera move outside `flyTo` (`FR-SCN-03`)                                                                                                                                                                                                                                                  |
-| `pnpm format:check`             | Prettier, with Tailwind's class order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `pnpm test`                     | Vitest on happy-dom ([ADR-0020](../../docs/architecture/decisions/0020-web-tests-on-happy-dom-and-zod-mini.md)), under 2 s: sign-in, organization first, sign-out, the scene's ground, palette, sampler and region, a 2,000-step fuzz of the camera's limits, the configuration's checks, the Supabase implementation against a fake GoTrue, PostgREST and Realtime channel, the fleets' queries, writes and live invalidation, the contrast of every text token on every surface in both themes (`NFR-UX-02`), the lint rules themselves |
-| `pnpm build` then `pnpm budget` | The initial JavaScript ≤ 250 KB gzip and the 3D chunk ≤ 450 KB (`NFR-PERF-05`), read from Vite's manifest                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Script                          | What it checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                | Strict TypeScript, app and tests apart (tests may use Node's API, the app may not)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `pnpm lint`                     | Type-aware rules, the hooks rules, and SOC's five in `lint-rules.js`: no colour literal outside the tokens (`NFR-UX-01`), no API plain HTTP lacks (`NFR-PORT-04`), no way to create an account (`FR-AUT-01`), no modal menu (`NFR-SEC-07`), no camera move outside `flyTo` (`FR-SCN-03`)                                                                                                                                                                                                                                                                                     |
+| `pnpm format:check`             | Prettier, with Tailwind's class order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `pnpm test`                     | Vitest on happy-dom ([ADR-0020](../../docs/architecture/decisions/0020-web-tests-on-happy-dom-and-zod-mini.md)), under 2 s: sign-in, organization first, sign-out, the scene's ground, palette, sampler and region, a 2,000-step fuzz of the camera's limits, the configuration's checks, the Supabase implementation against a fake GoTrue, PostgREST and Realtime channel, the fleets' queries, writes and live invalidation, the fleet panel and the inspector, the contrast of every text token on every surface in both themes (`NFR-UX-02`), the lint rules themselves |
+| `pnpm build` then `pnpm budget` | The initial JavaScript ≤ 250 KB gzip and the 3D chunk ≤ 450 KB (`NFR-PERF-05`), read from Vite's manifest                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## The image
 
@@ -139,27 +153,29 @@ on the page colour.
 
 ## Failure modes
 
-| Failure                                                       | What happens                                                                                                           |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Local storage unavailable (a private window, blocked storage) | The theme follows the system; the session and the organization are not remembered across reloads                       |
-| A colour written outside the token file                       | `pnpm lint` fails, in the hooks and in CI                                                                              |
-| A token change that drops text below 4.5:1                    | `pnpm test` fails, naming the pair and the theme                                                                       |
-| An API that needs a secure context                            | `pnpm lint` fails: the console is served over plain HTTP on the LAN                                                    |
-| `/config.json` missing, not JSON, or refused                  | The console does not start; one page names every problem, nothing talks to Supabase                                    |
-| The service role key given as the key                         | Refused at start, before any request: it must never reach a browser                                                    |
-| Supabase does not answer at sign-in                           | The sign-in names the address it tried                                                                                 |
-| Wrong email or password, too many attempts, unconfirmed email | The sign-in says which, also when CORS hides GoTrue's error code from the browser                                      |
-| Schema `soc` not served by PostgREST (`DEP-21`)               | The organizations page names the missing setting, with a button to try again                                           |
-| `soc.member_organizations` missing                            | The organizations page says SOC's migrations are not applied                                                           |
-| The account has no live organization                          | A page says so and offers sign-out; nothing opens                                                                      |
-| The remembered organization is no longer the user's           | The picker opens again                                                                                                 |
-| The session ends on the server (revoked, refresh expired)     | The console returns to sign-in and forgets everything it fetched                                                       |
-| An organization's time zone unknown to the browser            | The clock shows the device's zone and says so on hover                                                                 |
-| A browser without WebGL 2                                     | The scene's place says so; the panels keep working                                                                     |
-| The scene fails while drawing                                 | Its place says what stopped and asks for a reload; the panels keep working                                             |
-| A camera move that skips the camera's limits                  | `pnpm lint` refuses it outside `src/scene/camera.ts`; `flyTo` constrains it                                            |
-| The container's address or key missing or refused             | It exits with status 2 and one `configuration_refused` line naming each problem, never the key; compose shows it down  |
-| A modal menu or another inline style                          | The policy blocks it in the browser; `pnpm lint` refuses modal menus before that                                       |
-| The state topic drops and rejoins                             | Everything the console read of the organization is read again on the rejoin                                            |
-| A viewer's change or retirement of a fleet                    | Row security leaves the row untouched without an error; the console counts the rows returned and says nothing changed  |
-| A fleet's write the database refuses                          | The refusal names the field its constraint is about: the name, the model, the airframe serial, the aircraft, its stack |
+| Failure                                                        | What happens                                                                                                           |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Local storage unavailable (a private window, blocked storage)  | The theme follows the system; the session and the organization are not remembered across reloads                       |
+| A colour written outside the token file                        | `pnpm lint` fails, in the hooks and in CI                                                                              |
+| A token change that drops text below 4.5:1                     | `pnpm test` fails, naming the pair and the theme                                                                       |
+| An API that needs a secure context                             | `pnpm lint` fails: the console is served over plain HTTP on the LAN                                                    |
+| `/config.json` missing, not JSON, or refused                   | The console does not start; one page names every problem, nothing talks to Supabase                                    |
+| The service role key given as the key                          | Refused at start, before any request: it must never reach a browser                                                    |
+| Supabase does not answer at sign-in                            | The sign-in names the address it tried                                                                                 |
+| Wrong email or password, too many attempts, unconfirmed email  | The sign-in says which, also when CORS hides GoTrue's error code from the browser                                      |
+| Schema `soc` not served by PostgREST (`DEP-21`)                | The organizations page names the missing setting, with a button to try again                                           |
+| `soc.member_organizations` missing                             | The organizations page says SOC's migrations are not applied                                                           |
+| The account has no live organization                           | A page says so and offers sign-out; nothing opens                                                                      |
+| The remembered organization is no longer the user's            | The picker opens again                                                                                                 |
+| The session ends on the server (revoked, refresh expired)      | The console returns to sign-in and forgets everything it fetched                                                       |
+| An organization's time zone unknown to the browser             | The clock shows the device's zone and says so on hover                                                                 |
+| A browser without WebGL 2                                      | The scene's place says so; the panels keep working                                                                     |
+| The scene fails while drawing                                  | Its place says what stopped and asks for a reload; the panels keep working                                             |
+| A camera move that skips the camera's limits                   | `pnpm lint` refuses it outside `src/scene/camera.ts`; `flyTo` constrains it                                            |
+| The container's address or key missing or refused              | It exits with status 2 and one `configuration_refused` line naming each problem, never the key; compose shows it down  |
+| A modal menu or another inline style                           | The policy blocks it in the browser; `pnpm lint` refuses modal menus before that                                       |
+| A stack out of reach, displaced or still connecting            | Its aircraft read as the stack's state, never as the online flag it last reported                                      |
+| A link to a fleet retired, unknown, or of another organization | The inspector says so and offers to clear the selection                                                                |
+| The state topic drops and rejoins                              | Everything the console read of the organization is read again on the rejoin                                            |
+| A viewer's change or retirement of a fleet                     | Row security leaves the row untouched without an error; the console counts the rows returned and says nothing changed  |
+| A fleet's write the database refuses                           | The refusal names the field its constraint is about: the name, the model, the airframe serial, the aircraft, its stack |
