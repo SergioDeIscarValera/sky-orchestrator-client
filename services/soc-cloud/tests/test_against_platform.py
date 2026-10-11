@@ -34,6 +34,7 @@ DOCK = "SOTESTDOCK01"
 def stack_on(broker: EphemeralMosquitto, files_port: int) -> dict[str, Any]:
     return {
         "name": "lab",
+        "organization": "6f1c2b9e-4d2a-4c1e-9a7b-2f3e4d5c6b7a",
         "broker": {
             "host": "127.0.0.1",
             "port": broker.port,

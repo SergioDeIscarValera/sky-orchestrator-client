@@ -38,6 +38,13 @@ RELATIONS = (
         frozenset({"stacks"}),
         lambda v: distinct(stack["broker"]["client_id"] for stack in v["stacks"]),
     ),
+    Relation(
+        "stacks[].organization are in served_organizations",
+        frozenset({"stacks", "served_organizations"}),
+        lambda v: (
+            {stack["organization"] for stack in v["stacks"]} <= set(v["served_organizations"])
+        ),
+    ),
 )
 
 

@@ -18,6 +18,7 @@ STRONG = "k" * 20 + "7" * 20
 SERVICE_KEY = ".".join(("h" * 20, "p" * 40, "s" * 43))
 STACK = {
     "name": "lab",
+    "organization": ORGANIZATION,
     "broker": {
         "host": "so-mosquitto",
         "port": 1883,
