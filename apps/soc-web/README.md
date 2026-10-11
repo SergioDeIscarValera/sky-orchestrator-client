@@ -188,7 +188,7 @@ be registered. Almendral (viewer) has no aircraft and no fleets. Fleets change i
 restart resets them. Realtime is not faked: there is no live telemetry, and a change made elsewhere
 shows once the console reads again; `http://localhost:5199/?replay` flies the development replay
 around Finca Norte, idle for 2 s, then taking off and circling, listed under Seen on the wire as
-REPLAYUAV, to select, follow or register; `?replay=2` flies two. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
+REPLAYUAV, to select, follow or register; `?replay=2` flies two, both listed there. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
 
 **Measuring the frame time (`NFR-PERF-06`).** `pnpm measure` does the following:
 
