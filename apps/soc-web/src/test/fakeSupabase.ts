@@ -19,6 +19,8 @@ export class FakeSupabase {
   readonly accessToken = jwtFor('authenticated')
   organizations: object = []
   rpcFailure: { status: number; body: object } | null = null
+  /** Answers for PostgREST tables, by method and path: `GET /rest/v1/fleets`. */
+  readonly answers = new Map<string, { status: number; body: object | null }>()
   unreachable = false
   /** As a browser sees GoTrue when CORS does not expose its API version header. */
   hidesApiVersion = false
@@ -55,6 +57,12 @@ export class FakeSupabase {
     if (route === 'GET /rest/v1/rpc/member_organizations') {
       if (this.rpcFailure !== null) return this.json(this.rpcFailure.status, this.rpcFailure.body)
       return this.json(200, this.organizations)
+    }
+    const answer = this.answers.get(route)
+    if (answer !== undefined) {
+      return answer.body === null
+        ? new Response(null, { status: answer.status })
+        : this.json(answer.status, answer.body)
     }
     return this.json(404, { message: `the fake has no ${route}` })
   }
