@@ -167,6 +167,28 @@ class ContinuousIntegration(unittest.TestCase):
                 self.assertIn(f"pnpm {script}\n", gate)
         self.assertIn("pnpm install --frozen-lockfile", gate)
 
+    def test_the_web_gate_runs_when_a_contract_the_web_reads_changes(self) -> None:
+        sources = (REPOSITORY / "apps" / "soc-web" / "src").rglob("*.ts*")
+        read = sorted(
+            {
+                directory
+                for source in sources
+                for directory in re.findall(r"contracts/([a-z-]+)/", source.read_text())
+            }
+        )
+        self.assertTrue(read)
+        detection = re.search(
+            r"grep -qE '([^']+)'", self.text[self.text.index("- id: web-changes") :]
+        )
+        assert detection is not None
+        hooks = (REPOSITORY / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+        hook = hook_files(hooks, "soc-web-gate")
+        assert hook is not None
+        for directory in read:
+            with self.subTest(contract=directory):
+                self.assertRegex(f"contracts/{directory}/probe.json", detection[1])
+                self.assertRegex(f"contracts/{directory}/probe.json", hook)
+
     def test_every_step_after_the_setup_reports_independently(self) -> None:
         steps = re.split(r"^      - ", self.text, flags=re.MULTILINE)[1:]
         unguarded = [step.splitlines()[0] for step in steps if "!cancelled()" not in step]

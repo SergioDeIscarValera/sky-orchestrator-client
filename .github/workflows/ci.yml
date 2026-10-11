@@ -130,6 +130,12 @@ jobs:
           uv run --frozen mypy libs/soc-realtime
           uv run --frozen pytest libs/soc-realtime/tests -m "not lane"
 
+      - name: soc-geo gate
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: |
+          uv run --frozen mypy libs/soc-geo
+          uv run --frozen pytest libs/soc-geo/tests
+
       - name: soc-cloud gate
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
         run: |
@@ -187,7 +193,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$BASE_REF" ] || git diff --name-only "origin/$BASE_REF...HEAD" \
-              | grep -qE '^(apps/soc-web/|\.github/workflows/ci\.yml$)'; then
+              | grep -qE '^(apps/soc-web/|contracts/(config|broadcast|geometry)/|\.github/workflows/ci\.yml$)'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
