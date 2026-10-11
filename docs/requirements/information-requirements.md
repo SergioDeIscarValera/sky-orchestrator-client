@@ -139,7 +139,7 @@ Retention: permanent; retiring is a soft delete.
 | `model` | text | `IR-MOD` |
 | `airframe_serial` | text | As printed on the aircraft |
 | `controller_serial` | text, nullable | Recorded only |
-| `gateway_sn`, `aircraft_sn` | text | Wire identity, unique among live fleets |
+| `gateway_sn`, `aircraft_sn` | text | Wire identity, unique among live fleets; a device its organization's stack has seen |
 | `flight_time_before_soc_s` | integer | Default 0 |
 | `created_at`, `updated_at`, `deleted_at` | timestamptz | |
 
