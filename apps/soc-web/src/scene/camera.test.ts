@@ -27,6 +27,7 @@ import {
   overviewPose,
 } from './camera'
 import { replaySample } from '../telemetry/replay'
+import { takeoffAfter } from '../telemetry/store'
 import { drawnAt } from './aircraft'
 import { FLAT_SITE } from './site'
 
@@ -175,6 +176,8 @@ describe('following a pinned aircraft (FR-SCN-05)', () => {
           index === 0
             ? null
             : { sample: replaySample(farm, index - 1, 0), receivedAt: index * 200 - 200 },
+        // The replay stands idle where its circle starts, and takes off there.
+        takeoff: takeoffAfter(null, replaySample(farm, 0, 0)),
       }
       const drawn = drawnAt(track, farm, ms, thresholds)
       if (drawn === null) throw new Error('nothing drawn')

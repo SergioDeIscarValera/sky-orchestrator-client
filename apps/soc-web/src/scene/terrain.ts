@@ -1,6 +1,7 @@
 import {
   Color,
   LOD,
+  MathUtils,
   Mesh,
   PlaneGeometry,
   ShaderMaterial,
@@ -61,6 +62,22 @@ export function heightAt(site: LoadedSite, east: number, north: number): number 
   const top = at(r0, c0) * (1 - fc) + at(r0, c0 + 1) * fc
   const bottom = at(r0 + 1, c0) * (1 - fc) + at(r0 + 1, c0 + 1) * fc
   return top * (1 - fr) + bottom * fr - elevation.at_origin_m
+}
+
+/** The ground's height above the origin's at a point of the scene, x east and z south. */
+export type Ground = (x: number, z: number) => number
+
+/** Without a site model, the flat ground: the origin's level everywhere. */
+export const FLAT_GROUND: Ground = () => 0
+
+/**
+ * The terrain as aircraft stand on it. Past the site's edge, where nothing is drawn,
+ * the nearest edge's height, so an aircraft crossing it does not jump.
+ */
+export function groundOf(site: LoadedSite): Ground {
+  const half = site.model.half_size_m
+  return (x, z) =>
+    heightAt(site, MathUtils.clamp(x, -half, half), MathUtils.clamp(-z, -half, half)) ?? 0
 }
 
 function luminance(colour: Color): number {

@@ -16,14 +16,16 @@ import {
   MeshBasicMaterial,
   Object3D,
   RingGeometry,
+  Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 import { eastNorth, type Geodetic } from '../geometry/projection'
 import { freshnessOf, type Freshness } from '../telemetry/freshness'
 import type { TelemetrySample } from '../telemetry/sample'
-import type { Track } from '../telemetry/store'
+import { IDLE_MODE, type Track } from '../telemetry/store'
 import type { ScenePalette } from './palette'
+import { FLAT_GROUND, type Ground } from './terrain'
 
 /** A Mavic Air 2's span, motor to motor across, in metres. */
 export const SPAN_M = 0.42
@@ -69,32 +71,52 @@ export function casingMaterial(): MeshBasicMaterial {
   return new MeshBasicMaterial({ side: BackSide })
 }
 
-/** Where a sample puts an aircraft in the scene: x east, y up, z south, and its yaw. */
+/**
+ * Where a sample puts an aircraft in the scene: x east, y up, z south, and its yaw;
+ * `groundY` is the ground under it, which its stalk drops to.
+ */
 export interface Placement {
   readonly x: number
   readonly y: number
   readonly z: number
   readonly yawRad: number
+  readonly groundY: number
 }
 
 /**
- * The sample in the scene's frame (ADR-0014). The flat ground is the takeoff
- * point's level, so a height below it, or unknown, draws on the ground; the
- * inspector says which. DJI's heading is clockwise from north, the scene's yaw
- * counter-clockwise about up from a nose towards north.
+ * The sample in the scene's frame (ADR-0014): the ground at the takeoff point,
+ * `takeoffY`, plus the height above it, never under the ground beneath the
+ * aircraft. Idle, or with its height unknown, it stands on that ground. DJI's
+ * heading is clockwise from north, the scene's yaw counter-clockwise about up from
+ * a nose towards north.
  */
-export function placement(origin: Geodetic, sample: TelemetrySample): Placement | null {
+export function placement(
+  origin: Geodetic,
+  sample: TelemetrySample,
+  ground: Ground = FLAT_GROUND,
+  takeoffY = 0,
+): Placement | null {
   if (sample.latitudeDeg === null || sample.longitudeDeg === null) return null
   const { eastM, northM } = eastNorth(origin, {
     latitudeDeg: sample.latitudeDeg,
     longitudeDeg: sample.longitudeDeg,
   })
+  const groundY = ground(eastM, -northM)
+  const standing = sample.modeCode === IDLE_MODE || sample.heightM === null
   return {
     x: eastM,
-    y: Math.max(0, sample.heightM ?? 0),
+    y: standing ? groundY : Math.max(groundY, takeoffY + sample.heightM),
     z: -northM,
     yawRad: sample.headingDeg === null ? 0 : -MathUtils.degToRad(sample.headingDeg),
+    groundY,
   }
+}
+
+/** The ground's height at the track's takeoff point, which its heights are above. */
+export function takeoffLevel(track: Track, origin: Geodetic, ground: Ground = FLAT_GROUND): number {
+  if (track.takeoff === null) return 0
+  const { eastM, northM } = eastNorth(origin, track.takeoff)
+  return ground(eastM, -northM)
 }
 
 /** The turn from one yaw to another the short way round, in (-π, π]. */
@@ -122,23 +144,32 @@ export function drawnAt(
   origin: Geodetic,
   now: number,
   thresholds: { readonly telemetryStaleAfterMs: number; readonly telemetryLostAfterMs: number },
+  ground: Ground = FLAT_GROUND,
 ): Drawn | null {
   const freshness = freshnessOf(Math.max(0, now - track.latest.receivedAt), thresholds)
-  const latest = placement(origin, track.latest.sample)
+  const takeoff = takeoffLevel(track, origin, ground)
+  const latest = placement(origin, track.latest.sample, ground, takeoff)
   if (latest === null) return null
   if (freshness === 'lost') return { placement: latest, freshness, gliding: false }
-  const previous = track.previous === null ? null : placement(origin, track.previous.sample)
+  const previous =
+    track.previous === null ? null : placement(origin, track.previous.sample, ground, takeoff)
   if (previous === null || track.previous === null) {
     return { placement: latest, freshness, gliding: false }
   }
   const glideMs = Math.min(track.latest.receivedAt - track.previous.receivedAt, MAX_GLIDE_MS)
   const share = glideMs <= 0 ? 1 : MathUtils.clamp((now - track.latest.receivedAt) / glideMs, 0, 1)
+  const x = MathUtils.lerp(previous.x, latest.x, share)
+  const z = MathUtils.lerp(previous.z, latest.z, share)
+  // The ground between two samples is not the line between their grounds: a ridge
+  // crossed between them is under the glide, which stays above it.
+  const groundY = ground(x, z)
   return {
     placement: {
-      x: MathUtils.lerp(previous.x, latest.x, share),
-      y: MathUtils.lerp(previous.y, latest.y, share),
-      z: MathUtils.lerp(previous.z, latest.z, share),
+      x,
+      y: Math.max(groundY, MathUtils.lerp(previous.y, latest.y, share)),
+      z,
       yawRad: previous.yawRad + shortTurn(previous.yawRad, latest.yawRad) * share,
+      groundY,
     },
     freshness,
     gliding: share < 1,
@@ -169,6 +200,9 @@ export interface AircraftParts {
   readonly keys: string[]
 }
 
+/** Drawn over the terrain they lie on even where far depths lose precision. */
+const ON_GROUND = { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 } as const
+
 export function createAircraftParts(capacity: number): AircraftParts {
   const shape = createAircraftGeometry()
   const bodies = new InstancedMesh(shape, new MeshBasicMaterial(), capacity)
@@ -177,7 +211,7 @@ export function createAircraftParts(capacity: number): AircraftParts {
   casings.name = 'aircraft-casing'
   const discs = new InstancedMesh(
     createGroundDiscGeometry(),
-    new MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false }),
+    new MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false, ...ON_GROUND }),
     capacity,
   )
   discs.name = 'aircraft-disc'
@@ -190,7 +224,7 @@ export function createAircraftParts(capacity: number): AircraftParts {
   stalks.name = 'aircraft-stalk'
   const ring = new Mesh(
     new RingGeometry(SPAN_M * 0.75, SPAN_M * 1.05, 48).rotateX(-Math.PI / 2),
-    new MeshBasicMaterial({ transparent: true, opacity: 0.85, depthWrite: false }),
+    new MeshBasicMaterial({ transparent: true, opacity: 0.85, depthWrite: false, ...ON_GROUND }),
   )
   ring.name = 'aircraft-selection'
   ring.visible = false
@@ -216,6 +250,32 @@ export function paintAircraft(parts: AircraftParts, palette: ScenePalette): void
 
 const pose = new Object3D()
 const tint = new Color()
+const UP = new Vector3(0, 1, 0)
+const normal = new Vector3()
+
+/**
+ * Lays `object` flat on the ground at (x, z), `radius` across: tilted to the slope
+ * under that span and lifted to the higher of its centre and the span's mean, so a
+ * disc in a hollow does not sink into its sides.
+ */
+export function restOnGround(
+  object: Object3D,
+  ground: Ground,
+  x: number,
+  z: number,
+  radius: number,
+) {
+  const centre = ground(x, z)
+  const west = ground(x - radius, z)
+  const east = ground(x + radius, z)
+  const north = ground(x, z - radius)
+  const south = ground(x, z + radius)
+  normal.set((west - east) / (2 * radius), 1, (north - south) / (2 * radius)).normalize()
+  object.quaternion.setFromUnitVectors(UP, normal)
+  // A hair above the ground, more for a larger disc, which a coarser terrain is drawn under.
+  const lift = 0.02 + radius * 0.02
+  object.position.set(x, Math.max(centre, (west + east + north + south) / 4) + lift, z)
+}
 
 /**
  * Writes this frame's aircraft into the parts. Live, an aircraft is the accent;
@@ -230,6 +290,7 @@ export function writeAircraft(
   viewportPx: number,
   palette: ScenePalette,
   selected: string | null = null,
+  ground: Ground = FLAT_GROUND,
 ): void {
   const stalk = parts.stalks.geometry.getAttribute('position') as Float32BufferAttribute
   parts.ring.visible = false
@@ -239,7 +300,7 @@ export function writeAircraft(
   parts.keys.length = 0
   for (const { key, drawn } of aircraft) {
     if (discs >= parts.discs.instanceMatrix.count) break
-    const { x, y, z, yawRad } = drawn.placement
+    const { x, y, z, yawRad, groundY } = drawn.placement
     const scale = screenScale(
       Math.hypot(camera.x - x, camera.y - y, camera.z - z),
       fovDeg,
@@ -248,15 +309,15 @@ export function writeAircraft(
     const current = drawn.freshness !== 'lost'
     const colour = drawn.freshness === 'live' ? palette.accent : palette.gridMajor
 
-    pose.position.set(x, 0.02, z)
-    pose.rotation.set(0, 0, 0)
+    restOnGround(pose, ground, x, z, (SPAN_M / 2) * scale)
     pose.scale.setScalar(scale)
     pose.updateMatrix()
     parts.discs.setMatrixAt(discs, pose.matrix)
     parts.discs.setColorAt(discs, tint.set(current ? colour : palette.gridMajor))
     discs += 1
     if (key === selected) {
-      parts.ring.position.set(x, 0.03, z)
+      restOnGround(parts.ring, ground, x, z, SPAN_M * 1.05 * scale)
+      parts.ring.position.y += 0.01
       parts.ring.scale.setScalar(scale)
       parts.ring.visible = true
     }
@@ -273,8 +334,8 @@ export function writeAircraft(
     parts.keys.push(key)
     bodies += 1
 
-    if (y > 0) {
-      stalk.setXYZ(stalks * 2, x, 0, z)
+    if (y > groundY) {
+      stalk.setXYZ(stalks * 2, x, groundY, z)
       stalk.setXYZ(stalks * 2 + 1, x, y, z)
       stalks += 1
     }

@@ -74,6 +74,25 @@ describe('live values in the inspector (FR-TEL-03, FR-FLE-04)', () => {
     expect(values.queryByText('0 m')).toBeNull()
   })
 
+  it('says where the height is measured from, once the aircraft has stood idle', async () => {
+    const backend = new FakeBackend(NEIGHBOUR)
+    backend.seen.set(NORTH.id, [device('SOTESTUAV001')])
+    window.history.replaceState(null, '', '/?gateway=SOTESTDOCK01&aircraft=SOTESTUAV001')
+    renderApp(backend)
+    await screen.findByRole('complementary', { name: 'Inspector' })
+    await inspector().findByRole('heading', { name: 'SOTESTUAV001' })
+    const takeoff = () => live().getByText('Takeoff point').nextElementSibling
+    act(() => {
+      backend.sample(NORTH.id, sample({ takenAtMs: 1000 }))
+    })
+    expect(takeoff()).toHaveTextContent('Not seen; the scene assumes its first position')
+    act(() => {
+      backend.sample(NORTH.id, sample({ takenAtMs: 2000, modeCode: 0, longitudeDeg: -4.7246 }))
+      backend.sample(NORTH.id, sample({ takenAtMs: 3000 }))
+    })
+    expect(takeoff()).toHaveTextContent('41.652312° N, 4.724600° W')
+  })
+
   it('shows a newer sample, and never an older one that arrives late', async () => {
     const backend = new FakeBackend(NEIGHBOUR)
     backend.seen.set(NORTH.id, [device('SOTESTUAV001')])

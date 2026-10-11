@@ -7,6 +7,7 @@ import { useCameraCommands } from '../scene/commands'
 import { useTrack } from './context'
 import { useFreshness, type Freshness } from './freshness'
 import { formatAge, formatCoordinates, formatHeading, formatMetres, modeName } from './format'
+import type { Takeoff } from './store'
 
 const TONE: Readonly<Record<Freshness, string>> = {
   live: 'bg-success-subtle text-success-emphasis',
@@ -22,6 +23,15 @@ const WORD: Readonly<Record<Freshness, string>> = {
 
 function unavailable(value: string | null) {
   return value ?? <span className="text-muted">Unavailable</span>
+}
+
+/** Where the height is measured from; not seen idle, the scene guesses it (ADR-0014). */
+function takeoffPoint(takeoff: Takeoff | null) {
+  if (takeoff === null) return unavailable(null)
+  if (takeoff.estimated) {
+    return <span className="text-muted">Not seen; the scene assumes its first position</span>
+  }
+  return formatCoordinates(takeoff.latitudeDeg, takeoff.longitudeDeg)
 }
 
 /**
@@ -58,6 +68,7 @@ export function LiveValues({
         rows={[
           ['Position', unavailable(formatCoordinates(sample.latitudeDeg, sample.longitudeDeg))],
           ['Height above takeoff', unavailable(formatMetres(sample.heightM))],
+          ['Takeoff point', takeoffPoint(track.takeoff)],
           ['Heading', unavailable(formatHeading(sample.headingDeg))],
           ['Distance from home', unavailable(formatMetres(sample.homeDistanceM))],
           [
