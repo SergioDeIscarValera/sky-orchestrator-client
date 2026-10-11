@@ -44,7 +44,9 @@ user created through its admin API, with a profile, and owns Finca Norte.
    that fleet with its gateway and aircraft (`FR-FLE-03`).
 4. The dock flies. Every sample reaches the browser in order and the
    inspector's position changes. The scene draws frames
-   (`FR-TEL-01`, `FR-SCN-04`).
+   (`FR-TEL-01`, `FR-SCN-04`). The aircraft, selected since its
+   registration, is followed: its label holds still on the screen, within 40 px,
+   while it flies (`FR-SCN-05`).
 5. From the dock's publish to the browser's receipt of the frame, the latency
    is within **150 ms at p95 and 300 ms at p99** (`NFR-PERF-01`). That path
    starts before soc-cloud reads the OSD, so it bounds the requirement's own.

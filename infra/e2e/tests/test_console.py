@@ -135,6 +135,10 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
     assert telemetry["in_order"]
     assert telemetry["moved"]
     assert telemetry["frames_drawn"] > 0
+    # FR-SCN-05: the aircraft selected is followed, its label still on the screen as it flies.
+    assert telemetry["followed"]
+    assert telemetry["label_drift_px"] is not None
+    assert telemetry["label_drift_px"] <= 40
     # NFR-PERF-01, from the dock's publish, before soc-cloud even reads it, to the browser.
     assert telemetry["from_dock_ms"]["p95"] <= 150
     assert telemetry["from_dock_ms"]["p99"] <= 300

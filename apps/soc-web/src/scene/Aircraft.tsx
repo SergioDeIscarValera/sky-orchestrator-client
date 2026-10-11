@@ -121,13 +121,11 @@ export function Aircraft({
     }
   }, [store, settings, invalidate])
 
-  // A new selection flies the camera to it once, where it is when first drawn: a shared
-  // link may select it before its telemetry arrives. Following it is pinning's, and
-  // clearing the selection lets go of whatever was followed.
-  const toFrame = useRef<string | null>(null)
+  // Selecting an aircraft follows it (FR-SCN-05): the camera flies in to frame it where
+  // it is first drawn, a shared link possibly selecting it before its telemetry arrives,
+  // then moves with it. Clearing the selection lets go.
   useEffect(() => {
-    toFrame.current = selected
-    if (selected === null) useCameraCommands.getState().pin(null)
+    useCameraCommands.getState().pin(selected)
     invalidate()
   }, [selected, invalidate])
 
@@ -179,11 +177,6 @@ export function Aircraft({
         follow(controls, pin.current.at, at, site, state.size, coveredBy(panel !== undefined))
       }
       pin.current.at = at
-    }
-    const subject = toFrame.current === null ? undefined : positions.get(toFrame.current)
-    if (subject !== undefined) {
-      toFrame.current = null
-      useCameraCommands.getState().send('frame', subject)
     }
     writeAircraft(
       parts,

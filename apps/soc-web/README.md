@@ -116,16 +116,17 @@ The console: one persistent 3D scene of the farm with floating panels
   threshold.
 - **Selecting an aircraft in the scene** (`FR-SCN-05`, `FR-SCN-06`): a click
   selects its fleet, or the aircraft when it is in none, as its row in the fleet
-  panel does; a soft ring marks it on the ground. A new selection, from the
-  scene, the panel or a shared link, flies the camera once to frame it in the
-  middle of the view the inspector leaves, at the angle the user chose. The
-  selected, the hovered and the alerting (stale or lost) carry a pill label
-  above them with their name, height and battery; at most 20 at once.
-- **Following an aircraft** (`FR-SCN-05`): _Follow in the scene_, in the
-  inspector's live values, pins it. The camera flies in to frame it in the
-  middle of the view the cards leave free, then moves with it, keeping the
-  user's angle and distance, until unpinned, sent back to the overview, or moved
-  by the user.
+  panel does; a soft ring marks it on the ground. The selected, the hovered and
+  the alerting (stale or lost) carry a pill label above them with their name,
+  height and battery; at most 20 at once. A click on the bare ground, the
+  inspector's close button or Escape clears the selection; with nothing
+  selected there is no inspector, and the scene has the whole width.
+- **Following the selected aircraft** (`FR-SCN-05`): a selection, from the
+  scene, the panel or a shared link, is followed. The camera flies in to frame
+  it in the middle of the view the cards leave free, then moves with it; the
+  user may orbit it and come closer or farther, the camera turning round the
+  aircraft itself. Panning the map, _Following in the scene_ in the inspector,
+  or the overview lets go; the same button follows it again.
 - **A development replay** with `?replay` (development builds and the
   measurement build of `pnpm measure` only): a synthetic aircraft stands idle for
   2 s, takes off straight up to 40 m, then circles the organization at 15 m/s,

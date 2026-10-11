@@ -148,6 +148,13 @@ async function main() {
     const { flying_since_ms: flyingSinceMs } = await nextLine()
     trace('the dock flies')
     const framesBefore = await page.evaluate(() => globalThis.socScene?.frames ?? 0)
+    // The selected aircraft is followed: its label holds still on the screen while it flies.
+    const label = page.locator('span.font-heading.text-xs', { hasText: FLEET.name }).first()
+    const labelAt = async () => {
+      const box = await label.boundingBox().catch(() => null)
+      return box === null ? null : { x: box.x, y: box.y }
+    }
+    let followedFrom = null
     const deadline = Date.now() + WAIT_MS + (wanted / 5) * 1000
     let firstPosition = null
     while (samples.length < wanted && Date.now() < deadline) {
@@ -155,8 +162,14 @@ async function main() {
       if (firstPosition === null && samples.length > 0) {
         firstPosition = await liveValue(page, 'Position')
       }
+      // From once the camera has flown in, a couple of seconds into the flight.
+      if (followedFrom === null && samples.length >= 15) followedFrom = await labelAt()
     }
     const lastPosition = await liveValue(page, 'Position')
+    const followedTo = await labelAt()
+    const following = await page
+      .getByRole('button', { name: 'Following in the scene', pressed: true })
+      .count()
     const framesAfter = await page.evaluate(() => globalThis.socScene?.frames ?? 0)
     if (shots !== null) {
       mkdirSync(shots, { recursive: true })
@@ -174,6 +187,11 @@ async function main() {
       ),
       console_delivery_p95_ms: await overlayMs(page, 'delivery p95'),
       moved: firstPosition !== null && firstPosition !== lastPosition,
+      followed: following === 1,
+      label_drift_px:
+        followedFrom === null || followedTo === null
+          ? null
+          : Math.hypot(followedTo.x - followedFrom.x, followedTo.y - followedFrom.y),
       frames_drawn: framesAfter - framesBefore,
     })
 
