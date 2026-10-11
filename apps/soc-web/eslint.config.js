@@ -8,7 +8,7 @@ import tseslint from 'typescript-eslint'
 import { cameraModuleRules, consoleRules } from './lint-rules.js'
 
 export default defineConfig([
-  globalIgnores(['dist', 'node_modules']),
+  globalIgnores(['dist', 'dist-measure', 'node_modules']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

@@ -119,10 +119,12 @@ The console: one persistent 3D scene of the farm with floating panels
   middle of the view the cards leave free, then moves with it, keeping the
   user's angle and distance, until unpinned, sent back to the overview, or moved
   by the user.
-- **A development replay** with `?replay` (development builds only): a synthetic
-  aircraft stands idle for 2 s, takes off straight up to 40 m, then circles the
-  organization at 15 m/s, sampled at 5 Hz, to look at and measure the scene
-  without a stack. `pnpm budget` fails a build that ships it.
+- **A development replay** with `?replay` (development builds and the
+  measurement build of `pnpm measure` only): a synthetic aircraft stands idle for
+  2 s, takes off straight up to 40 m, then circles the organization at 15 m/s,
+  sampled at 5 Hz, to look at and measure the scene without a stack.
+  `?replay=2` flies two, and up to four, each from its own point of the circle.
+  `pnpm budget` fails a build that ships it.
 - **The scene's statistics** with `?stats` (`NFR-OBS-05`): frames rendered, the
   frame time at p95 while it moves, the delivery of telemetry at p95 from
   soc-cloud's broadcast to the browser (`NFR-PERF-01`, honest only with the
@@ -181,6 +183,26 @@ restart resets them. Realtime is not faked: there is no live telemetry, and a ch
 shows once the console reads again; `http://localhost:5199/?replay` flies a synthetic aircraft
 around Finca Norte, listed under Seen on the wire as REPLAYUAV, to select, follow or register. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
 
+**Measuring the frame time (`NFR-PERF-06`).** `pnpm measure` does the following:
+
+- It builds the console in the measurement mode: production React, with the replay kept.
+- It serves the build with `vite preview` at `http://localhost:4199`, against the demo's fake Supabase.
+- It drives Chrome at 1920×1080 along a scripted 60 s camera path: orbit, follow, back to the overview, closer, orbit and tilt, farther, orbit.
+- Two aircraft of the replay fly at 5 Hz throughout. The first is selected, so its inspector updates at every sample.
+
+The scene's own frame sampler measures every frame of the path. The script prints the frames, the p95 and worst frame times, and the GPU. It says whether the p95 is within 20 ms and exits 1 when it is not.
+
+Run it on mains power: on battery the laptop slows down. Its options:
+
+- `--site <dir>` serves the baked site models in that directory, as `SOC_SITE_DIR` does.
+- `--theme dark` measures the dark theme.
+- `--chrome <path>` names Chrome when it is not on the `PATH`.
+- `--headed` shows the browser while it runs.
+- `--shots <dir>` saves a screenshot after each step. Screenshots cost frames, and the report says they were taken.
+- `--serve` only serves the build, to look at by hand.
+
+Measuring on `pnpm dev` overstates the frame time. React's development mode adds work to every render of the inspector: 23 to 27 ms there, against 17.6 ms on the production build.
+
 | Script                          | What it checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm typecheck`                | Strict TypeScript, app and tests apart (tests may use Node's API, the app may not)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -188,6 +210,7 @@ around Finca Norte, listed under Seen on the wire as REPLAYUAV, to select, follo
 | `pnpm format:check`             | Prettier, with Tailwind's class order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `pnpm test`                     | Vitest on happy-dom ([ADR-0020](../../docs/architecture/decisions/0020-web-tests-on-happy-dom-and-zod-mini.md)), its files sharing their worker's modules ([ADR-0022](../../docs/architecture/decisions/0022-web-test-files-share-their-workers-modules.md)), under 2 s on mains power: sign-in, organization first, sign-out, the scene's ground, palette, sampler and region, a 2,000-step fuzz of the camera's limits, the configuration's checks, the Supabase implementation against a fake GoTrue, PostgREST and Realtime channel, the fleets' queries, writes and live invalidation, the fleet panel, the inspector and the fleet forms, the telemetry's contract, store, freshness and words, the aircraft's placement on the golden vectors, their glide and a 2,000-case fuzz that none is drawn past its latest sample, the contrast of every text token on every surface in both themes (`NFR-UX-02`), the lint rules themselves |
 | `pnpm build` then `pnpm budget` | The initial JavaScript ≤ 250 KB gzip and the 3D chunk ≤ 450 KB (`NFR-PERF-05`), read from Vite's manifest                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `pnpm measure`                  | The frame time ≤ 20 ms at p95 (`NFR-PERF-06`) on the production build, along the scripted 60 s path; it needs Chrome and a GPU, so it runs by hand, not in CI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ## The image
 

@@ -4,7 +4,7 @@ import { extname, resolve, sep } from 'node:path'
 
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, type Connect, type Plugin } from 'vite'
 
 import { faviconSvg } from './src/theme/favicon.ts'
 
@@ -18,26 +18,31 @@ function settingsFile(path: string | undefined): unknown {
   }
 }
 
+const serveConfiguration: Connect.NextHandleFunction = (_request, response) => {
+  response.setHeader('content-type', 'application/json')
+  response.setHeader('cache-control', 'no-store')
+  response.end(
+    JSON.stringify({
+      supabase_url: process.env.SOC_WEB_SUPABASE_URL ?? null,
+      supabase_key: process.env.SOC_WEB_SUPABASE_KEY ?? null,
+      settings: settingsFile(process.env.SOC_CONFIG_FILE),
+    }),
+  )
+}
+
 /**
- * In development, /config.json comes from the environment and soc-web's file, as
- * the image writes it at start (FR-DEP-04, ADR-0023).
+ * In development and in `vite preview`, /config.json comes from the environment
+ * and soc-web's file, as the image writes it at start (FR-DEP-04, ADR-0023).
  */
 function runtimeConfiguration(): Plugin {
   return {
     name: 'soc-runtime-configuration',
     apply: 'serve',
     configureServer(server) {
-      server.middlewares.use('/config.json', (_request, response) => {
-        response.setHeader('content-type', 'application/json')
-        response.setHeader('cache-control', 'no-store')
-        response.end(
-          JSON.stringify({
-            supabase_url: process.env.SOC_WEB_SUPABASE_URL ?? null,
-            supabase_key: process.env.SOC_WEB_SUPABASE_KEY ?? null,
-            settings: settingsFile(process.env.SOC_CONFIG_FILE),
-          }),
-        )
-      })
+      server.middlewares.use('/config.json', serveConfiguration)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use('/config.json', serveConfiguration)
     },
   }
 }
@@ -69,41 +74,46 @@ const SITE_TYPES: Readonly<Record<string, string>> = {
   '.png': 'image/png',
 }
 
+const serveSiteModel: Connect.NextHandleFunction = (request, response) => {
+  const root = process.env.SOC_SITE_DIR
+  const wanted = decodeURIComponent((request.url ?? '').split('?')[0] ?? '')
+  const file = root === undefined ? null : resolve(root, `.${wanted}`)
+  const type = file === null ? undefined : SITE_TYPES[extname(file)]
+  if (
+    root === undefined ||
+    file === null ||
+    type === undefined ||
+    !file.startsWith(resolve(root) + sep)
+  ) {
+    response.statusCode = 404
+    response.end()
+    return
+  }
+  try {
+    const body = readFileSync(file)
+    response.setHeader('content-type', type)
+    response.setHeader('cache-control', 'no-cache')
+    response.end(body)
+  } catch {
+    response.statusCode = 404
+    response.end()
+  }
+}
+
 /**
- * In development, /site/<organization>/ serves the baked site models in
- * SOC_SITE_DIR, as the image serves its volume (ADR-0018); without it, every site
- * is missing and the scene keeps its flat ground.
+ * In development and in `vite preview`, /site/<organization>/ serves the baked
+ * site models in SOC_SITE_DIR, as the image serves its volume (ADR-0018); without
+ * it, every site is missing and the scene keeps its flat ground.
  */
 function siteModels(): Plugin {
   return {
     name: 'soc-site-models',
     apply: 'serve',
     configureServer(server) {
-      server.middlewares.use('/site/', (request, response) => {
-        const root = process.env.SOC_SITE_DIR
-        const wanted = decodeURIComponent((request.url ?? '').split('?')[0] ?? '')
-        const file = root === undefined ? null : resolve(root, `.${wanted}`)
-        const type = file === null ? undefined : SITE_TYPES[extname(file)]
-        if (
-          root === undefined ||
-          file === null ||
-          type === undefined ||
-          !file.startsWith(resolve(root) + sep)
-        ) {
-          response.statusCode = 404
-          response.end()
-          return
-        }
-        try {
-          const body = readFileSync(file)
-          response.setHeader('content-type', type)
-          response.setHeader('cache-control', 'no-cache')
-          response.end(body)
-        } catch {
-          response.statusCode = 404
-          response.end()
-        }
-      })
+      server.middlewares.use('/site/', serveSiteModel)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use('/site/', serveSiteModel)
     },
   }
 }

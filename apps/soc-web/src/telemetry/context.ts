@@ -38,27 +38,29 @@ export function useLiveTelemetry(store: TelemetryStore): void {
 }
 
 /**
- * In development only, `?replay` flies a synthetic aircraft around the organization
+ * In development, and in the measurement build of `pnpm measure` (NFR-PERF-06),
+ * `?replay` flies a synthetic aircraft around the organization and `?replay=2` two
  * (`replay.ts`); a production build drops this and the replay with it.
  */
 export function useReplay(store: TelemetryStore): void {
   const { organization } = useOrganization()
   const { position } = organization
   // Read once, as the console opens: navigating rewrites the search.
-  const [wanted] = useState(() => new URLSearchParams(window.location.search).has('replay'))
+  const [wanted] = useState(() => new URLSearchParams(window.location.search).get('replay'))
 
   useEffect(() => {
-    // A literal condition, so the production build drops the replay and its chunk.
-    if (!import.meta.env.DEV) return
-    if (!wanted || position === null) return
+    // Literal conditions, so the production build drops the replay and its chunk.
+    if (!import.meta.env.DEV && import.meta.env.MODE !== 'measure') return
+    if (wanted === null || position === null) return
     let stop: (() => void) | null = null
     let stopped = false
     void import('./replay').then((replay) => {
       if (stopped) return
-      stop = replay.startReplay(store, {
-        latitudeDeg: position.latitude,
-        longitudeDeg: position.longitude,
-      })
+      stop = replay.startReplay(
+        store,
+        { latitudeDeg: position.latitude, longitudeDeg: position.longitude },
+        replay.replayCount(wanted),
+      )
     })
     return () => {
       stopped = true

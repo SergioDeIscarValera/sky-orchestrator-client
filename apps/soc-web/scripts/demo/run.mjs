@@ -59,7 +59,7 @@ function signalGroup(group, signal) {
 }
 
 /** Stops the Vite process group (pnpm and the dev server under it), by force after a while. */
-async function stopGroup(pid) {
+export async function stopGroup(pid) {
   const group = -pid
   signalGroup(group, 'SIGTERM')
   for (let waited = 0; groupAlive(group); waited += POLL_MS) {

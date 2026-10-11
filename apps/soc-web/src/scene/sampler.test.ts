@@ -26,6 +26,18 @@ describe("the scene's frame sampler (NFR-PERF-06, NFR-RES-01)", () => {
     expect(sampler.frames).toBe(2)
   })
 
+  it('keeps every frame of a run, past the window, by the same rule', () => {
+    const sampler = new FrameSampler()
+    for (let frame = 0; frame < 50; frame += 1) sampler.record(90, INFO)
+    sampler.startRun()
+    for (let frame = 1; frame <= 2000; frame += 1) sampler.record(frame <= 1900 ? 16 : 30, INFO)
+    sampler.record(IDLE_GAP_MS + 1, INFO)
+    // The window holds only the last 600 frames, of which a sixth took 30 ms.
+    expect(sampler.frameTimeP95Ms()).toBe(30)
+    expect(sampler.endRun()).toEqual({ frames: 2001, p95Ms: 16, worstMs: 30 })
+    expect(sampler.endRun()).toBeNull()
+  })
+
   it('keeps a window of the latest frames', () => {
     const sampler = new FrameSampler()
     for (let frame = 0; frame < 1000; frame += 1) sampler.record(40, INFO)
