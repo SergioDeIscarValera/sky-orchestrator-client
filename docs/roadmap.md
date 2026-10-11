@@ -69,7 +69,7 @@ The MVP is M5: **a first real flight commanded from SOC**
 | `soc-cloud` command path: command intents in the database, announced, claimed once, put on the wire | `feature/database/command-intents`, merged (#26); `feature/cloud/commands`, merged (#27) |
 | Sky Orchestrator's contracts pinned to its v0.4.1 release | `feature/contracts/sky-orchestrator-v0.4.1`, merged (#28) |
 | `soc-operations` skeleton: configuration, health, the database link; its transition intents arrive with the operations in M4 | `feature/operations/skeleton`, merged (#29, fixed by #30) |
-| `soc-web` skeleton: tokens and the shell; sign-in, organization first and the runtime configuration; the persistent scene and panels | `feature/web/scaffold`, merged (#34); `feature/database/member-organizations`, merged (#35); `feature/web/sign-in`; `feature/web/scene` |
+| `soc-web` skeleton: tokens and the shell; sign-in, organization first and the runtime configuration; the persistent scene and panels | `feature/web/scaffold`, merged (#34); `feature/database/member-organizations`, merged (#35); `feature/web/sign-in`, merged (#38); `feature/web/image`; `feature/web/scene` |
 | Compose stack for the mini-PC, the stack check in CI, the deploy command with its flight guard | `feature/infra/images`, merged (#32): the images and the compose project; `feature/repo/release-images`, merged (#33); `feature/infra/stack-and-check` |
 | Viability session on the mini-PC, measured | `feature/infra/viability-session` |
 
