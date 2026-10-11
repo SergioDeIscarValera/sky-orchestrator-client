@@ -19,6 +19,7 @@ The skeleton every later part plugs into:
 | One MQTT v5 link per stack as `cloud-client`, persistent session, supervised (`FR-LNK-01`) | `link/stack.py` |
 | Topology and presence: online while listed by `update_topo` and reported online by the dock (`FR-LNK-02`) | `link/topology.py` |
 | Each aircraft OSD as one sample at its own time, a missing field unavailable (`FR-LNK-03`) | `link/telemetry.py` |
+| What each stack reports, recorded for the console: its link state per dock, the devices it announces with their presence, each aircraft's firmware from `state`; only the latest of each, stacks before their devices, everything again after the database comes back (`FR-FLE-02`, `FR-LNK-02`, `IR-STK`, `IR-DEV`) | `presence.py`, through `soc.record_stack`, `soc.record_topology`, `soc.record_firmware` |
 | `update_topo` acknowledged with `status_reply` (`FR-LNK-11`); `flighttask_resource_get` answered on `requests_reply` (`FR-LNK-04`) | `link/stack.py` |
 | Flight files kept as exact bytes in memory, offered with their MD5, served at `/files/<128-bit token>.kmz` on `SOC_FLIGHT_FILES_PORT`, retired `flight_file_grace_s` after the flight ends (`FR-LNK-05`, `NFR-SEC-06`, [ADR-0008](../../docs/architecture/decisions/0008-flight-files-served-on-sky-orchestrators-network.md)) | `files.py` |
 | Command intents put on the wire: announced by `pg_notify`, swept on every reconnection, checked against their schema, claimed or expired, published with tid = intent and bid = flight, settled by their `services_reply` or timed out (`FR-LNK-06`, ADR-0006) | `commands.py` |
@@ -27,8 +28,8 @@ The skeleton every later part plugs into:
 
 The topics read are those a DJI cloud reads (`link/topics.py`): `status`,
 `osd`, `state`, `events`, `requests`, `services_reply`, `property/set_reply`,
-at QoS 1. The samples are kept in memory; the fan-out to the browsers and the
-devices in the database arrive in M2, and the flight files enter the registry
+at QoS 1. The samples are kept in memory; their fan-out to the browsers arrives
+next in M2, and the flight files enter the registry
 from `soc.flight_files` with the operations in M4 ([roadmap](../../docs/roadmap.md)).
 Each stack offers the files at its own `flight_files_url`: the address the dock
 reaches `soc-cloud` at on that stack's network.
@@ -106,6 +107,8 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
 | A request for any path but a live file's | The same 404, whether the token is unknown, malformed, retired or the path is a directory |
 | Other bytes kept for a flight that already has a file | Refused with `FlightFileConflictError`: what flies is what was kept (`IR-FIL-01`) |
 | The flight file port cannot be bound | The process ends with status 1 and `service_failed` |
+| The database away while stacks report | The latest of each report is kept and written when it is back, every one of them again; nothing reported meanwhile is lost, nothing stale is written last |
+| The database refuses a report (a serial it does not accept, a stack moved to another organization while it has fleets) | `presence_refused` names it; that report is dropped, the others are written |
 | A command for a dock no connected stack has announced | It waits; it runs when a stack announces the dock, or expires once `command_intent_ttl_s` has passed |
 | A command claimed but not published (the broker dropped) | It stays `sent` and times out after `command_reply_timeout_s`: nothing claims it twice |
 | A command its schema refuses | `failed` before anything is sent, with every problem logged |

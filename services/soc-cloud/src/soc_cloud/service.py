@@ -11,6 +11,7 @@ from soc_cloud.commands import CHANNEL, Commands, PostgresCommandStore
 from soc_cloud.files import FileServer, FlightFiles
 from soc_cloud.link.stack import StackLink
 from soc_cloud.link.telemetry import Sample
+from soc_cloud.presence import PostgresPresenceStore, PresenceRecorder
 from soc_cloud.settings import SERVICE, Settings
 from soc_cloud.wire import WireContract
 from soc_db import Database
@@ -48,6 +49,7 @@ class CloudService:
             connector=realtime_connector,
         )
         self.wire = WireContract()
+        self.presence = PresenceRecorder(PostgresPresenceStore(self.database))
         self.latest: dict[str, Sample] = {}
         self.files = FlightFiles(
             {stack.name: stack.flight_files_url for stack in settings.tunables.stacks},
@@ -63,6 +65,7 @@ class CloudService:
                 files=functools.partial(self.files.offer, stack.name),
                 on_reply=self._replied,
                 on_announced=self._dock_announced,
+                presence=self.presence.for_stack(stack.name, stack.organization),
             )
             for stack in settings.tunables.stacks
         ]
@@ -95,6 +98,7 @@ class CloudService:
         async with asyncio.TaskGroup() as group:
             group.create_task(self.database.run())
             group.create_task(self.realtime.run())
+            group.create_task(self.presence.run())
             for link in self.links:
                 group.create_task(link.run())
             group.create_task(serve(health, self.settings.health_port, self._bind_host))
@@ -113,6 +117,7 @@ class CloudService:
         await self.commands.announced(payload)
 
     async def _connected(self) -> None:
+        self.presence.rewrite_all()
         await self.commands.sweep()
 
     def _replied(self, tid: str, result: int) -> None:

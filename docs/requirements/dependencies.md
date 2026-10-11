@@ -53,7 +53,10 @@ on DJI's wire. What SOC's operation flow takes from it (M4):
   camera wrote during the task from SO's bridge contract 1.7.0 (`DEP-13` records
   0 today; DJI's wire shape is unchanged). SOC reads nothing from it yet.
   Downloading the images is SO's M5, which suits SOC: it has no media
-  requirement before then.
+  requirement before then. SO #125 delivered it on SO's `develop`: the count is
+  of files, not shots (a Mavic Air 2 set to JPEG+RAW counts 2 per photo), it
+  never decreases within a task, and it stays 0 from an application older than
+  1.7.0. SOC takes it with SO's next release.
 - Measured on the phone: OSD at 5 Hz, 300 of 300 messages in 60 s for aircraft
   and dock; clock offset −504 ± 18 ms; a 31.9 s loss of the phone's Wi-Fi
   mid-mission survived, the task ending `COMPLETED_OK`; 13 photos, 13 files.
