@@ -54,6 +54,10 @@ Rules:
 **IR-ORG-01**: an organization with `deleted_at` set gives no access in SOC, even
 to its members: SOC checks it, because Virtual Origen's `is_member` does not.
 
+**IR-ORG-02**: the web learns a user's organizations from
+`soc.member_organizations()`: id, name, the user's role, latitude, longitude and
+time zone, live memberships of live organizations only, ordered by name.
+
 ---
 
 ## IR-MOD — Aircraft model

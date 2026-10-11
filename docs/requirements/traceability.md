@@ -14,7 +14,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | ID | Priority | Unit | Milestone | Test | Status |
 | --- | --- | --- | --- | --- | --- |
 | FR-AUT-01 | MUST | soc-web, database | M1 | — | Planned |
-| FR-AUT-02 | MUST | soc-web, database | M1 | — | Planned |
+| FR-AUT-02 | MUST | soc-web, database | M1 | `database/migrations/0005-member-organizations.sql`, `database/tests/test_member_organizations.py` | Partial: the database offers each user their live organizations with role and position, tested per case; the web's choice and switch arrive with the sign-in |
 | FR-AUT-03 | MUST | soc-web, database | M1 | `database/tests/test_membership.py` | Partial: role ranking and live membership tested; per-table policies arrive with the tables |
 | FR-AUT-04 | MUST | soc-web, database | M1 | — | Planned |
 | FR-SCN-01 | MUST | soc-web | M1 | — | Planned |

@@ -133,12 +133,25 @@ class Tenancy:
         )
         return user_id
 
-    async def organization(self, owner: uuid.UUID) -> uuid.UUID:
+    async def organization(
+        self,
+        owner: uuid.UUID,
+        name: str = "Farm",
+        position: tuple[float, float] | None = None,
+        timezone: str | None = None,
+    ) -> uuid.UUID:
         organization_id = uuid.uuid4()
+        latitude, longitude = position or (None, None)
         await self._admin.execute(
-            "insert into public.organizations (id, name, owner_id) values ($1, 'Farm', $2)",
+            "insert into public.organizations "
+            "(id, name, owner_id, latitude, longitude, timezone) "
+            "values ($1, $2, $3, $4, $5, $6)",
             organization_id,
+            name,
             owner,
+            latitude,
+            longitude,
+            timezone,
         )
         await self.join(owner, organization_id, "owner")
         return organization_id
