@@ -100,7 +100,7 @@ def test_the_compose_project_is_valid_with_its_example_files(tmp_path: Path) -> 
     for source in compose.iterdir():
         target = tmp_path / source.name.removesuffix(".example")
         target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-    for configuration in ("soc-cloud.json", "soc-operations.json"):
+    for configuration in ("soc-cloud.json", "soc-operations.json", "soc-web.json"):
         (tmp_path / configuration).write_text("{}", encoding="utf-8")
     checked = docker(
         "compose", "--project-directory", str(tmp_path), "-f", str(tmp_path / "compose.yaml"),

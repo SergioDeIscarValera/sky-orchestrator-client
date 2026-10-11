@@ -52,7 +52,7 @@ export interface SupabaseOptions {
 }
 
 export function supabaseBackend(
-  configuration: RuntimeConfiguration,
+  configuration: Pick<RuntimeConfiguration, 'supabaseUrl' | 'supabaseKey'>,
   options: SupabaseOptions = {},
 ): Backend {
   const client = createClient(configuration.supabaseUrl, configuration.supabaseKey, {

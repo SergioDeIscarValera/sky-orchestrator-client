@@ -1,13 +1,14 @@
 #!/bin/sh
-# Writes the console's configuration and headers from the environment, then
-# serves it (FR-DEP-04, NFR-SEC-07). Like every SOC service it refuses to start
-# on a configuration it cannot trust, naming every problem (ADR-0019), and never
-# repeats a value it was given in its log.
+# Writes the console's configuration and headers from the environment and its
+# file, then serves it (FR-DEP-04, NFR-SEC-07). Like every SOC service it refuses
+# to start on a configuration it cannot trust, naming every problem (ADR-0019),
+# and never repeats a value it was given in its log.
 set -eu
 
 OUT=/tmp/soc-web
 URL="${SOC_WEB_SUPABASE_URL:-}"
 KEY="${SOC_WEB_SUPABASE_KEY:-}"
+FILE="${SOC_CONFIG_FILE:-}"
 problems=""
 
 refuse() {
@@ -49,6 +50,14 @@ else
     esac
 fi
 
+# The console's own file, already checked by soc-config check soc-web before this
+# container starts (ADR-0023); the browser reads it and refuses it again if it must.
+if [ -z "$FILE" ]; then
+    refuse "SOC_CONFIG_FILE is not set"
+elif [ ! -f "$FILE" ] || [ ! -r "$FILE" ]; then
+    refuse "SOC_CONFIG_FILE cannot be read"
+fi
+
 if [ -n "$problems" ]; then
     printf '{"event":"configuration_refused","service":"soc-web","problems":[%s]}\n' "$problems"
     exit 2
@@ -57,7 +66,11 @@ fi
 URL="${URL%/}"
 SOCKETS="ws${URL#http}"
 mkdir -p "$OUT"
-printf '{"supabase_url":"%s","supabase_key":"%s"}\n' "$URL" "$KEY" >"$OUT/config.json"
+{
+    printf '{"supabase_url":"%s","supabase_key":"%s","settings":' "$URL" "$KEY"
+    cat "$FILE"
+    printf '}\n'
+} >"$OUT/config.json"
 cat >"$OUT/headers.conf" <<EOF
 add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' $URL $SOCKETS; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
 add_header X-Content-Type-Options "nosniff" always;
