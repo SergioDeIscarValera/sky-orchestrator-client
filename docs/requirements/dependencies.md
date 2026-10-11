@@ -17,7 +17,7 @@ pinned to Sky Orchestrator's v0.4.1 tag, the release that publishes `DEP-01` to
 
 | ID | SO item | SO milestone | What it gives SOC | SOC requirements waiting on it | Status |
 | --- | --- | --- | --- | --- | --- |
-| `DEP-01` | FR-DEV-07, ADR-0038 | M4 | The stack's state over HTTP: simulator mode, link and its reason, aircraft connected, armed and seconds left, clock offset | `FR-LNK-08`, `FR-OPS-05` (`PF-MODE`, `PF-ARMED`, `PF-CLOCK`), `FR-OPS-06`, `FR-OPS-07`, `FR-SAF-04` | **Delivered**, SO PR #113: `GET /v1/status`, so-wayline API 1.3.0 |
+| `DEP-01` | FR-DEV-07, ADR-0038 | M4 | The stack's state over HTTP: simulator mode, link and its reason, aircraft connected, armed and seconds left, clock offset | `FR-LNK-08`, `FR-OPS-05` (`PF-MODE`, `PF-SIMULATOR`, `PF-ARMED`, `PF-CLOCK`), `FR-OPS-06`, `FR-OPS-07`, `FR-SAF-04` | **Delivered**, SO PR #113: `GET /v1/status`, so-wayline API 1.3.0 |
 | `DEP-02` | FR-FLT-11, NFR-SAF-07, ADR-0037 | M4 | `simulate_mission` (all three fields) must agree with the stack's mode; a real prepare only for a file flown to `ok` in simulation; refusals `319015`, `325001`, `314010`, `319004` | `FR-OPS-06`, `FR-OPS-09`, `NFR-SAF-05` | **Delivered**, SO PR #109 |
 | `DEP-03` | FR-WAY-11 | M4 | `GET /v1/envelope`: the active device envelope, with its fingerprint | `FR-OPS-08`, `FR-WAY-08`, `FR-GEO-04` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
 | `DEP-04` | FR-WAY-12 | M4 | `POST /v1/validations`: dry-run validation of a flight file | `FR-LNK-09`, `PF-SO-DRYRUN`, `NFR-COMP-02` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
@@ -30,7 +30,7 @@ pinned to Sky Orchestrator's v0.4.1 tag, the release that publishes `DEP-01` to
 | `DEP-11` | M4 exit: first real flight | M4 | The aircraft cleared for real flight through SO | SOC's M5 | Pending in SO |
 | `DEP-12` | FR-SAF-06, bridge contract 1.6.0 | M4 | An execute while the operator holds the aircraft from the phone's console is refused `314010`, as an unarmed phone is: the operator acts on the phone, then SOC retries | `FR-OPS-09` | **Delivered**, SO PR #114 |
 | `DEP-13` | FR-BRG-09 | M4 | `takePhoto` and `gimbalRotate` run once per waypoint visit, and a resume does not repeat a photo already taken; `flighttask_progress.ext.media_count` stays 0 | `FR-WAY-12` | **Delivered**, SO PR #115 |
-| `DEP-26` | ADR-0040, bridge contract 1.8.0 | M4 | The phone's readiness for a real execute in `/v1/status` (real flight confirmed on the phone, build cleared by a simulator pass, simulator off), so SOC can check it before an execute instead of learning it from a `314010` | `FR-OPS-05`, `FR-OPS-09` | Asked, 2026-10-11 |
+| `DEP-26` | ADR-0040, bridge contract 1.8.0 | M4 | The phone's readiness for a real execute in `/v1/status` (real flight confirmed on the phone, build cleared by a simulator pass, simulator off), so SOC can check it before an execute instead of learning it from a `314010` | `FR-OPS-05`, `FR-OPS-09` | Not before the MVP (SO, 2026-10-11): the operator sees both on the phone's screen, and SOC's MVP does without them; Sergio's call if it ever needs them (bridge contract 1.9.0, wayline API 1.4.0) |
 
 SO's `infra/fly.py --stop-after S` sends `return_home` S seconds into a route: the
 reference SOC's stop path is compared with.
@@ -75,10 +75,18 @@ changes in simulator mode. In real mode (`simulator_mode: false` in
   codes replace `simulator_not_active` in bridge contract 1.8.0. A `314010` on
   execute therefore has three causes in real mode: the phone unarmed, the
   aircraft held from the phone's console (`DEP-12`), or real flight not
-  unlocked on the phone. SOC's message names all three (`FR-OPS-09`) until
-  `DEP-26` lets it tell them apart beforehand.
-- **A phone still in its simulator refuses the execute**, mapped as aircraft
-  unavailable (so-bridge code `simulator_in_real_mode`).
+  unlocked on the phone. `/v1/status` says whether the phone is armed, not the
+  other two, and SO will not say them before the MVP (`DEP-26`): with the phone
+  armed, a `314010` on execute means real flight not confirmed, the build not
+  cleared, or the aircraft held, and SOC's message names the three
+  (`FR-OPS-09`).
+- **A phone still in its simulator refuses the execute** (so-bridge code
+  `simulator_in_real_mode`). The reply carries `316010` (`AIRCRAFT_NOT_DETECTED`),
+  as a lost link does, and as a phone without its simulator does in simulator
+  mode. `/v1/status` tells the three apart: `link.state` down; `simulator_mode`
+  true with `simulator_active` false; `simulator_mode` false with
+  `simulator_active` true. SOC checks the last two before it executes
+  (`PF-SIMULATOR`).
 - **A real prepare** still needs the same KMZ completed in simulation on this
   deployment (`NFR-SAF-07`, `314010` on the prepare), as before (`DEP-02`).
 
