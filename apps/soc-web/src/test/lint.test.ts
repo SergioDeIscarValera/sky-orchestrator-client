@@ -73,6 +73,13 @@ describe('the lint rules', () => {
     ).toEqual([])
   })
 
+  it.each([
+    'export const go = (controls) => controls.setLookAt(0, -10, 0, 0, 0, 0, false)',
+    'export const aim = (controls) => controls.setTarget(5000, 0, 0)',
+  ])('refuse a camera move that skips its limits: %s', (code) => {
+    expect(messages(code)).toEqual([expect.stringContaining('through flyTo')])
+  })
+
   it('accept the tokens and the element ids', () => {
     expect(
       messages("export const name = 'bg-primary-subtle'\nexport const root = '#root'"),
