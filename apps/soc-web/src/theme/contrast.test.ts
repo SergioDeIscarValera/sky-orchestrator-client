@@ -39,7 +39,7 @@ function pairs(): [string, string][] {
     [token, 'surface'] as [string, string],
   ])
   const pills = HUES.map((hue) => [`${hue}-emphasis`, `${hue}-subtle`] as [string, string])
-  return [...text, ...pills]
+  return [...text, ...pills, ['on-primary', 'primary']]
 }
 
 describe.each([

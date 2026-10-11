@@ -1,9 +1,11 @@
 /*
  * The design tokens: the only place a colour, radius, shadow or typeface is
- * written (NFR-UX-01). Minty's hues are fills and accents; text on them is the
- * matching emphasis colour (NFR-UX-02). The subtle and emphasis pairs are
- * Bootstrap 5.3's derivation from Minty: light, tint 80 % and shade 60 %; dark,
- * shade 80 % and tint 40 %. See docs/design/README.md.
+ * written (NFR-UX-01). Minty's hues are fills and accents; text on a subtle is
+ * the matching emphasis colour, and text on the primary fill is on-primary,
+ * since Bootstrap's primary emphasis reaches only 4.4:1 there (NFR-UX-02). The
+ * subtle and emphasis pairs are Bootstrap 5.3's derivation from Minty: light,
+ * tint 80 % and shade 60 %; dark, shade 80 % and tint 40 %. See
+ * docs/design/README.md.
  */
 @import 'tailwindcss';
 
@@ -26,6 +28,7 @@
   --color-info: #6cc3d5;
   --color-warning: #ffce67;
   --color-danger: #ff7851;
+  --color-on-primary: #1e3a33;
 
   --color-primary-subtle: #e4f3ef;
   --color-primary-emphasis: #304e45;
