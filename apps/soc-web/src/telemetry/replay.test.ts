@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { eastNorth } from '../geometry/projection'
-import { REPLAY, replaySample } from './replay'
+import { CIRCLING_FROM_S, REPLAY, replaySample } from './replay'
 import { createTelemetryStore } from './store'
 
 const FARM = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
@@ -15,14 +15,26 @@ describe('the development replay', () => {
       })
       expect(Math.hypot(placed.eastM, placed.northM)).toBeCloseTo(REPLAY.radiusM, 1)
     }
-    const a = replaySample(FARM, 10, 0)
-    const b = replaySample(FARM, 11, 0)
+    const circling = CIRCLING_FROM_S * REPLAY.rateHz
+    const a = replaySample(FARM, circling + 10, 0)
+    const b = replaySample(FARM, circling + 11, 0)
     const step = eastNorth(
       { latitudeDeg: a.latitudeDeg ?? NaN, longitudeDeg: a.longitudeDeg ?? NaN },
       { latitudeDeg: b.latitudeDeg ?? NaN, longitudeDeg: b.longitudeDeg ?? NaN },
     )
     expect(Math.hypot(step.eastM, step.northM)).toBeCloseTo(REPLAY.speedMs / REPLAY.rateHz, 1)
     expect(b.takenAtMs - a.takenAtMs).toBe(200)
+  })
+
+  it('stands idle, takes off straight up, then circles at its height', () => {
+    const at = (seconds: number) => replaySample(FARM, Math.round(seconds * REPLAY.rateHz), 0)
+    expect(at(0)).toMatchObject({ modeCode: 0, heightM: 0, homeDistanceM: 0 })
+    expect(at(REPLAY.idleS - 0.2)).toMatchObject({ modeCode: 0, heightM: 0 })
+    expect(at(REPLAY.idleS + 1)).toMatchObject({ modeCode: 4, heightM: REPLAY.climbMs })
+    expect(at(REPLAY.idleS + 1).latitudeDeg).toBe(at(0).latitudeDeg)
+    expect(at(CIRCLING_FROM_S)).toMatchObject({ modeCode: 5, heightM: REPLAY.heightM })
+    const half = CIRCLING_FROM_S + (Math.PI * REPLAY.radiusM) / REPLAY.speedMs
+    expect(at(half).homeDistanceM).toBeCloseTo(2 * REPLAY.radiusM, 0)
   })
 
   it('heads along the circle, counter-clockwise seen from above', () => {
