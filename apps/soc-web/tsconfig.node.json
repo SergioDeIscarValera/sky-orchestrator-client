@@ -22,6 +22,7 @@
     "scripts/secrets.d.mts",
     "scripts/demo/fake-supabase.d.mts",
     "scripts/demo/run.d.mts",
-    "scripts/measure/path.d.mts"
+    "scripts/measure/path.d.mts",
+    "scripts/e2e/frames.d.mts"
   ]
 }
