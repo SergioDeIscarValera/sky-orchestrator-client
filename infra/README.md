@@ -48,6 +48,14 @@ MiB at rest.
 
 ## Deploying on the mini-PC
 
+Bake each organization's site model first, from the repository root. A model is optional: an organization without one gets a flat ground (ADR-0018).
+
+1. Fetch IGN's elevation and imagery for the organization's area; this step needs the internet: `uv run soc-site fetch --latitude <latitude> --longitude <longitude> --half-size-m 1000 --sources site/sources`.
+2. Bake the model, offline and the same bytes every time: `uv run soc-site bake --sources site/sources --out site/model`.
+3. Copy the model into the compose project: `mkdir -p infra/compose/site/<organization-id> && cp site/model/* infra/compose/site/<organization-id>/`. Make the folder before `docker compose up`, or Docker creates `site/` as root; the files must be world-readable, since soc-web reads them as user 10001.
+
+Then deploy the stack:
+
 ```bash
 cd infra/compose
 cp .env.example .env                               # the version, the networks

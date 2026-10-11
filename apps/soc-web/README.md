@@ -203,8 +203,11 @@ file as it is) and the security headers into `/tmp/soc-web`, logs one
 (`NFR-SEC-07`): a Content Security Policy that loads scripts and styles from the
 console only and connects only to the configured Supabase (HTTP and WebSocket),
 `frame-ancestors 'none'`, no referrer, `nosniff`, and no server version. The
-built files are cached for a year, `index.html` and `/config.json` never. Any
-other path answers with the console, for the routes the panels add.
+built files are cached for a year, `index.html` and `/config.json` never. `/site/`
+serves the organization's site model from the folder mounted read-only at
+`/srv/site` (ADR-0018), with its ETag and `Cache-Control: no-cache`, GET and HEAD
+only; a model it does not have answers 404, never the console. Any other path
+answers with the console, for the routes the panels add.
 
 A Radix menu is non-modal here: a modal one injects an inline `<style>` the
 policy refuses, so a lint rule asks for `modal={false}`. Dialogs, when they
