@@ -50,3 +50,18 @@ export function Gone({ children }: { readonly children: ReactNode }) {
 export function Waiting({ children }: { readonly children: ReactNode }) {
   return <p className="text-muted text-sm">{children}</p>
 }
+
+/** Why a viewer's buttons are off; the buttons point at it. */
+export function ReadOnlyReason({
+  id,
+  organization,
+}: {
+  readonly id: string
+  readonly organization: string
+}) {
+  return (
+    <p id={id} className="text-muted mt-2 text-xs">
+      Your role in {organization} only reads: editors and owners change fleets.
+    </p>
+  )
+}
