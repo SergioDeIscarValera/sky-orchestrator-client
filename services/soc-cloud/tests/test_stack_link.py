@@ -4,6 +4,7 @@ import asyncio
 import copy
 import json
 import socket
+import uuid
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -25,6 +26,7 @@ AIRCRAFT = "SOTESTUAV001"
 NOW_S = 1790800001.5
 STACK = Stack(
     name="lab",
+    organization=uuid.UUID("6f1c2b9e-4d2a-4c1e-9a7b-2f3e4d5c6b7a"),
     broker=Broker(
         host="so-mosquitto",
         port=1883,

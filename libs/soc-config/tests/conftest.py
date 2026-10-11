@@ -13,6 +13,7 @@ from soc_config import Contract
 ORGANIZATION = "6f1c2b9e-4d2a-4c1e-9a7b-2f3e4d5c6b7a"
 STACK: dict[str, Any] = {
     "name": "lab",
+    "organization": ORGANIZATION,
     "broker": {
         "host": "so-mosquitto",
         "port": 1883,

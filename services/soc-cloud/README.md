@@ -40,6 +40,10 @@ uv run soc-config example soc-cloud > /etc/soc/soc-cloud.json   # then fill the 
 SOC_CONFIG_FILE=/etc/soc/soc-cloud.json ... uv run soc-cloud
 ```
 
+Each stack names the organization its aircraft fly for, one of
+`served_organizations` (contract 2.0.0): its stack, devices, fleets, telemetry
+and commands are that organization's.
+
 Every variable it reads is declared in `contracts/config/soc-config.schema.json`
 (`x-environment`), plus the broker password and API token each stack names. At
 start it logs `service_started` with the configuration's fingerprint and the

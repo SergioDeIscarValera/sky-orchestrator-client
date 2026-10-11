@@ -153,6 +153,26 @@ def test_stack_names_are_distinct(complete: Complete, stack: dict[str, Any]) -> 
     ]
 
 
+def test_a_stack_flies_for_an_organization_the_service_serves(
+    complete: Complete, stack: dict[str, Any]
+) -> None:
+    other = {**stack, "organization": "0b6d3f1e-8a2c-4e5f-9b1a-7c3d2e1f0a9b"}
+    assert refused(complete("soc-cloud", stacks=[other])) == [
+        "stacks[].organization are in served_organizations does not hold"
+    ]
+
+
+@pytest.mark.parametrize("organization", [None, "farm", 7])
+def test_a_stack_names_its_organization_by_uuid(
+    complete: Complete, stack: dict[str, Any], organization: Any
+) -> None:
+    values = {**stack, "organization": organization}
+    if organization is None:
+        del values["organization"]
+    problems = refused(complete("soc-cloud", stacks=[values]))
+    assert problems and all(problem.startswith("stacks/0") for problem in problems)
+
+
 def test_broker_client_ids_are_distinct(complete: Complete, stack: dict[str, Any]) -> None:
     assert refused(complete("soc-cloud", stacks=[stack, {**stack, "name": "field"}])) == [
         "stacks[].broker.client_id are distinct does not hold"

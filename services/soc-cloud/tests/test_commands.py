@@ -26,6 +26,7 @@ TTL_S = 10
 REPLY_TIMEOUT_S = 0.2
 STACK = Stack(
     name="lab",
+    organization=uuid.UUID("6f1c2b9e-4d2a-4c1e-9a7b-2f3e4d5c6b7a"),
     broker=Broker(
         host="so-mosquitto",
         port=1883,
