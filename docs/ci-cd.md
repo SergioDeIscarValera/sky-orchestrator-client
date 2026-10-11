@@ -70,10 +70,11 @@ So:
 | Slow lanes filtered by the paths they read | A documentation change does not start containers |
 | Every job has a timeout | A hung job cannot burn the month |
 | Every step guarded with `!cancelled()` | One red run shows every problem |
+| Every job on `ubuntu-24.04`, by version | `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19, on GitHub's date rather than in a pull request here |
 
 `tools/tests/test_workflows.py` holds these rules: a second job, a push trigger,
-a job without a timeout or an expression interpolated into a script fails the
-gate and has to be argued for in review.
+a job without a timeout or on another runner image, or an expression
+interpolated into a script fails the gate and has to be argued for in review.
 
 What this costs, plainly: the tree on `develop` after a merge is not re-checked
 as such. While the rulesets cannot require branches to be up to date, a manual
