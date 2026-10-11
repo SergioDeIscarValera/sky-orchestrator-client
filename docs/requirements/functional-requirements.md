@@ -241,7 +241,10 @@ other path answers 404; no port is published on the host.
 Wire command intents (prepare, execute, pause, recovery, return home, undo) are
 sent on `services` with `tid` = the intent's id and `bid` = the flight id. The
 reply's result is recorded on the intent with its latency; no reply within
-`command_reply_timeout_s` marks it timed out.
+`command_reply_timeout_s` marks it timed out. A `319999` to an execute or a
+recovery records an unknown outcome, not a refusal: Sky Orchestrator gave up
+waiting for the phone, which may still have started (SO's ADR-0041); the
+flight's progress settles it (`FR-LNK-07`).
 
 **Acceptance**: each verb against Sky Orchestrator's fake bridge stack records
 `accepted` with result 0; a redelivered intent is sent once.
@@ -568,7 +571,10 @@ flight on the phone's screen, and retry" (`DEP-12`; a phone whose app build has
 no simulator pass cannot fly real, SO's ADR-0040; SO does not say which before
 the MVP, `DEP-26`); `316010` on an execute, told apart by the stack's status: "the
 link to the phone is down", "turn the phone's simulator off", or in simulator
-mode "turn the phone's simulator on"; `319015` "the stack's mode is not known yet"; `319004` "the
+mode "turn the phone's simulator on"; `319999` on an execute, "the outcome is not known yet": SOC reads the flight's
+progress and the stack's status, and a task still `PREPARED` is executed again
+or undone, while a moving one is flying (`DEP-27`); `319015` "the stack's mode
+is not known yet"; `319004` "the
 task was prepared under the other mode: cancel it and prepare again"; `314003`
 "Sky Orchestrator refused the file".
 
