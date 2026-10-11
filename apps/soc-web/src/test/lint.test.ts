@@ -54,6 +54,13 @@ describe('the lint rules', () => {
     )
   })
 
+  it.each(["vi.mock('../backend/supabase')", "vi.doMock('../backend/supabase', () => ({}))"])(
+    'refuse a module mock, which would leak into the next file: %s',
+    (code) => {
+      expect(messages(code)).toContainEqual(expect.stringContaining('ADR-0022'))
+    },
+  )
+
   it.each([
     'export const join = (auth) => auth.signUp({})',
     'export const guest = (auth) => auth.signInAnonymously()',
