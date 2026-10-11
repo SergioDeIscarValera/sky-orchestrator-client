@@ -512,6 +512,7 @@ The checks, each blocking unless marked:
 | `PF-SO-DRYRUN` | Sky Orchestrator's dry run accepts the flight file |
 | `PF-ENVELOPE` | The geofence lies inside the stack's device envelope (`FR-OPS-08`) |
 | `PF-MODE` | The stack's simulator mode is known |
+| `PF-SIMULATOR` | The phone's simulator agrees with the stack's mode: on in simulator mode, off in real mode (`simulator_active` in the stack's status) |
 | `PF-ARMED` | The operator armed the phone, with at least `min_arming_left_s` left |
 | `PF-IDLE` | The stack has no unfinished flight |
 | `PF-CLOCK` | The stack's clock offset is within its bound (warning, not blocking) |
@@ -551,8 +552,11 @@ with the same file and executed. Refusals are shown with their meaning, told
 apart by the method that drew them (SO's ADR-0037): `314010` on a prepare, "this
 file has not completed a simulation on this stack"; `314010` on an execute, "arm
 the phone, release the aircraft held from the phone's console, or confirm real
-flight on the phone's screen, and retry" (`DEP-12`, `DEP-26`; a phone whose app
-build has no simulator pass cannot fly real, SO's ADR-0040); `319015` "the stack's mode is not known yet"; `319004` "the
+flight on the phone's screen, and retry" (`DEP-12`; a phone whose app build has
+no simulator pass cannot fly real, SO's ADR-0040; SO does not say which before
+the MVP, `DEP-26`); `316010` on an execute, told apart by the stack's status: "the
+link to the phone is down", "turn the phone's simulator off", or in simulator
+mode "turn the phone's simulator on"; `319015` "the stack's mode is not known yet"; `319004` "the
 task was prepared under the other mode: cancel it and prepare again"; `314003`
 "Sky Orchestrator refused the file".
 
