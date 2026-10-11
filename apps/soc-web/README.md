@@ -30,7 +30,9 @@ The console: one persistent 3D scene of the farm with floating panels
   model is baked, a flat ground with a 50 m and a 250 m grid over a 2 km site
   centred on the organization, reaching into fog in the page colour, and a note
   that says the ground is flat, or that the organization has no position. Its
-  colours are the theme's tokens, followed without a reload (`FR-SCN-08`). The
+  colours are the theme's tokens, followed without a reload (`FR-SCN-08`): the
+  system's light or dark, as it changes, until the user picks one with the
+  toggle, which this device then keeps. The
   camera orbits, pans, zooms and tilts within the site, never under the ground,
   and the map tools bring it closer, farther, or back to the overview; with
   reduced motion it cuts instead of flying (ADR-0021). It renders only when
