@@ -37,3 +37,4 @@ Rules:
 | [0018](0018-the-site-model-is-baked-once.md) | The site model is baked once and served as static assets | Accepted |
 | [0019](0019-one-configuration-contract-no-fallbacks.md) | One configuration contract, a file per service, no fallbacks | Accepted |
 | [0020](0020-web-tests-on-happy-dom-and-zod-mini.md) | The web's unit tests run on happy-dom; its schemas use Zod's mini build | Accepted |
+| [0021](0021-the-scene-camera-and-ground.md) | The scene's camera keeps its own limits; its ground is plain three.js | Accepted |

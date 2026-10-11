@@ -22,11 +22,22 @@ The console: one persistent 3D scene of the farm with floating panels
   another organization is dropped from the cache when it does.
 - **The shell**: the top bar (the organization, search, the clock in the
   organization's time zone with UTC on hover, the theme, the account menu with
-  sign-out), the navigation rail, the inspector, and the place where the scene
-  arrives, each a landmark. Light and dark themes, remembered per browser.
+  sign-out), the navigation rail, the inspector and the map tools, each a
+  landmark, over the scene. Light and dark themes, remembered per browser.
+- **The persistent scene** (`FR-SCN-01`), loaded in its own chunk: until a site
+  model is baked, a flat ground with a 50 m and a 250 m grid over a 2 km site
+  centred on the organization, reaching into fog in the page colour, and a note
+  that says the ground is flat, or that the organization has no position. Its
+  colours are the theme's tokens, followed without a reload (`FR-SCN-08`). The
+  camera orbits, pans, zooms and tilts within the site, never under the ground,
+  and the map tools bring it closer, farther, or back to the overview; with
+  reduced motion it cuts instead of flying (ADR-0021). It renders only when
+  something changes: no frame while idle (`NFR-RES-01`).
+- **The scene's statistics** with `?stats` (`NFR-OBS-05`): frames rendered, the
+  frame time at p95 while it moves, draw calls, triangles, geometries and
+  textures; the sampler is then `window.socScene`.
 
-The scene and the panels' content arrive next ([roadmap](../../docs/roadmap.md),
-M1).
+The panels' content arrives next ([roadmap](../../docs/roadmap.md)).
 
 ## How it is built
 
@@ -36,7 +47,8 @@ M1).
 | `src/backend`       | `Backend`, everything the web asks of Supabase, and its Supabase implementation; components see only the interface                              |
 | `src/account`       | The session (`useAccountState`), sign-in, sign-out, the account menu                                                                            |
 | `src/organizations` | The organization gate, the picker, the switcher, the per-device choice, and `organizationKey`, which every organization's query key starts with |
-| `src/app`           | The application, the shell, the shared card layout and styles                                                                                   |
+| `src/app`           | The application, the shell, the scene's region (loaded lazily), the shared card layout and styles                                               |
+| `src/scene`         | The scene: the site, the camera and its limits (`flyTo`), the ground, the palette from the tokens, the frame sampler, the map tools             |
 | `src/theme`         | The tokens and the theme switch                                                                                                                 |
 | `src/test`          | The fakes the tests use: `FakeBackend` for components, `FakeSupabase` behind `fetch` for the Supabase implementation                            |
 
@@ -61,13 +73,13 @@ image writes it when its container starts. Without them the console starts on
 the page that names what is missing. Schema `soc` must be in Supabase's
 `PGRST_DB_SCHEMAS` for the organizations to load (`DEP-21`).
 
-| Script                          | What it checks                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm typecheck`                | Strict TypeScript, app and tests apart (tests may use Node's API, the app may not)                                                                                                                                                                                                                                                                                        |
-| `pnpm lint`                     | Type-aware rules, the hooks rules, and SOC's four in `lint-rules.js`: no colour literal outside the tokens (`NFR-UX-01`), no API plain HTTP lacks (`NFR-PORT-04`), no way to create an account (`FR-AUT-01`), no modal menu (`NFR-SEC-07`)                                                                                                                                |
-| `pnpm format:check`             | Prettier, with Tailwind's class order                                                                                                                                                                                                                                                                                                                                     |
-| `pnpm test`                     | Vitest on happy-dom ([ADR-0020](../../docs/architecture/decisions/0020-web-tests-on-happy-dom-and-zod-mini.md)), under 2 s: sign-in, organization first, sign-out, the configuration's checks, the Supabase implementation against a fake GoTrue and PostgREST, the contrast of every text token on every surface in both themes (`NFR-UX-02`), the lint rules themselves |
-| `pnpm build` then `pnpm budget` | The initial JavaScript ≤ 250 KB gzip and the 3D chunk ≤ 450 KB (`NFR-PERF-05`), read from Vite's manifest                                                                                                                                                                                                                                                                 |
+| Script                          | What it checks                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                | Strict TypeScript, app and tests apart (tests may use Node's API, the app may not)                                                                                                                                                                                                                                                                                                                                                                                   |
+| `pnpm lint`                     | Type-aware rules, the hooks rules, and SOC's five in `lint-rules.js`: no colour literal outside the tokens (`NFR-UX-01`), no API plain HTTP lacks (`NFR-PORT-04`), no way to create an account (`FR-AUT-01`), no modal menu (`NFR-SEC-07`), no camera move outside `flyTo` (`FR-SCN-03`)                                                                                                                                                                             |
+| `pnpm format:check`             | Prettier, with Tailwind's class order                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `pnpm test`                     | Vitest on happy-dom ([ADR-0020](../../docs/architecture/decisions/0020-web-tests-on-happy-dom-and-zod-mini.md)), under 2 s: sign-in, organization first, sign-out, the scene's ground, palette, sampler and region, a 2,000-step fuzz of the camera's limits, the configuration's checks, the Supabase implementation against a fake GoTrue and PostgREST, the contrast of every text token on every surface in both themes (`NFR-UX-02`), the lint rules themselves |
+| `pnpm build` then `pnpm budget` | The initial JavaScript ≤ 250 KB gzip and the 3D chunk ≤ 450 KB (`NFR-PERF-05`), read from Vite's manifest                                                                                                                                                                                                                                                                                                                                                            |
 
 ## The image
 
@@ -125,5 +137,8 @@ on the page colour.
 | The remembered organization is no longer the user's           | The picker opens again                                                                                                |
 | The session ends on the server (revoked, refresh expired)     | The console returns to sign-in and forgets everything it fetched                                                      |
 | An organization's time zone unknown to the browser            | The clock shows the device's zone and says so on hover                                                                |
+| A browser without WebGL 2                                     | The scene's place says so; the panels keep working                                                                    |
+| The scene fails while drawing                                 | Its place says what stopped and asks for a reload; the panels keep working                                            |
+| A camera move that skips the camera's limits                  | `pnpm lint` refuses it outside `src/scene/camera.ts`; `flyTo` constrains it                                           |
 | The container's address or key missing or refused             | It exits with status 2 and one `configuration_refused` line naming each problem, never the key; compose shows it down |
 | A modal menu or another inline style                          | The policy blocks it in the browser; `pnpm lint` refuses modal menus before that                                      |
