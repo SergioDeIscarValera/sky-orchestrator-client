@@ -4,11 +4,12 @@ import { useCameraCommands } from '../scene/commands'
 import type { TelemetrySample } from '../telemetry/sample'
 import { FakeBackend, NORTH, ORCHARD, PILOT } from '../test/FakeBackend'
 import { renderApp } from '../test/render'
+import { SITE } from '../test/site'
 
-async function openedOn(organizationId: string, search = '') {
+async function openedOn(organizationId: string, search = '', backend = new FakeBackend(PILOT)) {
   window.history.replaceState(null, '', `/${search}`)
   window.localStorage.setItem(`soc.organization.${PILOT.userId}`, organizationId)
-  const rendered = renderApp(new FakeBackend(PILOT))
+  const rendered = renderApp(backend)
   await screen.findByRole('banner')
   return rendered
 }
@@ -47,8 +48,25 @@ describe('the scene region (FR-SCN-01)', () => {
 
   it('names the missing site model, or the missing position', async () => {
     await openedOn(NORTH.id)
-    expect(screen.getByRole('note')).toHaveTextContent(
+    expect(await screen.findByRole('note')).toHaveTextContent(
       'No site model for Finca Norte yet: the ground is flat.',
+    )
+  })
+
+  it('credits the site model it draws, and says no more about the ground', async () => {
+    const backend = new FakeBackend(PILOT)
+    backend.sites.set(NORTH.id, SITE)
+    await openedOn(NORTH.id, '', backend)
+    expect(await screen.findByText(SITE.model.attribution)).toBeInTheDocument()
+    expect(screen.queryByRole('note')).toBeNull()
+  })
+
+  it('names a site model it cannot load, and keeps the flat ground', async () => {
+    const backend = new FakeBackend(PILOT)
+    backend.siteFailure = new Error('elevation.f32 answered HTTP 500')
+    await openedOn(NORTH.id, '', backend)
+    expect(await screen.findByRole('note')).toHaveTextContent(
+      'The site model of Finca Norte cannot be loaded (elevation.f32 answered HTTP 500): the ground is flat.',
     )
   })
 

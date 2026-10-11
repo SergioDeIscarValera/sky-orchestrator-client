@@ -81,6 +81,11 @@ export function paintSky(scene: Scene, palette: ScenePalette, site: Site): void 
   scene.fog = new Fog(palette.page, overview, overview * 1.6)
 }
 
+/** The flat ground shows only where no terrain was baked. */
+export function showGround(ground: Group, shown: boolean): void {
+  ground.visible = shown
+}
+
 export function disposeGround(ground: Group): void {
   for (const part of groundParts(ground)) {
     part.geometry.dispose()
