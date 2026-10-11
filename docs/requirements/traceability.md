@@ -110,7 +110,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-PERF-02 | MUST | soc-web, database, soc-cloud | M4 | `services/soc-cloud/tests/test_against_platform.py::test_commands_reach_the_wire_through_pg_notify_within_50_ms_at_p95` | Partial: from commit to claim p95 under 50 ms over 100 commands on the container lane; the click and the console arrive in M4, the box measurement in the viability session |
 | NFR-PERF-03 | MUST | soc-cloud | M1 | — | Planned |
 | NFR-PERF-04 | MUST | soc-cloud, libs | M4 | — | Planned |
-| NFR-PERF-05 | MUST | soc-web | M1 | `apps/soc-web/scripts/budget.mjs` | Partial: the initial JavaScript (172.9 KB gzip) and the 3D chunk, loaded apart (244.4 KB gzip), held to their budgets in CI and in the image build; the load times on the LAN arrive with the viability session |
+| NFR-PERF-05 | MUST | soc-web | M1 | `apps/soc-web/scripts/budget.mjs` | Partial: the initial JavaScript (198.7 KB gzip, with the router) and the 3D chunk, loaded apart (244.4 KB gzip), held to their budgets in CI and in the image build; the load times on the LAN arrive with the viability session |
 | NFR-PERF-06 | MUST | soc-web | M1 | `apps/soc-web/src/scene/sampler.ts`, `apps/soc-web/src/scene/sampler.test.ts` | Partial: the scene's frame-time sampler; orbiting for 5 s at 1920×1080 in Chrome gave 17.2 ms at p95 on an Intel UHD (TGL GT1, below the Iris Xe class of `ASM-02`) and 17.1 ms on an RTX 3050 Ti (2026-10-11), with no telemetry yet; the scripted 60 s with two aircraft on `ASM-02` arrives with the flight console |
 | NFR-PERF-07 | SHOULD | soc-cloud | M4 | — | Planned |
 | NFR-RES-01 | MUST | soc-web | M1 | `apps/soc-web/src/scene/canvas.ts`, `apps/soc-web/src/scene/canvas.test.ts`, `apps/soc-web/src/scene/Meter.tsx` | Partial: rendered on demand; in Chrome, 0 frames over 30 s of idle and one frame per theme change (2026-10-11); the frame counter in the end-to-end suite arrives with it |
@@ -147,7 +147,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-COMP-04 | MUST | infra | M4 | — | Planned |
 | NFR-UX-01 | MUST | soc-web | M1 | `apps/soc-web/src/test/lint.test.ts`, `apps/soc-web/eslint.config.js` | Done: a lint rule refuses any colour literal outside `src/theme/theme.css`, held by its own test |
 | NFR-UX-02 | MUST | soc-web | M1 | `apps/soc-web/src/theme/contrast.test.ts` | Done: every text token on every surface it is used on, and every emphasis on its subtle, at 4.5:1 or more in both themes |
-| NFR-UX-03 | MUST | soc-web | M1 | — | Planned |
+| NFR-UX-03 | MUST | soc-web | M1 | `apps/soc-web/src/app/router.ts`, `apps/soc-web/src/app/panels.test.tsx` | Partial: the open panel and the selected fleet in the URL, read leniently, every panel opened from the rail with no reload; each panel's actions arrive with it |
 | NFR-UX-04 | MUST | soc-web | M1 | — | Planned |
 | NFR-UX-05 | MUST | soc-web | M1 | `apps/soc-web/src/scene/motion.ts`, `apps/soc-web/src/scene/camera.ts`, `apps/soc-web/src/theme/theme.css` | Partial: interface transitions of 200 ms, camera moves damped over 0.25 s, and both off under `prefers-reduced-motion`; the count-up of changing numbers arrives with the panels |
 | NFR-UX-06 | MUST | soc-web | M1 | — | Planned |
@@ -159,7 +159,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (no file over 512 KB), `.pre-commit-config.yaml` (large files, private keys) | Done for size and keys; build output kept out by `.gitignore` |
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
-| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*`, `apps/soc-web/src/**/*.test.*` | Done so far: tooling 174, soc-migrate 26, soc-config 195, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 83, soc-operations 15, soc-check 7, soc-web 124 tests, each Python suite under 0.3 s and the web's under 2 s (ADR-0020), per unit in pre-commit and CI |
+| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*`, `apps/soc-web/src/**/*.test.*` | Done so far: tooling 174, soc-migrate 26, soc-config 195, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 83, soc-operations 15, soc-check 7, soc-web 130 tests, each Python suite under 0.3 s and the web's under 2 s (ADR-0020), per unit in pre-commit and CI |
 | NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py`, `services/soc-cloud/tests/test_against_broker.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, the real Realtime v2.102.3 beside it, and Mosquitto 2.0.22 configured as Sky Orchestrator's broker; `soc-db`, `soc-realtime` and `soc-cloud` run their end-to-end tests there |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |
