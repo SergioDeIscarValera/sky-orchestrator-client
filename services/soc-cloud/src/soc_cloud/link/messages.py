@@ -45,6 +45,10 @@ class DockSubDevice(msgspec.Struct, frozen=True):
     device_paired: int = 0
 
 
+class StateData(msgspec.Struct, frozen=True):
+    firmware_version: str | None = None
+
+
 class DockOsd(msgspec.Struct, frozen=True):
     mode_code: int | None = None
     sub_device: DockSubDevice | None = None

@@ -39,10 +39,12 @@ from soc_cloud.link.messages import (
     Envelope,
     ResourceGet,
     ServiceReply,
+    StateData,
     UpdateTopo,
 )
 from soc_cloud.link.telemetry import Sample, sample
 from soc_cloud.link.topology import Topology
+from soc_cloud.presence import LinkState, NoPresence, Presence
 from soc_cloud.settings import Stack, StackCredentials
 from soc_cloud.wire import WireContract, WireRefusedError
 from soc_supervision import Backoff, Health, Supervisor
@@ -104,6 +106,7 @@ class StackLink:
         files: Callable[[str], FileOffer | None] = no_files,
         on_reply: Callable[[str, int], None] = no_replies,
         on_announced: Callable[[str], None] = no_announcements,
+        presence: Presence | None = None,
         client_factory: ClientFactory = aiomqtt.Client,
         backoff: Backoff | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
@@ -117,6 +120,8 @@ class StackLink:
         self._files = files
         self._on_reply = on_reply
         self._on_announced = on_announced
+        self._presence = presence or NoPresence()
+        self._link = LinkState.CONNECTING
         self._client: aiomqtt.Client | None = None
         self._client_factory = client_factory
         self._clock = clock
@@ -173,6 +178,7 @@ class StackLink:
             await self._close(client)
             raise
         self._client = client
+        self._report_link(LinkState.CONNECTED)
         return client
 
     async def _serve(self, client: aiomqtt.Client) -> None:
@@ -182,8 +188,11 @@ class StackLink:
         except aiomqtt.MqttError as error:
             if displaced(error):
                 log.warning("link_displaced", stack=self.stack.name)
+                self._report_link(LinkState.DISPLACED)
                 raise LinkDisplacedError("another cloud-client took the session") from error
+            self._report_link(LinkState.UNREACHABLE)
             raise
+        self._report_link(LinkState.UNREACHABLE)
 
     async def _close(self, client: aiomqtt.Client) -> None:
         self._client = None
@@ -200,6 +209,8 @@ class StackLink:
                 await self._status(client, parsed.sn, body)
             elif parsed.kind is topics.Inbound.OSD:
                 self._osd(parsed.sn, body)
+            elif parsed.kind is topics.Inbound.STATE:
+                self._state(parsed.sn, body)
             elif parsed.kind is topics.Inbound.REQUESTS:
                 await self._request(client, parsed.sn, body)
             elif parsed.kind is topics.Inbound.SERVICES_REPLY:
@@ -222,6 +233,8 @@ class StackLink:
         with soc_log.correlated(stack=self.stack.name, tid=announcement.tid, bid=announcement.bid):
             for change in self.topology.announce(gateway, announcement.data):
                 self._log_presence(change.aircraft, change.online)
+            self._presence.link(gateway, self._link)
+            self._presence.topology(gateway, self.topology.devices(gateway))
             reply = self._reply(
                 announcement.tid, announcement.bid, UPDATE_TOPO, {"result": ACCEPTED}
             )
@@ -232,13 +245,27 @@ class StackLink:
         envelope = msgspec.json.decode(payload, type=Envelope)
         if serial == envelope.gateway:
             dock = msgspec.json.decode(envelope.data, type=DockOsd)
-            for change in self.topology.report(serial, dock):
+            changes = self.topology.report(serial, dock)
+            for change in changes:
                 self._log_presence(change.aircraft, change.online)
+            if changes:
+                self._presence.topology(serial, self.topology.devices(serial))
             return
         aircraft = msgspec.json.decode(envelope.data, type=AircraftOsd)
         self._on_sample(
             sample(self.stack.name, envelope.gateway, serial, envelope.timestamp, aircraft)
         )
+
+    def _state(self, serial: str, payload: bytes) -> None:
+        envelope = msgspec.json.decode(payload, type=Envelope)
+        state = msgspec.json.decode(envelope.data, type=StateData)
+        if serial != envelope.gateway and state.firmware_version is not None:
+            self._presence.firmware(envelope.gateway, serial, state.firmware_version)
+
+    def _report_link(self, state: LinkState) -> None:
+        self._link = state
+        for gateway in sorted(self.topology.gateways()):
+            self._presence.link(gateway, state)
 
     async def _request(self, client: aiomqtt.Client, gateway: str, payload: bytes) -> None:
         request = msgspec.json.decode(payload, type=Envelope)
