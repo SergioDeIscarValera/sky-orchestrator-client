@@ -25,7 +25,7 @@ export default function Scene({ site, organizationId, origin, terrain }: Props) 
     <Canvas {...CANVAS_SETTINGS} dpr={[...CANVAS_SETTINGS.dpr]}>
       <SceneContents site={site} flat={terrain === null} />
       {terrain !== null && <Terrain site={terrain} />}
-      <Aircraft origin={origin} site={site} terrain={terrain} />
+      <Aircraft origin={origin} site={site} />
       <Controls site={site} organizationId={organizationId} />
       <Meter />
     </Canvas>

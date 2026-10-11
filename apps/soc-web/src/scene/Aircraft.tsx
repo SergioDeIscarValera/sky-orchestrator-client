@@ -34,8 +34,6 @@ import { labelLines, richLabels } from './labels'
 import { useReducedMotion } from './motion'
 import { usePalette } from './palette'
 import type { Site } from './site'
-import type { LoadedSite } from './siteModel'
-import { FLAT_GROUND, groundOf } from './terrain'
 
 /** More aircraft than a farm flies at once. */
 const CAPACITY = 32
@@ -62,11 +60,9 @@ function selectedKey(selection: Selection | null, fleets: readonly Fleet[] | und
 export function Aircraft({
   origin,
   site,
-  terrain,
 }: {
   readonly origin: Geodetic | null
   readonly site: Site
-  readonly terrain: LoadedSite | null
 }) {
   const store = useTelemetryStore()
   const settings = useSettings()
@@ -77,7 +73,6 @@ export function Aircraft({
   const select = useSelect()
   const invalidate = useThree((state) => state.invalidate)
   const parts = useMemo(() => createAircraftParts(CAPACITY), [])
-  const ground = useMemo(() => (terrain === null ? FLAT_GROUND : groundOf(terrain)), [terrain])
   const placed = useRef<Placed>(new Map())
   const [hovered, setHovered] = useState<string | null>(null)
   const [labelled, setLabelled] = useState<readonly string[]>([])
@@ -154,7 +149,7 @@ export function Aircraft({
     const positions = new Map<string, Placement>()
     if (origin !== null) {
       for (const [key, track] of store.getState().tracks) {
-        const drawn = drawnAt(track, origin, now, settings, ground)
+        const drawn = drawnAt(track, origin, now, settings, site.ground)
         if (drawn === null) continue
         aircraft.push({ key, drawn })
         positions.set(key, drawn.placement)
@@ -196,7 +191,7 @@ export function Aircraft({
       state.size.height,
       palette,
       selected,
-      ground,
+      site.ground,
     )
     const rich = richLabels(
       aircraft.map(({ key, drawn }) => ({ key, freshness: drawn.freshness })),
