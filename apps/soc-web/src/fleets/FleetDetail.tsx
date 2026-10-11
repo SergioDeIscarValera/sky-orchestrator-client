@@ -1,3 +1,4 @@
+import { Archive, Pencil } from 'lucide-react'
 import { useId, useState } from 'react'
 
 import { useForm, useSelect } from '../app/router'
@@ -11,7 +12,7 @@ import { changesFleets, changesFrom, readValues, valuesOf } from './form'
 import { formatDuration, formatMoment, stackLabel } from './format'
 import { ModelSpecs } from './ModelSpecs'
 import { PresencePill } from './PresencePill'
-import { LiveValues } from '../telemetry/LiveValues'
+import { FollowButton, LiveValues } from '../telemetry/LiveValues'
 import { useAircraftColours } from './colours'
 import { Swatch } from './Swatch'
 
@@ -96,7 +97,9 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
             <Swatch colour={colourOf(aircraftKey(fleet.gatewaySn, fleet.aircraftSn))} />
             {fleet.name}
           </h3>
-          <p className="text-muted text-sm">{model?.displayName ?? fleet.model}</p>
+          <p className="text-muted text-sm">
+            {model?.displayName ?? fleet.model} · {fleet.aircraftSn}
+          </p>
         </div>
         {device !== undefined && <PresencePill device={device} />}
       </div>
@@ -134,17 +137,19 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
           </div>
         </div>
       ) : (
-        <div className="mt-4">
-          <div className="flex items-center gap-2">
+        <div className="mt-3">
+          <div className="-ml-3 flex flex-wrap items-center gap-1">
+            <FollowButton aircraft={aircraftKey(fleet.gatewaySn, fleet.aircraftSn)} />
             <button
               type="button"
-              className={`${QUIET_BUTTON} ${UNAVAILABLE} -ml-3`}
+              className={`${QUIET_BUTTON} ${UNAVAILABLE}`}
               aria-disabled={!writes}
               aria-describedby={writes ? undefined : reason}
               onClick={() => {
                 if (writes) setForm('edit')
               }}
             >
+              <Pencil size={15} aria-hidden />
               Edit
             </button>
             <button
@@ -156,13 +161,16 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
                 if (writes) setMode('retiring')
               }}
             >
+              <Archive size={15} aria-hidden />
               Retire
             </button>
           </div>
           {!writes && <ReadOnlyReason id={reason} organization={organization.name} />}
         </div>
       )}
+      <LiveValues gatewaySn={fleet.gatewaySn} aircraftSn={fleet.aircraftSn} />
       <Details
+        folded
         title="Identity"
         rows={[
           ['Airframe serial', fleet.airframeSerial],
@@ -173,9 +181,9 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
           ['Registered', formatMoment(fleet.createdAt, zone)],
         ]}
       />
-      <LiveValues gatewaySn={fleet.gatewaySn} aircraftSn={fleet.aircraftSn} />
       {device !== undefined && (
         <Details
+          folded
           title="On the wire"
           rows={[
             ['Stack', stackLabel(device)],

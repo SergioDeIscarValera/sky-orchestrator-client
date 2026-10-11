@@ -76,14 +76,18 @@ The console: one persistent 3D scene of the farm with floating panels
   aircraft is _Online_ or _Offline_ only while its stack is connected: otherwise
   it reads as the stack's state, since a stack out of reach says nothing about
   now (`FR-LNK-02`).
-- **The inspector** follows the selection and fades it in. A fleet: its
-  identity, what its stack last said of it (stack, wire model, firmware, last
-  seen), and its model's published figures, each linked to the DJI page it was
-  read on, _Not published_ where DJI does not say (`FR-FLE-04`). An aircraft
-  seen: its gateway, wire model, stack, firmware, when it was first and last
-  seen, and its fleet if it has one. Times are in the organization's time zone.
-  A link to a fleet retired or of another organization says so and offers to
-  clear the selection.
+- **The inspector** follows the selection and fades it in. Its header names the
+  selection with its colour and presence, the close beside it; its actions sit
+  right under it: _Follow_, then a fleet's _Edit_ and _Retire_ or an aircraft's
+  _Register as a fleet_. Then the live values, and the rest folded in sections
+  the user opens. A fleet: its identity, what its stack last said of it (stack,
+  wire model, firmware, last seen), and its model's published figures, each
+  linked to the DJI page it was read on, _Not published_ where DJI does not say
+  (`FR-FLE-04`). An aircraft seen: _Not registered_ and the stack that announced
+  it, or the fleet it flies as; folded, its gateway, wire model, stack,
+  firmware, and when it was first and last seen. Times are in the
+  organization's time zone. A link to a fleet retired or of another
+  organization says so and offers to clear the selection.
 - **Registering, editing and retiring a fleet** (`FR-FLE-03`, `FR-FLE-05`), in
   the inspector, never in a dialog. An aircraft seen registers as a fleet with a
   name, a model from the catalogue, the airframe serial, optionally the
@@ -100,8 +104,12 @@ The console: one persistent 3D scene of the farm with floating panels
   (`contracts/broadcast/telemetry.schema.json`) and drops one the aircraft took
   before the latest. The inspector shows a fleet's or an aircraft's live values
   with their age: live, then stale and lost at the thresholds of the console's
-  file, each crossed when it is reached. What a sample lacks reads as
-  unavailable, never zero.
+  file, each crossed when it is reached. Height, battery, satellites, mode,
+  heading and distance from home are tiles, the battery with a bar that turns
+  warning under 50 % and danger under 20 %, the heading with an arrow turned to
+  it; the position and the takeoff point follow. What a sample lacks reads as
+  unavailable, never zero; what Sky Orchestrator does not send yet is named
+  once, not shown as empty tiles.
 - **The aircraft in the scene** (`FR-SCN-04`, `FR-TEL-02`): every aircraft of
   the organization with telemetry, built in code in its own colour and cased, a
   chevron on its back and a wedge on its ground disc pointing its heading, the
@@ -131,7 +139,7 @@ The console: one persistent 3D scene of the farm with floating panels
   scene, the panel or a shared link, is followed. The camera flies in to frame
   it in the middle of the view the cards leave free, then moves with it; the
   user may orbit it and come closer or farther, the camera turning round the
-  aircraft itself. Panning the map, _Following in the scene_ in the inspector,
+  aircraft itself. Panning the map, _Following_ in the inspector,
   or the overview lets go; the same button follows it again.
 - **A development replay** with `?replay` (development builds and the
   measurement build of `pnpm measure` only): a synthetic aircraft stands idle for

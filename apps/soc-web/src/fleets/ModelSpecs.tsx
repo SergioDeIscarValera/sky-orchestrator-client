@@ -8,22 +8,22 @@ const LINK = 'text-primary-emphasis underline-offset-2 hover:underline'
 export function ModelSpecs({ model }: { readonly model: AircraftModel }) {
   const support = model.sources.msdk_v4_support
   return (
-    <>
-      <Details
-        title={`Model: ${model.displayName}`}
-        rows={specRows(model).map(({ label, value, source }) => [
-          label,
-          value === null ? (
-            <span className="text-muted">Not published</span>
-          ) : source === null ? (
-            value
-          ) : (
-            <a href={source} target="_blank" rel="noreferrer" className={LINK}>
-              {value}
-            </a>
-          ),
-        ])}
-      />
+    <Details
+      folded
+      title={`Model: ${model.displayName}`}
+      rows={specRows(model).map(({ label, value, source }) => [
+        label,
+        value === null ? (
+          <span className="text-muted">Not published</span>
+        ) : source === null ? (
+          value
+        ) : (
+          <a href={source} target="_blank" rel="noreferrer" className={LINK}>
+            {value}
+          </a>
+        ),
+      ])}
+    >
       <p className="text-muted mt-3 text-xs">
         {model.msdkV4Support === 'full'
           ? 'Fully supported by Mobile SDK V4.'
@@ -34,6 +34,6 @@ export function ModelSpecs({ model }: { readonly model: AircraftModel }) {
           </a>
         )}
       </p>
-    </>
+    </Details>
   )
 }

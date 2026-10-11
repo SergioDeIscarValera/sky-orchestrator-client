@@ -152,7 +152,8 @@ describe('editing and retiring a fleet (FR-FLE-05)', () => {
     const confirm = within(screen.getByRole('group', { name: 'Retire Norte 1' }))
     await user.click(confirm.getByRole('button', { name: 'Retire for good' }))
     expect(await inspector().findByRole('heading', { name: 'SOTESTUAV001' })).toBeVisible()
-    expect(inspector().getByText('Not in a fleet yet.')).toBeInTheDocument()
+    expect(inspector().getByText('Not registered · via lab')).toBeVisible()
+    expect(inspector().getByRole('button', { name: 'Register as a fleet' })).toBeVisible()
     expect(backend.registered.get(NORTH.id)).toEqual([])
     expect([search().get('gateway'), search().get('aircraft')]).toEqual([
       'SOTESTDOCK01',

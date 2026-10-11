@@ -81,7 +81,9 @@ async function drive(page, shots) {
       }
       await page.mouse.up()
     } else if (step.action === 'follow') {
-      await page.getByRole('button', { name: 'Follow in the scene' }).click()
+      // A selection is followed already, and orbiting keeps it: follow only if let go.
+      const follow = page.getByRole('button', { name: 'Follow', exact: true, pressed: false })
+      if ((await follow.count()) > 0) await follow.click()
     } else {
       await page.getByRole('button', { name: step.label, exact: true }).click()
     }

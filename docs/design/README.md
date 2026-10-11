@@ -51,7 +51,13 @@ What SOC takes from it:
   state, theme, user.
 - **KPI row** (top left): what matters now: aircraft online, operation state,
   next check failing.
-- **Inspector** (right, 360 px): the selected entity.
+- **Inspector** (right, 360 px): the selected entity, and nothing when nothing is
+  selected. A header with the entity's colour, name, status and the close; its
+  actions right under it (follow, register or edit, retire); the values that
+  matter in flight as tiles, the figure large and what it is measured from
+  small; then the rest folded in sections the user opens (identity, the wire,
+  the model). The battery tile carries a bar in the status colours: success,
+  warning under 50 %, danger under 20 %.
 - **Bottom area**: the operation stepper, tables (Fleets, Flights, Events), and
   during a flight the flight controls, which never move (`FR-CMD-07`).
 - **Map tools** (bottom right): zoom, rotate, back to the site overview.

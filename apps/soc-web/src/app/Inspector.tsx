@@ -22,20 +22,19 @@ export function Inspector() {
       aria-label="Inspector"
       className={`${CARD} pointer-events-auto max-h-full min-h-0 self-start overflow-y-auto p-5`}
     >
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold tracking-wider uppercase">Inspector</h2>
+      <div key={key} className="animate-appear">
+        {/* Floated, the close shares its line with whatever the detail shows first: the
+            header, a form's title, a wait or a gone selection; the rest takes the width. */}
         <button
           type="button"
           aria-label="Close the inspector"
-          className={QUIET_BUTTON}
+          className={`${QUIET_BUTTON} float-right -mt-1.5 -mr-2 ml-2 w-9 justify-center px-0`}
           onClick={() => {
             select(null)
           }}
         >
           <X size={16} aria-hidden />
         </button>
-      </div>
-      <div key={key} className="animate-appear mt-3">
         {selection.kind === 'fleet' ? (
           <FleetDetail fleetId={selection.fleetId} />
         ) : (

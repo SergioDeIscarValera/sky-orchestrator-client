@@ -168,7 +168,7 @@ async function main() {
     const lastPosition = await liveValue(page, 'Position')
     const followedTo = await labelAt()
     const following = await page
-      .getByRole('button', { name: 'Following in the scene', pressed: true })
+      .getByRole('button', { name: 'Following', exact: true, pressed: true })
       .count()
     const framesAfter = await page.evaluate(() => globalThis.socScene?.frames ?? 0)
     if (shots !== null) {

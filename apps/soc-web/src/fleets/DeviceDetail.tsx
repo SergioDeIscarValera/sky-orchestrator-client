@@ -1,7 +1,8 @@
+import { Plus } from 'lucide-react'
 import { useId } from 'react'
 
 import { useForm, useSelect } from '../app/router'
-import { ALERT, PRIMARY_BUTTON, UNAVAILABLE } from '../app/styles'
+import { ALERT, UNAVAILABLE } from '../app/styles'
 import { useOrganization } from '../organizations/context'
 import { useDevices, useFleets, useRegisterFleet } from './data'
 import { Details, Gone, ReadOnlyReason, Waiting } from './Details'
@@ -10,9 +11,13 @@ import { aircraftKey } from '../backend/backend'
 import { blankValues, changesFleets } from './form'
 import { formatMoment, stackLabel } from './format'
 import { PresencePill } from './PresencePill'
-import { LiveValues } from '../telemetry/LiveValues'
+import { FollowButton, LiveValues } from '../telemetry/LiveValues'
 import { useAircraftColours } from './colours'
 import { Swatch } from './Swatch'
+
+/** The one primary action, at the height of the quiet Follow beside it. */
+const REGISTER_BUTTON =
+  'rounded-pill bg-primary text-on-primary font-heading inline-flex h-9 items-center gap-2 px-4 text-sm font-semibold transition-[filter] duration-200 hover:brightness-95'
 
 /** An aircraft one of the organization's stacks announced, and its registration (FR-FLE-02, FR-FLE-03). */
 export function DeviceDetail({
@@ -89,11 +94,50 @@ export function DeviceDetail({
             <Swatch colour={colourOf(aircraftKey(device.gatewaySn, device.aircraftSn))} />
             {device.aircraftSn}
           </h3>
-          <p className="text-muted text-sm">Seen on the wire</p>
+          {fleet === undefined ? (
+            <p className="text-muted text-sm">Not registered · via {device.stack.name}</p>
+          ) : (
+            <p className="text-muted text-sm">
+              In fleet{' '}
+              <button
+                type="button"
+                className="text-primary-emphasis font-semibold underline-offset-2 hover:underline"
+                onClick={() => {
+                  select({ kind: 'fleet', fleetId: fleet.id })
+                }}
+              >
+                {fleet.name}
+              </button>
+            </p>
+          )}
         </div>
         <PresencePill device={device} />
       </div>
+      <div className="mt-3">
+        <div className="-ml-3 flex flex-wrap items-center gap-2">
+          <FollowButton aircraft={aircraftKey(device.gatewaySn, device.aircraftSn)} />
+          {fleet === undefined && (
+            <button
+              type="button"
+              className={`${REGISTER_BUTTON} ${UNAVAILABLE}`}
+              aria-disabled={!writes}
+              aria-describedby={writes ? undefined : reason}
+              onClick={() => {
+                if (writes) setForm('register')
+              }}
+            >
+              <Plus size={15} aria-hidden />
+              Register as a fleet
+            </button>
+          )}
+        </div>
+        {fleet === undefined && !writes && (
+          <ReadOnlyReason id={reason} organization={organization.name} />
+        )}
+      </div>
+      <LiveValues gatewaySn={device.gatewaySn} aircraftSn={device.aircraftSn} />
       <Details
+        folded
         title="On the wire"
         rows={[
           ['Gateway', device.gatewaySn],
@@ -104,38 +148,6 @@ export function DeviceDetail({
           ['Last seen', formatMoment(device.lastSeenAt, zone)],
         ]}
       />
-      <LiveValues gatewaySn={device.gatewaySn} aircraftSn={device.aircraftSn} />
-      {fleet === undefined ? (
-        <div className="mt-5">
-          <p className="text-sm">Not in a fleet yet.</p>
-          <button
-            type="button"
-            className={`${PRIMARY_BUTTON} ${UNAVAILABLE} mt-3`}
-            aria-disabled={!writes}
-            aria-describedby={writes ? undefined : reason}
-            onClick={() => {
-              if (writes) setForm('register')
-            }}
-          >
-            Register as a fleet
-          </button>
-          {!writes && <ReadOnlyReason id={reason} organization={organization.name} />}
-        </div>
-      ) : (
-        <p className="mt-5 text-sm">
-          In fleet{' '}
-          <button
-            type="button"
-            className="text-primary-emphasis font-semibold underline-offset-2 hover:underline"
-            onClick={() => {
-              select({ kind: 'fleet', fleetId: fleet.id })
-            }}
-          >
-            {fleet.name}
-          </button>
-          .
-        </p>
-      )}
     </article>
   )
 }
