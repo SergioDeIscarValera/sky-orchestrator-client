@@ -72,6 +72,13 @@ repos:
         pass_filenames: false
         files: ^(contracts/sky-orchestrator/|tools/vendor_sky_orchestrator\.py$)
 
+      - id: aircraft-catalogue
+        name: aircraft catalogue valid, sourced and loaded as it is
+        entry: uv run --frozen python tools/catalogue_migration.py --check
+        language: system
+        pass_filenames: false
+        files: ^(contracts/catalogue/|database/migrations/|tools/catalogue_migration\.py$)
+
       - id: traceability
         name: traceability matrix equals the requirements
         entry: python3 tools/check_traceability.py

@@ -67,7 +67,7 @@ migration. Retention: permanent. Read only for every user.
 
 | Attribute | Type | Notes |
 | --- | --- | --- |
-| `model_key` | text | Primary key, kebab case, e.g. `mavic-air-2` |
+| `model` | text | Primary key, kebab case, e.g. `mavic-air-2` |
 | `display_name` | text | |
 | `msdk_v4_enum` | text, nullable | The Mobile SDK V4 `Model` value |
 | `msdk_v4_support` | enum | `full`, `partial` |
@@ -80,9 +80,13 @@ migration. Retention: permanent. Read only for every user.
 | `weight_g` | integer, nullable | |
 | `camera` | jsonb | Sensor, photo resolution, video resolution and frame rate, zoom |
 | `thermal` | jsonb | Integrated or supported through payloads, resolution |
+| `sources` | jsonb | Each published figure's name and the URL it was read from |
 | `source_urls` | text[] | Where every value came from |
 
 **IR-MOD-01**: a value DJI does not publish is `null`, never an estimate.
+
+**IR-MOD-02**: models are loaded by migrations from the catalogue and never
+removed; a fleet keeps the model it was registered with.
 
 ---
 
@@ -132,7 +136,7 @@ Retention: permanent; retiring is a soft delete.
 | `id` | uuid | |
 | `organization_id` | uuid | |
 | `name` | text | |
-| `model_key` | text | `IR-MOD` |
+| `model` | text | `IR-MOD` |
 | `airframe_serial` | text | As printed on the aircraft |
 | `controller_serial` | text, nullable | Recorded only |
 | `gateway_sn`, `aircraft_sn` | text | Wire identity, unique among live fleets |

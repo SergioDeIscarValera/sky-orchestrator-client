@@ -25,7 +25,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-SCN-06 | MUST | soc-web | M2 | — | Planned |
 | FR-SCN-07 | MUST | soc-web | M3 | — | Planned |
 | FR-SCN-08 | MUST | soc-web | M1 | `apps/soc-web/src/scene/palette.ts`, `apps/soc-web/src/scene/palette.test.ts`, `apps/soc-web/src/scene/ground.test.ts` | Done: every scene colour read from the theme's tokens and repainted when the theme changes, with no reload and no tone mapping; one frame per change in Chrome |
-| FR-FLE-01 | MUST | contracts, database | M2 | — | Planned |
+| FR-FLE-01 | MUST | contracts, database | M2 | `contracts/catalogue/`, `tools/catalogue_migration.py`, `database/migrations/0006-aircraft-models.sql`, `database/tests/test_aircraft_models.py` | Done: 38 models of Mobile SDK V4, 11 of them partial, every published figure with the DJI page it was read on and every unpublished one null; the file checked against its schema and its sources in the hooks and in CI, and loaded as it is by a migration, read by every signed-in user |
 | FR-FLE-02 | MUST | soc-cloud, database | M2 | — | Planned |
 | FR-FLE-03 | MUST | soc-web, database | M2 | — | Planned |
 | FR-FLE-04 | MUST | soc-web, database | M2 | — | Planned |
@@ -159,7 +159,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (no file over 512 KB), `.pre-commit-config.yaml` (large files, private keys) | Done for size and keys; build output kept out by `.gitignore` |
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
-| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*`, `apps/soc-web/src/**/*.test.*` | Done so far: tooling 162, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 63, soc-operations 15, soc-check 7, soc-web 124 tests, each Python suite under 0.3 s and the web's under 2 s (ADR-0020), per unit in pre-commit and CI |
+| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*`, `apps/soc-web/src/**/*.test.*` | Done so far: tooling 174, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 63, soc-operations 15, soc-check 7, soc-web 124 tests, each Python suite under 0.3 s and the web's under 2 s (ADR-0020), per unit in pre-commit and CI |
 | NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py`, `services/soc-cloud/tests/test_against_broker.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, the real Realtime v2.102.3 beside it, and Mosquitto 2.0.22 configured as Sky Orchestrator's broker; `soc-db`, `soc-realtime` and `soc-cloud` run their end-to-end tests there |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |

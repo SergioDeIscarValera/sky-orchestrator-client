@@ -89,7 +89,7 @@ The MVP is M5: **a first real flight commanded from SOC**
 
 | Step | Pull request |
 | --- | --- |
-| Aircraft catalogue: the sourced JSON, its schema and its loading migration | `feature/contracts/aircraft-catalogue` |
+| Aircraft catalogue: the sourced JSON, its schema and its loading migration | `feature/contracts/aircraft-catalogue`, 38 models |
 | Fleets, devices and stacks in the database, with their policies and RPCs | `feature/database/fleets` |
 | Live telemetry: Broadcast fan-out, presence, stack status, latency instruments | `feature/cloud/live-telemetry` |
 | Fleet panels: catalogue, devices seen, registration, detail, retirement | `feature/web/fleet-panels` |

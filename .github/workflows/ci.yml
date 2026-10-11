@@ -74,6 +74,10 @@ jobs:
         if: ${{ !cancelled() && steps.uv.outcome == 'success' }}
         run: uv sync --frozen --all-packages
 
+      - name: Aircraft catalogue valid, sourced and loaded as it is
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: uv run --frozen python tools/catalogue_migration.py --check
+
       - name: Python lint and format
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
         run: |

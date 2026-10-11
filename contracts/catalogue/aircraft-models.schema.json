@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator-client/blob/develop/contracts/catalogue/aircraft-models.schema.json",
+  "title": "SOC's aircraft catalogue",
+  "description": "The DJI aircraft Mobile SDK V4 supports, with their published specifications (FR-FLE-01, IR-MOD). Every published value carries the URL it was read from; a value DJI does not publish is null, never an estimate (IR-MOD-01).",
+  "x-version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["models"],
+  "properties": {
+    "models": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/model" }
+    }
+  },
+  "$defs": {
+    "url": {
+      "type": "string",
+      "pattern": "^https://[^\\s]+$"
+    },
+    "number": {
+      "description": "A published number and where it was published.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["value", "source"],
+      "properties": {
+        "value": { "type": "number", "exclusiveMinimum": 0 },
+        "source": { "$ref": "#/$defs/url" }
+      }
+    },
+    "whole": {
+      "description": "A published whole number and where it was published.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["value", "source"],
+      "properties": {
+        "value": { "type": "integer", "exclusiveMinimum": 0 },
+        "source": { "$ref": "#/$defs/url" }
+      }
+    },
+    "text": {
+      "description": "A published description and where it was published.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["value", "source"],
+      "properties": {
+        "value": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/url" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "display_name",
+        "msdk_v4_enum",
+        "msdk_v4_support",
+        "support_notes",
+        "support_source",
+        "max_horizontal_speed_ms",
+        "max_ascent_speed_ms",
+        "max_descent_speed_ms",
+        "max_flight_time_s",
+        "max_service_ceiling_m",
+        "max_wind_resistance_ms",
+        "weight_g",
+        "camera",
+        "thermal"
+      ],
+      "properties": {
+        "model": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+        "display_name": { "type": "string", "minLength": 1 },
+        "msdk_v4_enum": {
+          "description": "The Mobile SDK V4 Model value, as DJI's SDK names it.",
+          "type": ["string", "null"],
+          "pattern": "^[A-Za-z0-9_]+$"
+        },
+        "msdk_v4_support": { "enum": ["full", "partial"] },
+        "support_notes": { "type": "string" },
+        "support_source": {
+          "description": "Where DJI states this aircraft's support in Mobile SDK V4.",
+          "$ref": "#/$defs/url"
+        },
+        "max_horizontal_speed_ms": { "$ref": "#/$defs/number" },
+        "max_ascent_speed_ms": { "$ref": "#/$defs/number" },
+        "max_descent_speed_ms": { "$ref": "#/$defs/number" },
+        "max_flight_time_s": { "$ref": "#/$defs/whole" },
+        "max_service_ceiling_m": { "$ref": "#/$defs/number" },
+        "max_wind_resistance_ms": { "$ref": "#/$defs/number" },
+        "weight_g": { "$ref": "#/$defs/whole" },
+        "camera": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sensor", "photo_resolution", "video_resolution", "zoom"],
+          "properties": {
+            "sensor": { "$ref": "#/$defs/text" },
+            "photo_resolution": { "$ref": "#/$defs/text" },
+            "video_resolution": { "$ref": "#/$defs/text" },
+            "zoom": { "$ref": "#/$defs/text" }
+          }
+        },
+        "thermal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["capability", "resolution"],
+          "properties": {
+            "capability": {
+              "description": "Integrated in the aircraft, through a payload it carries, or none; sourced unless none.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["value", "source"],
+              "properties": {
+                "value": { "enum": ["integrated", "payload", "none"] },
+                "source": { "$ref": "#/$defs/url" }
+              }
+            },
+            "resolution": { "$ref": "#/$defs/text" }
+          }
+        }
+      }
+    }
+  }
+}
