@@ -168,7 +168,15 @@ repos:
         entry: bash -c 'cd apps/soc-web && pnpm typecheck && pnpm lint && pnpm format:check && pnpm test'
         language: system
         pass_filenames: false
-        files: ^apps/soc-web/
+        # The web's tests read these contracts and hold its mirrors equal to them.
+        files: ^(apps/soc-web/|contracts/(config|broadcast|geometry)/)
+
+      - id: soc-geo-gate
+        name: soc-geo gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-geo && uv run --frozen pytest libs/soc-geo/tests'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-geo/|contracts/geometry/|pyproject\.toml$|uv\.lock$)
 
       - id: soc-realtime-gate
         name: soc-realtime gate

@@ -2,12 +2,14 @@
 # one lockfile pins them all with hashes (ADR-0017, NFR-PORT-02).
 
 [tool.uv.workspace]
-members = ["database", "infra/migrate", "libs/soc-config", "libs/soc-log", "libs/soc-db", "libs/soc-supervision", "libs/soc-realtime", "services/soc-cloud", "services/soc-operations", "infra/check"]
+members = ["database", "infra/migrate", "libs/soc-config", "libs/soc-log", "libs/soc-db", "libs/soc-supervision", "libs/soc-realtime", "libs/soc-geo", "services/soc-cloud", "services/soc-operations", "infra/check"]
 
 [dependency-groups]
 dev = [
   "asyncpg-stubs==0.32.0",
   "mypy==2.4.0",
+  # A test oracle only (ADR-0009): it checks contracts/geometry, never runs in a service.
+  "pyproj==3.8.0",
   "pytest==9.1.1",
   "pytest-asyncio==1.4.0",
   "ruff==0.16.10",
