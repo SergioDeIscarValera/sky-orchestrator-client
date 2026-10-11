@@ -1,15 +1,16 @@
 # The sky-orchestrator-client compose project on the farm's mini-PC (ADR-0015).
 #
-#   cp .env.example .env              # the version and the networks
-#   cp soc-cloud.env.example soc-cloud.env ... and fill the secrets
+#   cp .env.example .env              # the version, the networks, the web's port
+#   cp soc-cloud.env.example soc-cloud.env ... and fill the secrets and addresses
 #   uv run soc-config example soc-cloud > soc-cloud.json ... and fill the blanks
 #   docker compose up -d
 #
 # SOC joins Virtual Origen's and Sky Orchestrator's networks and adds nothing to
-# theirs. No port is published: the health endpoints answer inside the networks,
-# and the flight files are served on Sky Orchestrator's network only (ADR-0008).
-# Every container is read-only, unprivileged and limited; the memory limits add
-# up to 512 MB at most (NFR-RES-05).
+# theirs. Only the console publishes a port, on the LAN (ADR-0015); the health
+# endpoints answer inside the networks, and the flight files are served on Sky
+# Orchestrator's network only (ADR-0008). Every container is read-only,
+# unprivileged and limited; the memory limits add up to 512 MB at most
+# (NFR-RES-05).
 
 name: sky-orchestrator-client
 
@@ -65,6 +66,18 @@ services:
     deploy:
       resources:
         limits: {memory: 96M, cpus: "0.25"}
+
+  # The browser talks to Supabase itself (ADR-0006), so the web joins no network
+  # but its own; its address and public key are written at start (FR-DEP-04).
+  soc-web:
+    <<: *hardened
+    image: ${SOC_REGISTRY:-ghcr.io/sergiodeiscarvalera/sky-orchestrator-client}/soc-web:${SOC_VERSION:?set SOC_VERSION}
+    env_file: [soc-web.env]
+    tmpfs: ["/tmp:size=4m"]
+    ports: ["${SOC_WEB_PORT:?set SOC_WEB_PORT}:8080"]
+    deploy:
+      resources:
+        limits: {memory: 32M, cpus: "0.25"}
 
 networks:
   virtual-origen:

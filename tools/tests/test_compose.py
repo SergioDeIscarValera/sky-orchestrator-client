@@ -7,6 +7,9 @@ from pathlib import Path
 COMPOSE = Path(__file__).resolve().parents[2] / "infra" / "compose" / "compose.yaml"
 STACK_MEMORY_MB = 512
 UNITS_MB = {"M": 1, "G": 1024}
+# Published on the mini-PC by Virtual Origen (Postgres, Kong, its web) and Sky
+# Orchestrator (Mosquitto, so-wayline).
+TAKEN_PORTS = {5432, 8000, 8443, 8080, 8081, 1883}
 
 
 def services(text: str) -> dict[str, str]:
@@ -24,8 +27,10 @@ class ComposeProject(unittest.TestCase):
         self.text = COMPOSE.read_text(encoding="utf-8")
         self.services = services(self.text)
 
-    def test_the_project_runs_every_backend_unit(self) -> None:
-        self.assertEqual(set(self.services), {"soc-migrate", "soc-cloud", "soc-operations"})
+    def test_the_project_runs_every_unit(self) -> None:
+        self.assertEqual(
+            set(self.services), {"soc-migrate", "soc-cloud", "soc-operations", "soc-web"}
+        )
 
     def test_every_container_declares_its_memory_and_cpu_limits(self) -> None:
         for name, block in self.services.items():
@@ -47,8 +52,24 @@ class ComposeProject(unittest.TestCase):
             with self.subTest(service=name):
                 self.assertIn("<<: *hardened", block)
 
-    def test_no_port_is_published(self) -> None:
-        self.assertNotRegex(self.text, r"\n\s+ports:")
+    def test_only_the_console_publishes_a_port_and_only_its_own(self) -> None:
+        self.assertEqual(
+            re.findall(r"\n\s+ports: (.+)", self.text),
+            ['["${SOC_WEB_PORT:?set SOC_WEB_PORT}:8080"]'],
+        )
+        self.assertIn("ports:", self.services["soc-web"])
+
+    def test_the_consoles_port_is_one_virtual_origen_and_sky_orchestrator_leave_free(
+        self,
+    ) -> None:
+        example = (COMPOSE.parent / ".env.example").read_text(encoding="utf-8")
+        match = re.search(r"^SOC_WEB_PORT=(\d+)$", example, re.MULTILINE)
+        assert match is not None
+        self.assertNotIn(int(match[1]), TAKEN_PORTS)
+
+    def test_the_console_writes_only_to_a_small_tmpfs(self) -> None:
+        self.assertIn('tmpfs: ["/tmp:size=4m"]', self.services["soc-web"])
+        self.assertNotIn("networks:", self.services["soc-web"])
 
     def test_the_networks_are_virtual_origens_and_sky_orchestrators_own(self) -> None:
         networks = self.text[self.text.index("\nnetworks:\n") :]

@@ -81,7 +81,7 @@ jobs:
       contents: read
       packages: write
     env:
-      SERVICES: "soc-cloud=services/soc-cloud/Dockerfile soc-operations=services/soc-operations/Dockerfile soc-migrate=infra/migrate/Dockerfile"
+      SERVICES: "soc-cloud=services/soc-cloud/Dockerfile soc-operations=services/soc-operations/Dockerfile soc-migrate=infra/migrate/Dockerfile soc-web=apps/soc-web/Dockerfile"
     steps:
       - uses: actions/checkout@v7
         with:
