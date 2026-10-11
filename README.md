@@ -65,7 +65,7 @@ The full picture: [architecture overview](docs/architecture/overview.md).
 | [`libs/`](libs/) | Python shared by the services: configuration, logs, data access, geometry validators |
 | [`database/`](database/) | Schema `soc`: migrations, policies, RPCs and their tests |
 | [`contracts/`](contracts/) | Interfaces between units: payloads, verbs, golden vectors, SO's vendored schemas |
-| [`infra/`](infra/) | The compose stack for the mini-PC, the migration runner, live checks |
+| [`infra/`](infra/) | The compose stack for the mini-PC, the migration runner, live checks, the console end to end |
 | [`tools/`](tools/) | Repository tooling: deterministic, tested |
 | [`docs/`](docs/) | Requirements, architecture, decisions, design, risks, roadmap |
 

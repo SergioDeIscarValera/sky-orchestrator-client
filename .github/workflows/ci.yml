@@ -162,6 +162,12 @@ jobs:
           uv run --frozen mypy infra/check
           uv run --frozen pytest infra/check/tests -m "not lane"
 
+      - name: soc-e2e gate
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: |
+          uv run --frozen mypy infra/e2e
+          uv run --frozen pytest infra/e2e/tests -m "not lane"
+
       # The container lane (NFR-TEST-02): Postgres, Realtime and Mosquitto from the
       # production images, and SOC's own images built and run, so it costs their
       # pulls and builds, a few minutes. It runs when a pull request changes what it
@@ -180,7 +186,7 @@ jobs:
           if [ -n "$BASE_REF" ]; then
             changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
           fi
-          if [ -z "$BASE_REF" ] || grep -qE '^(database/|infra/(check|compose|migrate)/|libs/|services/|contracts/(broadcast|catalogue|config|sky-orchestrator)/|apps/soc-web/(Dockerfile|nginx/|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)|\.dockerignore$|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)' <<< "$changed"; then
+          if [ -z "$BASE_REF" ] || grep -qE '^(database/|infra/(check|compose|e2e|migrate)/|libs/|services/|contracts/(broadcast|catalogue|config|geometry|sky-orchestrator)/|apps/soc-web/(Dockerfile|nginx/|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)|\.dockerignore$|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)' <<< "$changed"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -217,14 +223,16 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Node serves the web's gate and the console end to end, which runs when either
+      # the web or what the lane tests changes.
       - id: node
-        if: ${{ !cancelled() && steps.web-changes.outputs.changed == 'true' }}
+        if: ${{ !cancelled() && (steps.web-changes.outputs.changed == 'true' || steps.lane-changes.outputs.changed == 'true') }}
         uses: actions/setup-node@v7
         with:
           node-version: "24.21.0"
 
       - name: soc-web gate
-        if: ${{ !cancelled() && steps.node.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.node.outcome == 'success' && steps.web-changes.outputs.changed == 'true' }}
         working-directory: apps/soc-web
         env:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
@@ -251,6 +259,23 @@ jobs:
             printf '  %s\n' "${failed[@]}" >&2
             exit 1
           fi
+
+      # The console end to end (infra/e2e): Virtual Origen's platform behind Kong,
+      # soc-cloud, a dock on the broker and the console's own image, worked in the
+      # runner's Chrome, with WebGL on SwiftShader as the runner has no GPU. M2's exit
+      # criteria, measured: an aircraft announced appears within 2 s and is
+      # registered, its telemetry reaches the browser within 150 ms at p95, and a
+      # silent dock turns it stale at the threshold.
+      - name: Console end to end in Chrome
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' && steps.node.outcome == 'success' }}
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+          SOC_E2E_SOFTWARE_GL: "1"
+        run: |
+          set -euo pipefail
+          corepack enable
+          (cd apps/soc-web && pnpm install --frozen-lockfile)
+          uv run --frozen pytest infra/e2e/tests -m lane
 
       # The binary, not the action: the action needs a licence on organization
       # accounts, and a scan that stops the day the repository moves is no gate.

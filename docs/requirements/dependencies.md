@@ -13,7 +13,8 @@ SOC vendors Sky Orchestrator's wire contracts at a pinned commit,
 [`contracts/sky-orchestrator/`](../../contracts/sky-orchestrator/README.md),
 pinned to Sky Orchestrator's v0.4.2 tag, the release that publishes `DEP-01` to
 `DEP-06`, `DEP-12`, `DEP-13` and `DEP-27`, and the real-flight keys of SO's
-ADR-0040. Its images run SOC's stack check (`SO_VERSION=v0.4.2`).
+ADR-0040. Its images are the ones SOC's stack check runs (`SO_VERSION=v0.4.2`),
+once SOC can read Sky Orchestrator's packages on GHCR.
 
 | ID | SO item | SO milestone | What it gives SOC | SOC requirements waiting on it | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -23,7 +24,7 @@ ADR-0040. Its images run SOC's stack check (`SO_VERSION=v0.4.2`).
 | `DEP-04` | FR-WAY-12 | M4 | `POST /v1/validations`: dry-run validation of a flight file | `FR-LNK-09`, `PF-SO-DRYRUN`, `NFR-COMP-02` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
 | `DEP-05` | FR-FLT-12 | M4 | The cause of a pause in `break_point.break_reason`, as DJI's `FlighttaskBreakReasonEnum` | `FR-LOG-02` | **Delivered**, SO PR #112 |
 | `DEP-06` | NFR-TEST-07 | M4 | The fake bridge image on GHCR, test only | `NFR-TEST-03` | **Delivered**, SO PR #111; published in v0.4.1 (`ghcr.io/sergiodeiscarvalera/sky-orchestrator/fake-bridge:v0.4.1`) |
-| `DEP-07` | FR-TEL-01 at 5 Hz | M4 | OSD at 5 Hz measured on the phone | `NFR-PERF-01` in the field, `FR-SAF-01` reaction distance | Requested |
+| `DEP-07` | FR-TEL-01 at 5 Hz | M4 | OSD at 5 Hz measured on the phone | `NFR-PERF-01` in the field, `FR-SAF-01` reaction distance | **Delivered**: 300 of 300 OSD in 60 s on the phone, in SO's M4 session (2026-10-11); in the field with the first flight |
 | `DEP-08` | FR-TEL-07 | M5, possibly earlier | Horizontal and vertical speed, pitch, roll, remaining flight time | `FR-TEL-03` | Requested |
 | `DEP-09` | FR-TEL-08 | M5 | Remote controller link quality, once verified on the Mavic Air 2 | `FR-TEL-03` | Requested |
 | `DEP-10` | FR-FLT-13 | M5 | `break_point` honoured after `return_home` | `FR-CMD-08` | Requested |
@@ -31,7 +32,7 @@ ADR-0040. Its images run SOC's stack check (`SO_VERSION=v0.4.2`).
 | `DEP-12` | FR-SAF-06, bridge contract 1.6.0 | M4 | An execute while the operator holds the aircraft from the phone's console is refused `314010`, as an unarmed phone is: the operator acts on the phone, then SOC retries | `FR-OPS-09` | **Delivered**, SO PR #114 |
 | `DEP-13` | FR-BRG-09 | M4 | `takePhoto` and `gimbalRotate` run once per waypoint visit, and a resume does not repeat a photo already taken; `flighttask_progress.ext.media_count` stays 0 | `FR-WAY-12` | **Delivered**, SO PR #115 |
 | `DEP-26` | ADR-0040, bridge contract 1.8.0 | M4 | The phone's readiness for a real execute in `/v1/status` (real flight confirmed on the phone, build cleared by a simulator pass, simulator off), so SOC can check it before an execute instead of learning it from a `314010` | `FR-OPS-05`, `FR-OPS-09` | Not before the MVP (SO, 2026-10-11): the operator sees both on the phone's screen, and SOC's MVP does without them; Sergio's call if it ever needs them (bridge contract 1.9.0, wayline API 1.4.0) |
-| `DEP-27` | ADR-0041, bridge contract 1.9.0 | M4 | A start or a resume carries a deadline 3 s ahead on the phone's clock and is refused `command_expired` past it, so nothing so-bridge gave up on can fly; an execute answered `319999` has an unknown outcome, which the flight's progress settles | `FR-LNK-06`, `FR-OPS-09` | **Delivered** on SO's `develop` (SO PR #128), in SO's next release |
+| `DEP-27` | ADR-0041, bridge contract 1.9.0 | M4 | A start or a resume carries a deadline 3 s ahead on the phone's clock and is refused `command_expired` past it, so nothing so-bridge gave up on can fly; an execute answered `319999` has an unknown outcome, which the flight's progress settles | `FR-LNK-06`, `FR-OPS-09` | **Delivered** in SO's v0.4.2 (SO PR #128), vendored in SOC's #68 |
 
 SO's `infra/fly.py --stop-after S` sends `return_home` S seconds into a route: the
 reference SOC's stop path is compared with.
@@ -52,21 +53,22 @@ on DJI's wire. What SOC's operation flow takes from it (M4):
 - **`link.changed_at_ms`** in `/v1/status` means when the link became what it
   is, up or down (SO PR #121, described in v0.4.2), no longer every change of
   its health.
-- **`flighttask_progress.ext.media_count`** will carry the number of files the
+- **`flighttask_progress.ext.media_count`** carries the number of files the
   camera wrote during the task from SO's bridge contract 1.7.0 (`DEP-13` records
   0 today; DJI's wire shape is unchanged). SOC reads nothing from it yet.
   Downloading the images is SO's M5, which suits SOC: it has no media
   requirement before then. SO #125 delivered it on SO's `develop`: the count is
   of files, not shots (a Mavic Air 2 set to JPEG+RAW counts 2 per photo), it
   never decreases within a task, and it stays 0 from an application older than
-  1.7.0. SOC takes it with SO's next release.
+  1.7.0. It reached SOC with SO's v0.4.2, vendored in SOC's #68.
 - Measured on the phone: OSD at 5 Hz, 300 of 300 messages in 60 s for aircraft
   and dock; clock offset −504 ± 18 ms; a 31.9 s loss of the phone's Wi-Fi
   mid-mission survived, the task ending `COMPLETED_OK`; 13 photos, 13 files.
 
 ### What SO #126 changes for real flight (ADR-0040, 2026-10-11)
 
-How SO unlocks real flight. It reaches SOC with SO's next release, and nothing
+How SO unlocks real flight. It reached SOC with SO's v0.4.2, vendored in SOC's
+#68, and nothing
 changes in simulator mode. In real mode (`simulator_mode: false` in
 `/v1/status` and in so-bridge):
 

@@ -10,6 +10,7 @@ Orchestrator ([ADR-0015](../docs/architecture/decisions/0015-lan-first-deploymen
 | [`check/`](check/README.md) | The images built and run as the mini-PC runs them; the stack check, everything up from nothing, healthy within 60 s, tested, removed | M1, the images here |
 | `deploy/` | The deploy command, which refuses while a flight is unfinished | M1 |
 | [`site/`](site/README.md) | The site model baking tool, `soc-site` | M2, here |
+| [`e2e/`](e2e/README.md) | The console end to end: Virtual Origen's platform behind Kong, `soc-cloud`, a dock on the wire and the console's image, worked in Chrome; M2's exit criteria measured | M2, here |
 
 What SOC never does on the mini-PC: add services to Virtual Origen's or Sky
 Orchestrator's compose projects, publish a port Virtual Origen or Sky

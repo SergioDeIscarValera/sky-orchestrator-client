@@ -59,6 +59,11 @@ class RealtimeStack:
         return f"{TENANT}.localhost"
 
     @property
+    def tenant_host(self) -> str:
+        """The Realtime container's name on its network, which names the tenant."""
+        return f"{TENANT}.realtime"
+
+    @property
     def base(self) -> str:
         return f"http://{self.host}:{self.port}/socket"
 
@@ -114,6 +119,9 @@ class RealtimeStack:
     def _run_realtime(self) -> None:
         docker(
             "run", "-d", "--name", self.realtime, "--network", self.network,
+            # Realtime takes its tenant from the Host header's first label: a gateway
+            # on the network reaches it as Kong does on the mini-PC, by that name.
+            "--network-alias", self.tenant_host,
             "-p", f"127.0.0.1:{self.port}:4000",
             "-e", "PORT=4000", "-e", "DB_HOST=db", "-e", "DB_PORT=5432",
             "-e", "DB_USER=supabase_admin", "-e", f"DB_PASSWORD={self.postgres.password}",
