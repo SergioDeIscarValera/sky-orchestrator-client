@@ -11,6 +11,8 @@ import { blankValues, changesFleets } from './form'
 import { formatMoment, stackLabel } from './format'
 import { PresencePill } from './PresencePill'
 import { LiveValues } from '../telemetry/LiveValues'
+import { useAircraftColours } from './colours'
+import { Swatch } from './Swatch'
 
 /** An aircraft one of the organization's stacks announced, and its registration (FR-FLE-02, FR-FLE-03). */
 export function DeviceDetail({
@@ -27,6 +29,7 @@ export function DeviceDetail({
   const select = useSelect()
   const [registering, setRegistering] = useState(false)
   const heading = useId()
+  const colourOf = useAircraftColours()
   const reason = useId()
 
   if (devices.isPending) return <Waiting>Loading the aircraft…</Waiting>
@@ -81,7 +84,8 @@ export function DeviceDetail({
     <article aria-labelledby={heading}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 id={heading} className="text-lg font-semibold break-words">
+          <h3 id={heading} className="flex items-center gap-2.5 text-lg font-semibold break-words">
+            <Swatch colour={colourOf(aircraftKey(device.gatewaySn, device.aircraftSn))} />
             {device.aircraftSn}
           </h3>
           <p className="text-muted text-sm">Seen on the wire</p>

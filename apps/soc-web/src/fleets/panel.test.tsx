@@ -53,6 +53,20 @@ describe('the fleet panel (FR-FLE-02)', () => {
     ).toEqual(['SOTESTUAV002via labOffline'])
   })
 
+  it('marks each aircraft with its own colour, the one the scene draws it in', async () => {
+    const { backend } = await farm()
+    await openAt(backend, '?panel=fleet')
+    const colourOf = async (name: RegExp) =>
+      (await screen.findByRole('button', { name }))
+        .querySelector('[data-colour]')
+        ?.getAttribute('data-colour')
+    const fleet = await colourOf(/Norte 1/)
+    const seen = await colourOf(/SOTESTUAV002/)
+    expect(fleet).toBeDefined()
+    expect(seen).toBeDefined()
+    expect(fleet).not.toBe(seen)
+  })
+
   it('says what to do when there is nothing yet', async () => {
     const backend = new FakeBackend(NEIGHBOUR)
     backend.seen.set(NORTH.id, [])

@@ -1,12 +1,14 @@
 import { RotateCw } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 
-import type { Device, Fleet } from '../backend/backend'
+import { aircraftKey, type Device, type Fleet } from '../backend/backend'
 import { useSelect, useSelection, type Selection } from '../app/router'
 import { ALERT, QUIET_BUTTON } from '../app/styles'
+import { useAircraftColours } from './colours'
 import { useAircraftModels, useDevices, useFleets } from './data'
 import { Waiting } from './Details'
 import { PresencePill } from './PresencePill'
+import { Swatch } from './Swatch'
 
 const ROW =
   'hover:bg-primary-subtle aria-pressed:bg-primary-subtle flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition-colors duration-200'
@@ -32,6 +34,7 @@ function isSelected(selection: Selection | null, candidate: Selection): boolean 
 export function FleetPanel() {
   const fleets = useFleets()
   const devices = useDevices()
+  const colourOf = useAircraftColours()
   const models = useAircraftModels()
   const selection = useSelection()
   const select = useSelect()
@@ -89,11 +92,14 @@ export function FleetPanel() {
                     toggle(candidate)
                   }}
                 >
-                  <span className="flex min-w-0 flex-col">
-                    <span className="text-heading font-heading truncate text-sm font-semibold">
-                      {fleet.name}
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <Swatch colour={colourOf(aircraftKey(fleet.gatewaySn, fleet.aircraftSn))} />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-heading font-heading truncate text-sm font-semibold">
+                        {fleet.name}
+                      </span>
+                      <span className="text-muted truncate text-xs">{modelName(fleet.model)}</span>
                     </span>
-                    <span className="text-muted truncate text-xs">{modelName(fleet.model)}</span>
                   </span>
                   {device !== undefined && <PresencePill device={device} />}
                 </button>
@@ -126,11 +132,14 @@ export function FleetPanel() {
                     toggle(candidate)
                   }}
                 >
-                  <span className="flex min-w-0 flex-col">
-                    <span className="text-heading truncate text-sm font-semibold">
-                      {device.aircraftSn}
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <Swatch colour={colourOf(aircraftKey(device.gatewaySn, device.aircraftSn))} />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-heading truncate text-sm font-semibold">
+                        {device.aircraftSn}
+                      </span>
+                      <span className="text-muted truncate text-xs">via {device.stack.name}</span>
                     </span>
-                    <span className="text-muted truncate text-xs">via {device.stack.name}</span>
                   </span>
                   <PresencePill device={device} />
                 </button>

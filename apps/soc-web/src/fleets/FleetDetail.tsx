@@ -12,6 +12,8 @@ import { formatDuration, formatMoment, stackLabel } from './format'
 import { ModelSpecs } from './ModelSpecs'
 import { PresencePill } from './PresencePill'
 import { LiveValues } from '../telemetry/LiveValues'
+import { useAircraftColours } from './colours'
+import { Swatch } from './Swatch'
 
 /** A fleet's identity, what its stack last said of it, its model, and its changes (FR-FLE-04, FR-FLE-05). */
 export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
@@ -25,6 +27,7 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
   const [mode, setMode] = useState<'reading' | 'editing' | 'retiring'>('reading')
   const [refusal, setRefusal] = useState<string | null>(null)
   const heading = useId()
+  const colourOf = useAircraftColours()
   const reason = useId()
 
   if (fleets.isPending) return <Waiting>Loading the fleet…</Waiting>
@@ -87,7 +90,8 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
     <article aria-labelledby={heading}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 id={heading} className="text-lg font-semibold break-words">
+          <h3 id={heading} className="flex items-center gap-2.5 text-lg font-semibold break-words">
+            <Swatch colour={colourOf(aircraftKey(fleet.gatewaySn, fleet.aircraftSn))} />
             {fleet.name}
           </h3>
           <p className="text-muted text-sm">{model?.displayName ?? fleet.model}</p>

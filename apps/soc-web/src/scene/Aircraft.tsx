@@ -7,6 +7,8 @@ import { Vector3, type Group } from 'three'
 import { aircraftKey, type Fleet } from '../backend/backend'
 import { useSelect, useSelection, useView, type Selection } from '../app/router'
 import { useSettings } from '../config/settings'
+import { useAircraftColours } from '../fleets/colours'
+import { Swatch } from '../fleets/Swatch'
 import { useFleets } from '../fleets/data'
 import type { Geodetic } from '../geometry/projection'
 import { useTelemetryStore, useTrack } from '../telemetry/context'
@@ -17,8 +19,8 @@ import {
   drawnAt,
   paintAircraft,
   writeAircraft,
-  type Drawn,
   type Placement,
+  type ToDraw,
 } from './aircraft'
 import {
   ARRIVED_M,
@@ -68,6 +70,7 @@ export function Aircraft({
   const settings = useSettings()
   const palette = usePalette()
   const fleets = useFleets()
+  const colourOf = useAircraftColours()
   const selection = useSelection()
   const { panel } = useView()
   const select = useSelect()
@@ -145,13 +148,13 @@ export function Aircraft({
 
   useFrame((state) => {
     const now = performance.now()
-    const aircraft: { key: string; drawn: Drawn }[] = []
+    const aircraft: ToDraw[] = []
     const positions = new Map<string, Placement>()
     if (origin !== null) {
       for (const [key, track] of store.getState().tracks) {
         const drawn = drawnAt(track, origin, now, settings, site.ground)
         if (drawn === null) continue
-        aircraft.push({ key, drawn })
+        aircraft.push({ key, drawn, colour: colourOf(key) })
         positions.set(key, drawn.placement)
       }
     }
@@ -237,6 +240,7 @@ export function Aircraft({
         <AircraftLabel
           key={key}
           aircraft={key}
+          colour={colourOf(key)}
           name={nameOf(key, fleets.data)}
           placed={placed}
           selected={key === selected}
@@ -257,11 +261,13 @@ function nameOf(key: string, fleets: readonly Fleet[] | undefined): string {
 /** A pill above the aircraft with a pointer down to it, never over it (FR-SCN-06). */
 function AircraftLabel({
   aircraft,
+  colour,
   name,
   placed,
   selected,
 }: {
   readonly aircraft: string
+  readonly colour: number
   readonly name: string
   readonly placed: RefObject<Placed>
   readonly selected: boolean
@@ -288,7 +294,10 @@ function AircraftLabel({
               selected ? 'bg-primary text-on-primary' : 'bg-surface text-heading'
             }`}
           >
-            <span className="font-heading text-xs font-semibold">{title}</span>
+            <span className="flex items-center gap-1.5">
+              <Swatch colour={colour} />
+              <span className="font-heading text-xs font-semibold">{title}</span>
+            </span>
             <span className="text-[11px] tabular-nums">{detail}</span>
           </div>
           <div
