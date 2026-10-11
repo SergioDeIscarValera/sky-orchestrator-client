@@ -5,7 +5,7 @@ import { parseRuntimeConfiguration } from '../../src/config/runtime'
 import { PASSWORD_FOR_TESTS } from '../../src/test/keys'
 import { startFakeSupabase, type FakeSupabase } from './fake-supabase.mjs'
 import { DEMO_SETTINGS, demoSupabaseKey } from './run.mjs'
-import { REPLAY } from '../../src/telemetry/replay'
+import { replaySerials } from '../../src/telemetry/replay'
 
 const EMAIL = 'pilot@farm.test'
 const NORTH = '11111111-1111-4111-8111-111111111111'
@@ -98,7 +98,7 @@ describe('the demo Supabase, read through the console backend', () => {
     )
   })
 
-  it('answers the aircraft of Finca Norte: three on stack lab, and the replay on its own', async () => {
+  it("answers the aircraft of Finca Norte: three on stack lab, and the replay's two on their own", async () => {
     const devices = await backend.devices(NORTH)
     expect(
       devices.map(({ aircraftSn, online, stack }) => [
@@ -112,8 +112,12 @@ describe('the demo Supabase, read through the console backend', () => {
       [NO_FLEET_AIRCRAFT, true, 'lab', 'connected'],
       ['5HPCJ4T00D2M77', true, 'lab', 'unreachable'],
       ['REPLAYUAV', true, 'replay', 'connected'],
+      ['REPLAYUAV2', true, 'replay', 'connected'],
     ])
-    expect(devices.at(-1)?.gatewaySn).toBe(REPLAY.gatewaySn)
+    // The serials `?replay=2` flies, so both aircraft in the scene are listed too.
+    expect(
+      devices.slice(-2).map(({ gatewaySn, aircraftSn }) => ({ gatewaySn, aircraftSn })),
+    ).toEqual([replaySerials(0), replaySerials(1)])
   })
 
   it('answers the one fleet of Finca Norte, and nothing for Almendral', async () => {

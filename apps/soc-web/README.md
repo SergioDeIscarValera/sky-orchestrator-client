@@ -30,7 +30,9 @@ The console: one persistent 3D scene of the farm with floating panels
   model is baked, a flat ground with a 50 m and a 250 m grid over a 2 km site
   centred on the organization, reaching into fog in the page colour, and a note
   that says the ground is flat, or that the organization has no position. Its
-  colours are the theme's tokens, followed without a reload (`FR-SCN-08`). The
+  colours are the theme's tokens, followed without a reload (`FR-SCN-08`): the
+  system's light or dark, as it changes, until the user picks one with the
+  toggle, which this device then keeps. The
   camera orbits, pans, zooms and tilts within the site, never under the ground,
   and the map tools bring it closer, farther, or back to the overview; with
   reduced motion it cuts instead of flying (ADR-0021). It renders only when
@@ -188,7 +190,7 @@ be registered. Almendral (viewer) has no aircraft and no fleets. Fleets change i
 restart resets them. Realtime is not faked: there is no live telemetry, and a change made elsewhere
 shows once the console reads again; `http://localhost:5199/?replay` flies the development replay
 around Finca Norte, idle for 2 s, then taking off and circling, listed under Seen on the wire as
-REPLAYUAV, to select, follow or register; `?replay=2` flies two. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
+REPLAYUAV, to select, follow or register; `?replay=2` flies two, both listed there. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
 
 **Measuring the frame time (`NFR-PERF-06`).** `pnpm measure` does the following:
 

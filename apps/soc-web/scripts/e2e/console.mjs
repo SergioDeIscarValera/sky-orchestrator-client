@@ -11,6 +11,7 @@
 //   → {"event": "telemetry", ...}              SOC_E2E_SAMPLES samples, measured
 //   ← {"stopped": true}                        the dock has gone quiet
 //   → {"event": "stale", "after_last_ms"}      the inspector says Stale
+//   → {"event": "layout", "map_tools_moved_px"} the map tools with the panel open and shut
 //
 // Each sample's latency is the browser's receipt, the frame as Playwright hands it
 // over, against the dock's publish (its taken_at_ms) and against soc-cloud's
@@ -186,6 +187,18 @@ async function main() {
       }),
     ])
     emit({ event: 'stale', after_last_ms: staleAtMs - (samples.at(-1)?.receivedAtMs ?? staleAtMs) })
+
+    // The map tools sit bottom right whether or not a panel is open (the design system).
+    const tools = page.getByRole('toolbar', { name: 'Map tools' })
+    const open = await tools.boundingBox()
+    await page.getByRole('button', { name: 'Close Fleet' }).click()
+    await page.getByRole('button', { name: 'Close Fleet' }).waitFor({ state: 'detached' })
+    const shut = await tools.boundingBox()
+    emit({
+      event: 'layout',
+      map_tools_moved_px:
+        open === null || shut === null ? null : Math.hypot(open.x - shut.x, open.y - shut.y),
+    })
   } finally {
     await browser.close()
   }

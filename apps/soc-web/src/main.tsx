@@ -9,9 +9,10 @@ import { App } from './app/App'
 import { StartupProblem } from './app/StartupProblem'
 import { supabaseBackend } from './backend/supabase'
 import { ConfigurationError, loadRuntimeConfiguration } from './config/runtime'
-import { applyTheme, preferredTheme } from './theme/theme'
+import { applyTheme, followSystemTheme, preferredTheme } from './theme/theme'
 
 applyTheme(preferredTheme())
+followSystemTheme()
 
 const element = document.getElementById('root')
 if (element === null) throw new Error('index.html has no #root element')

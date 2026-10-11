@@ -1,12 +1,10 @@
 import { Moon, Sun } from 'lucide-react'
-import { useState } from 'react'
 
-import { applyTheme, preferredTheme, type Theme } from '../theme/theme'
+import { chooseTheme, useTheme, type Theme } from '../theme/theme'
 
+/** Switches the theme and keeps the choice on this device; until then the system's is followed. */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(() =>
-    document.documentElement.dataset.theme === 'dark' ? 'dark' : preferredTheme(),
-  )
+  const theme = useTheme()
   const next: Theme = theme === 'dark' ? 'light' : 'dark'
 
   return (
@@ -15,8 +13,7 @@ export function ThemeToggle() {
       className="rounded-pill text-muted hover:bg-primary-subtle hover:text-primary-emphasis grid size-9 place-items-center transition-colors duration-200"
       aria-label={`Switch to the ${next} theme`}
       onClick={() => {
-        applyTheme(next)
-        setTheme(next)
+        chooseTheme(next)
       }}
     >
       {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
