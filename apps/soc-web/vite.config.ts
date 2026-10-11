@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs'
+import { extname, resolve, sep } from 'node:path'
 
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
@@ -62,8 +63,53 @@ function favicon(): Plugin {
   }
 }
 
+const SITE_TYPES: Readonly<Record<string, string>> = {
+  '.json': 'application/json',
+  '.f32': 'application/octet-stream',
+  '.png': 'image/png',
+}
+
+/**
+ * In development, /site/<organization>/ serves the baked site models in
+ * SOC_SITE_DIR, as the image serves its volume (ADR-0018); without it, every site
+ * is missing and the scene keeps its flat ground.
+ */
+function siteModels(): Plugin {
+  return {
+    name: 'soc-site-models',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/site/', (request, response) => {
+        const root = process.env.SOC_SITE_DIR
+        const wanted = decodeURIComponent((request.url ?? '').split('?')[0] ?? '')
+        const file = root === undefined ? null : resolve(root, `.${wanted}`)
+        const type = file === null ? undefined : SITE_TYPES[extname(file)]
+        if (
+          root === undefined ||
+          file === null ||
+          type === undefined ||
+          !file.startsWith(resolve(root) + sep)
+        ) {
+          response.statusCode = 404
+          response.end()
+          return
+        }
+        try {
+          const body = readFileSync(file)
+          response.setHeader('content-type', type)
+          response.setHeader('cache-control', 'no-cache')
+          response.end(body)
+        } catch {
+          response.statusCode = 404
+          response.end()
+        }
+      })
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), runtimeConfiguration(), favicon()],
+  plugins: [react(), tailwindcss(), runtimeConfiguration(), favicon(), siteModels()],
   build: { target: 'baseline-widely-available', sourcemap: false, manifest: true },
   test: {
     environment: 'happy-dom',

@@ -13,6 +13,7 @@ import {
   type StateEvent,
 } from '../backend/backend'
 import { untouched } from '../backend/supabaseFleets'
+import type { LoadedSite } from '../scene/siteModel'
 import type { TelemetrySample } from '../telemetry/sample'
 import { PASSWORD_FOR_TESTS } from './keys'
 
@@ -195,6 +196,15 @@ export class FakeBackend implements Backend {
     listeners.add(listener)
     this.telemetryListeners.set(organizationId, listeners)
     return () => listeners.delete(listener)
+  }
+
+  /** The site models served beside the console, by organization: none unless a test adds one. */
+  readonly sites = new Map<string, LoadedSite>()
+  siteFailure: Error | null = null
+
+  siteModel(organizationId: string): Promise<LoadedSite | null> {
+    if (this.siteFailure !== null) return Promise.reject(this.siteFailure)
+    return Promise.resolve(this.sites.get(organizationId) ?? null)
   }
 
   /** What soc-cloud broadcasts on the organization's telemetry topic. */

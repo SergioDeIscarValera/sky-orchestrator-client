@@ -1,3 +1,4 @@
+import type { LoadedSite } from '../scene/siteModel'
 import type { TelemetrySample } from '../telemetry/sample'
 
 export interface Account {
@@ -143,4 +144,6 @@ export interface Backend {
   retireFleet(fleetId: string): Promise<void>
   onState(organizationId: string, listener: (event: StateEvent) => void): () => void
   onTelemetry(organizationId: string, listener: (sample: TelemetrySample) => void): () => void
+  /** The organization's baked site model, served beside the console, or null (ADR-0018). */
+  siteModel(organizationId: string): Promise<LoadedSite | null>
 }
