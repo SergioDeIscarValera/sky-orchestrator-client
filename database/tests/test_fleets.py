@@ -244,6 +244,32 @@ async def test_an_editor_edits_but_cannot_move_a_fleet_to_another_organization(
             )
 
 
+async def test_a_viewers_change_or_retirement_touches_no_row(
+    session: asyncpg.Connection, soc_cloud: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    """Row security hides the row from a viewer's update: no error, nothing changed.
+
+    The console counts the rows a write returned to tell this apart from a change.
+    """
+    owner = await tenancy.member("owner")
+    viewer = Member(await tenancy.user(), owner.organization_id)
+    await tenancy.join(viewer.user_id, viewer.organization_id, "viewer")
+    gateway = await stack_of(soc_cloud, owner.organization_id, "AIRCRAFT1")
+    fleet = await register(session, owner, gateway, "AIRCRAFT1")
+    async with acting_as(session, viewer.user_id):
+        for change in ("name = 'Viewer was here'", "deleted_at = now()"):
+            status = await session.execute(
+                f"update soc.fleets set {change} where id = $1",  # noqa: S608 - fixed text
+                fleet["id"],
+            )
+            assert status == "UPDATE 0"
+    async with acting_as(session, owner.user_id):
+        kept = await session.fetchrow(
+            "select name, deleted_at from soc.fleets where id = $1", fleet["id"]
+        )
+    assert kept is not None and (kept["name"], kept["deleted_at"]) == ("Norte 1", None)
+
+
 async def test_only_soc_cloud_records_what_stacks_report(
     session: asyncpg.Connection, soc_cloud: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
