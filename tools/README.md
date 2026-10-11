@@ -11,12 +11,18 @@ answer, so it is a script with tests rather than a judgement made each time
 | [`check_branch.py`](check_branch.py) | Branch names and Git Flow direction | [`test_check_branch.py`](tests/test_check_branch.py) |
 | [`next_version.py`](next_version.py) | The next version, suggested and verified | [`test_next_version.py`](tests/test_next_version.py) |
 | [`check_links.py`](check_links.py) | Every relative Markdown link resolves | [`test_check_links.py`](tests/test_check_links.py) |
+| [`vendor_sky_orchestrator.py`](vendor_sky_orchestrator.py) | Sky Orchestrator's wire contracts, vendored at a pinned commit and held to their hashes | [`test_vendor_sky_orchestrator.py`](tests/test_vendor_sky_orchestrator.py) |
+| [`merge_when_green.py`](merge_when_green.py) | A pull request merged only once every check, and every check the rulesets require, has passed | [`test_merge_when_green.py`](tests/test_merge_when_green.py) |
 | [`prune_branches.py`](prune_branches.py) | Local branches whose merged remote was deleted, deleted safely | [`test_prune_branches.py`](tests/test_prune_branches.py) |
 | [`setup_github.sh`](setup_github.sh) | Applies the [governance](../docs/github-governance.md) | Idempotent; `--dry-run` shows the plan |
 | [`tests/test_workflows.py`](tests/test_workflows.py) | Holds the workflows to the [minutes budget](../docs/ci-cd.md#minutes-budget) and to safe scripting | Itself |
 
 The commit linter, the branch checker and the link checker run identically in
 the pre-commit hooks and in CI.
+
+The tools run on the system `python3`, 3.12 or newer, with nothing installed:
+ruff and mypy hold them to Python 3.12 while the workspace targets 3.14, and CI
+runs their tests on 3.12.
 
 ```bash
 python3 -m unittest discover -s tools/tests -v

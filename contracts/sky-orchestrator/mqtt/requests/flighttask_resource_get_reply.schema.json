@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/requests/flighttask_resource_get_reply.schema.json",
+  "title": "flighttask_resource_get reply",
+  "description": "From DJI's SDK at bef525cb: TopicRequestsResponse of MqttReply of cloudapi/wayline/FlighttaskResourceGetResponse. result 0 with the file; otherwise a code and, as MqttReply.error sends it, a message as the output. The cloud's answer, so held to the types: a cloud may send more (FR-FLT-03b).",
+  "x-version": "1.0.0",
+  "x-topic": "thing/product/{gateway_sn}/requests_reply",
+  "x-direction": "cloud_to_dock",
+  "type": "object",
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "method",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/tid"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/bid"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "method": {
+      "const": "flighttask_resource_get"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "result"
+      ],
+      "properties": {
+        "result": {
+          "$ref": "../dji-envelope.schema.json#/$defs/result"
+        },
+        "output": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "file"
+              ],
+              "properties": {
+                "file": {
+                  "type": "object",
+                  "required": [
+                    "url",
+                    "fingerprint"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "minLength": 8,
+                      "maxLength": 4096
+                    },
+                    "fingerprint": {
+                      "type": "string",
+                      "pattern": "^[0-9a-fA-F]{32}$"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

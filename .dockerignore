@@ -1,0 +1,17 @@
+# Images are built from the repository root and copy what they need by path;
+# this keeps the context small and keeps secrets and local state out of it.
+**
+!pyproject.toml
+!uv.lock
+!contracts/
+!database/pyproject.toml
+!database/migrations/
+!infra/migrate/
+!libs/
+!services/
+!apps/soc-web/
+apps/soc-web/node_modules/
+apps/soc-web/dist/
+**/tests/
+**/__pycache__/
+**/.venv/

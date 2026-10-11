@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator-client/blob/develop/contracts/config/soc-config.schema.json",
+  "title": "SOC configuration",
+  "description": "Every tunable, once (FR-DEP-03, IR-CFG). Each consumer's configuration file holds exactly the keys that list it in x-consumers, all of them required, and nothing else; a default is what a new file starts from, never applied at load (ADR-0019). Addresses, ports and secrets come from the environment, declared in x-environment. x-unit, x-consumers, x-safety, x-constraints and x-environment are annotations; a validator ignores them.",
+  "x-version": "1.0.0",
+  "x-constraints": [
+    "telemetry_stale_after_ms < telemetry_lost_after_ms",
+    "stacks[].name are distinct",
+    "stacks[].broker.client_id are distinct"
+  ],
+  "x-environment": {
+    "SOC_CONFIG_FILE": {
+      "rule": "path",
+      "x-consumers": ["soc-cloud", "soc-operations"],
+      "description": "The service's configuration file, an absolute path."
+    },
+    "SOC_HEALTH_PORT": {
+      "rule": "port",
+      "x-consumers": ["soc-cloud", "soc-operations"],
+      "description": "Port of the health endpoint (NFR-OBS-02)."
+    },
+    "SOC_DB_HOST": {
+      "rule": "host",
+      "x-consumers": ["soc-cloud", "soc-operations"],
+      "description": "Virtual Origen's Postgres, reached directly on its network (ADR-0017)."
+    },
+    "SOC_DB_PORT": {
+      "rule": "port",
+      "x-consumers": ["soc-cloud", "soc-operations"],
+      "description": "Port of Virtual Origen's Postgres."
+    },
+    "SOC_DB_NAME": {
+      "rule": "identifier",
+      "x-consumers": ["soc-cloud", "soc-operations"],
+      "description": "Database holding schema soc."
+    },
+    "SOC_DB_PASSWORD_SOC_CLOUD": {
+      "rule": "secret",
+      "x-consumers": ["soc-cloud"],
+      "description": "Password of login role soc_cloud, the one the migration runner sets."
+    },
+    "SOC_DB_PASSWORD_SOC_OPERATIONS": {
+      "rule": "secret",
+      "x-consumers": ["soc-operations"],
+      "description": "Password of login role soc_operations, the one the migration runner sets."
+    },
+    "SOC_SUPABASE_URL": {
+      "rule": "http_url",
+      "x-consumers": ["soc-cloud"],
+      "description": "Virtual Origen's Supabase gateway, for Realtime Broadcast (ADR-0007)."
+    },
+    "SOC_SUPABASE_SERVICE_ROLE_KEY": {
+      "rule": "service_key",
+      "x-consumers": ["soc-cloud"],
+      "description": "The service role key, the only sender on SOC topics; never leaves the backend (NFR-SEC-02)."
+    },
+    "SOC_FLIGHT_FILES_PORT": {
+      "rule": "port",
+      "x-consumers": ["soc-cloud"],
+      "description": "Port the flight file server listens on, on Sky Orchestrator's network (ADR-0008)."
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "served_organizations": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" },
+      "minItems": 1,
+      "uniqueItems": true,
+      "x-unit": "organization id",
+      "x-consumers": ["soc-cloud", "soc-operations"],
+      "x-safety": true,
+      "description": "The organizations the service acts for; anything else is refused (NFR-SEC-03). Has no default: a default organization is someone else's."
+    },
+    "stacks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stack" },
+      "minItems": 1,
+      "x-unit": "stack",
+      "x-consumers": ["soc-cloud"],
+      "x-safety": true,
+      "description": "The Sky Orchestrator stacks, one MQTT connection each (FR-LNK-01). Has no default: addresses belong to the deployment."
+    },
+    "telemetry_stale_after_ms": {
+      "type": "integer",
+      "minimum": 500,
+      "maximum": 60000,
+      "default": 3000,
+      "x-unit": "ms",
+      "x-consumers": ["soc-cloud", "soc-operations", "soc-web"],
+      "x-safety": true,
+      "description": "A fleet with no sample for this long is drawn as stale (FR-TEL-02)."
+    },
+    "telemetry_lost_after_ms": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 300000,
+      "default": 10000,
+      "x-unit": "ms",
+      "x-consumers": ["soc-cloud", "soc-operations", "soc-web"],
+      "x-safety": true,
+      "description": "A fleet with no sample for this long has no current position; in flight, it raises the telemetry lost alarm (FR-TEL-02, FR-SAF-06)."
+    },
+    "telemetry_batch_s": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 60,
+      "default": 5,
+      "x-unit": "s",
+      "x-consumers": ["soc-cloud"],
+      "description": "Interval between the history writes of one aircraft (FR-TEL-04, NFR-RES-06)."
+    },
+    "command_reply_timeout_s": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 60,
+      "default": 10,
+      "x-unit": "s",
+      "x-consumers": ["soc-cloud"],
+      "x-safety": true,
+      "description": "A wire command with no reply after this is timed out (FR-LNK-06)."
+    },
+    "command_intent_ttl_s": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 60,
+      "default": 10,
+      "x-unit": "s",
+      "x-consumers": ["soc-cloud", "soc-operations"],
+      "x-safety": true,
+      "description": "An intent claimed later than this after it was requested expires instead of running (ADR-0006)."
+    },
+    "geofence_warning_band_m": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 5,
+      "x-unit": "m",
+      "x-consumers": ["soc-cloud", "soc-web"],
+      "x-safety": true,
+      "description": "Distance inside the geofence boundary at which the console warns (FR-SAF-01)."
+    },
+    "geofence_max_vertices": {
+      "type": "integer",
+      "minimum": 3,
+      "maximum": 256,
+      "default": 32,
+      "x-unit": "count",
+      "x-consumers": ["soc-operations", "soc-web"],
+      "description": "Most vertices a geofence may have, generated or drawn (FR-GEO-03)."
+    },
+    "min_satellites": {
+      "type": "integer",
+      "minimum": 6,
+      "maximum": 30,
+      "default": 12,
+      "x-unit": "count",
+      "x-consumers": ["soc-operations"],
+      "x-safety": true,
+      "description": "Fewest satellites for the GNSS check; Sky Orchestrator's own default and range (PF-GNSS)."
+    },
+    "min_gps_quality": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "default": 4,
+      "x-unit": "DJI level",
+      "x-consumers": ["soc-operations"],
+      "x-safety": true,
+      "description": "Lowest positioning quality on DJI's 0 to 5 scale for the GNSS check (PF-GNSS)."
+    },
+    "min_battery_start_pct": {
+      "type": "integer",
+      "minimum": 20,
+      "maximum": 100,
+      "default": 50,
+      "x-unit": "%",
+      "x-consumers": ["soc-operations"],
+      "x-safety": true,
+      "description": "Lowest battery to start an operation; Sky Orchestrator's own default and range (PF-BATTERY)."
+    },
+    "takeoff_tolerance_m": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 10,
+      "x-unit": "m",
+      "x-consumers": ["soc-operations"],
+      "x-safety": true,
+      "description": "Farthest the aircraft may be from the planned takeoff point (PF-TAKEOFF)."
+    },
+    "min_arming_left_s": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 600,
+      "default": 120,
+      "x-unit": "s",
+      "x-consumers": ["soc-operations"],
+      "x-safety": true,
+      "description": "Least arming time left on the phone to launch (PF-ARMED)."
+    },
+    "max_arc_spacing_m": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 10,
+      "x-unit": "m",
+      "x-consumers": ["soc-operations", "soc-web"],
+      "description": "Longest arc between consecutive points of the circle tool (FR-WAY-04)."
+    },
+    "flight_file_grace_s": {
+      "type": "integer",
+      "minimum": 60,
+      "maximum": 3600,
+      "default": 600,
+      "x-unit": "s",
+      "x-consumers": ["soc-cloud"],
+      "x-safety": true,
+      "description": "How long a flight file is still served after its flight ends (NFR-SEC-06)."
+    },
+    "broadcast_max_rate_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 25,
+      "default": 25,
+      "x-unit": "Hz",
+      "x-consumers": ["soc-cloud"],
+      "description": "Most telemetry broadcasts per aircraft per second, latest sample wins (ADR-0007, NFR-RES-07)."
+    }
+  },
+  "$defs": {
+    "stack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "broker", "api", "flight_files_url"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,30}$",
+          "description": "Short name, in logs and on the console."
+        },
+        "broker": { "$ref": "#/$defs/broker" },
+        "api": { "$ref": "#/$defs/api" },
+        "flight_files_url": {
+          "type": "string",
+          "pattern": "^http://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?$",
+          "description": "Where the dock reaches SOC's flight file server on this stack's network: plain http, as Sky Orchestrator downloads (ADR-0008)."
+        }
+      }
+    },
+    "broker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "port", "username", "password_env", "client_id"],
+      "properties": {
+        "host": { "type": "string", "pattern": "^[A-Za-z0-9.-]+$" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Sky Orchestrator's Cloud API client credential, cloud-client (ADR-0004)."
+        },
+        "password_env": { "$ref": "#/$defs/environment_name" },
+        "client_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "description": "Stable, so the broker keeps the persistent session (FR-LNK-01)."
+        }
+      }
+    },
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "token_env"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?$",
+          "description": "so-wayline's HTTP API: status, envelope, validations (DEP-01, DEP-03, DEP-04)."
+        },
+        "token_env": { "$ref": "#/$defs/environment_name" }
+      }
+    },
+    "environment_name": {
+      "type": "string",
+      "pattern": "^SOC_[A-Z0-9_]+$",
+      "description": "The environment variable holding the secret, never the secret (NFR-SEC-04)."
+    }
+  }
+}

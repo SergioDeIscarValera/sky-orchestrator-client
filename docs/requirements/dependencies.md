@@ -9,35 +9,69 @@ Sources: the integration exchange with both projects' maintainers on
 
 ## Sky Orchestrator
 
+SOC vendors Sky Orchestrator's wire contracts at a pinned commit,
+[`contracts/sky-orchestrator/`](../../contracts/sky-orchestrator/README.md),
+pinned to Sky Orchestrator's v0.4.1 tag, the release that publishes `DEP-01` to
+`DEP-06`, `DEP-12` and `DEP-13`. Its images run SOC's stack check
+(`SO_VERSION=v0.4.1`).
+
 | ID | SO item | SO milestone | What it gives SOC | SOC requirements waiting on it | Status |
 | --- | --- | --- | --- | --- | --- |
-| `DEP-01` | FR-DEV-07, ADR-0038 | M4 | The stack's state over HTTP: simulator mode, link and its reason, aircraft connected, armed and seconds left, clock offset | `FR-LNK-08`, `FR-OPS-05` (`PF-MODE`, `PF-ARMED`, `PF-CLOCK`), `FR-OPS-06`, `FR-OPS-07`, `FR-SAF-04` | Requested |
+| `DEP-01` | FR-DEV-07, ADR-0038 | M4 | The stack's state over HTTP: simulator mode, link and its reason, aircraft connected, armed and seconds left, clock offset | `FR-LNK-08`, `FR-OPS-05` (`PF-MODE`, `PF-ARMED`, `PF-CLOCK`), `FR-OPS-06`, `FR-OPS-07`, `FR-SAF-04` | **Delivered**, SO PR #113: `GET /v1/status`, so-wayline API 1.3.0 |
 | `DEP-02` | FR-FLT-11, NFR-SAF-07, ADR-0037 | M4 | `simulate_mission` (all three fields) must agree with the stack's mode; a real prepare only for a file flown to `ok` in simulation; refusals `319015`, `325001`, `314010`, `319004` | `FR-OPS-06`, `FR-OPS-09`, `NFR-SAF-05` | **Delivered**, SO PR #109 |
 | `DEP-03` | FR-WAY-11 | M4 | `GET /v1/envelope`: the active device envelope, with its fingerprint | `FR-OPS-08`, `FR-WAY-08`, `FR-GEO-04` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
 | `DEP-04` | FR-WAY-12 | M4 | `POST /v1/validations`: dry-run validation of a flight file | `FR-LNK-09`, `PF-SO-DRYRUN`, `NFR-COMP-02` | **Delivered**, SO PR #110, so-wayline API 1.2.0 |
-| `DEP-05` | FR-FLT-12 | M4 | The cause of a pause in `break_point.break_reason` | `FR-LOG-02` | Requested |
-| `DEP-06` | NFR-TEST-07 | M4 | The fake bridge image on GHCR, test only | `NFR-TEST-03` | Requested |
+| `DEP-05` | FR-FLT-12 | M4 | The cause of a pause in `break_point.break_reason`, as DJI's `FlighttaskBreakReasonEnum` | `FR-LOG-02` | **Delivered**, SO PR #112 |
+| `DEP-06` | NFR-TEST-07 | M4 | The fake bridge image on GHCR, test only | `NFR-TEST-03` | **Delivered**, SO PR #111; published in v0.4.1 (`ghcr.io/sergiodeiscarvalera/sky-orchestrator/fake-bridge:v0.4.1`) |
 | `DEP-07` | FR-TEL-01 at 5 Hz | M4 | OSD at 5 Hz measured on the phone | `NFR-PERF-01` in the field, `FR-SAF-01` reaction distance | Requested |
 | `DEP-08` | FR-TEL-07 | M5, possibly earlier | Horizontal and vertical speed, pitch, roll, remaining flight time | `FR-TEL-03` | Requested |
 | `DEP-09` | FR-TEL-08 | M5 | Remote controller link quality, once verified on the Mavic Air 2 | `FR-TEL-03` | Requested |
 | `DEP-10` | FR-FLT-13 | M5 | `break_point` honoured after `return_home` | `FR-CMD-08` | Requested |
 | `DEP-11` | M4 exit: first real flight | M4 | The aircraft cleared for real flight through SO | SOC's M5 | Pending in SO |
+| `DEP-12` | FR-SAF-06, bridge contract 1.6.0 | M4 | An execute while the operator holds the aircraft from the phone's console is refused `314010`, as an unarmed phone is: the operator acts on the phone, then SOC retries | `FR-OPS-09` | **Delivered**, SO PR #114 |
+| `DEP-13` | FR-BRG-09 | M4 | `takePhoto` and `gimbalRotate` run once per waypoint visit, and a resume does not repeat a photo already taken; `flighttask_progress.ext.media_count` stays 0 | `FR-WAY-12` | **Delivered**, SO PR #115 |
 
-Until `DEP-01` lands, a stack's mode is unknown, and SOC refuses to prepare
-(`FR-SAF-04`). Development before then runs against SO v0.4.0 with its fake
-bridge under `cloud_role: external`, which already carries everything SOC's
-milestones M1 to M3 need on the wire.
+SO's `infra/fly.py --stop-after S` sends `return_home` S seconds into a route: the
+reference SOC's stop path is compared with.
+
+### What SO's M4 phone session showed (2026-10-11)
+
+Every M4 step passed in the simulator on the real Mavic Air 2, through the stack
+on DJI's wire. What SOC's operation flow takes from it (M4):
+
+- **After a `314010` on execute** (`DEP-12`, the operator holds the aircraft),
+  the task stays `PREPARED`. SOC retries the execute once the operator releases,
+  or sends `flighttask_undo`; a new prepare before either is refused `319016`,
+  one task at a time (SO's FR-FLT-09).
+- **`return_home`** ends the task `COMPLETED_ABORTED` with `322283`, and the task
+  stays `RETURNING` until the aircraft is on the ground: near home it lands where
+  it is, away from home the landing waits for the pilot's stick (SO's ADR-0018).
+  SOC gives that state no timeout of its own.
+- **`link.changed_at_ms`** in `/v1/status` means when the link came up (SO PR
+  #121), no longer every change of its health.
+- **`flighttask_progress.ext.media_count`** will carry the number of files the
+  camera wrote during the task from SO's bridge contract 1.7.0 (`DEP-13` records
+  0 today; DJI's wire shape is unchanged). SOC reads nothing from it yet.
+  Downloading the images is SO's M5, which suits SOC: it has no media
+  requirement before then.
+- Measured on the phone: OSD at 5 Hz, 300 of 300 messages in 60 s for aircraft
+  and dock; clock offset −504 ± 18 ms; a 31.9 s loss of the phone's Wi-Fi
+  mid-mission survived, the task ending `COMPLETED_OK`; 13 photos, 13 files.
+
+A stack whose status cannot be read has an unknown mode, and SOC refuses to
+prepare (`FR-SAF-04`). With SO's link down, its status still carries the
+deployment's simulator mode, so `simulate_mission` can always be set from it.
 
 ## Virtual Origen
 
 | ID | VO2 item | Owner | What it gives SOC | SOC requirements waiting on it | Status |
 | --- | --- | --- | --- | --- | --- |
 | `DEP-20` | ADR 0059 and its gate test | VO2 | `private.is_member`, `has_role`, `current_member_orgs`, the `role` enum, and the columns SOC reads of `organizations`, `memberships`, `profiles` declared as a contract | `FR-AUT-*`, `NFR-SEC-01` | Proposed |
-| `DEP-21` | `PGRST_DB_SCHEMAS` gains `soc` | Sergio, on the mini-PC | PostgREST serves schema `soc` | Every web read and write | Box step |
+| `DEP-21` | `PGRST_DB_SCHEMAS` gains `soc` | Sergio, on the mini-PC | PostgREST serves schema `soc` | Every web read and write, from the organizations offered at sign-in (`soc.member_organizations`) | Box step; until it is done the web names it after sign-in |
 | `DEP-22` | GoTrue `ADDITIONAL_REDIRECT_URLS` gains SOC's origin | Sergio, on the mini-PC | Email links (password reset) that land on SOC | `FR-AUT-04` | Box step |
-| `DEP-23` | Realtime Broadcast with private channels | SOC's M1 smoke test, on VO2's stack | The live path, measured on the box, surviving a recreate of the Realtime container; ES256 joins (VO2's `API_JWT_JWKS`, set in its hotfix 0.0.35) | `FR-TEL-01`, `NFR-PERF-01` | To measure |
+| `DEP-23` | Realtime Broadcast with private channels | SOC's M1 smoke test, on VO2's stack | The live path, measured on the box, surviving a recreate of the Realtime container; ES256 joins (VO2's `API_JWT_JWKS`, set in its hotfix 0.0.35) | `FR-TEL-01`, `NFR-PERF-01` | Proven on the same Realtime and Postgres versions in the container lane; to measure on the box |
 | `DEP-24` | `TENANT_MAX_EVENTS_PER_SECOND` raised in VO2's Realtime environment | VO2, with Sergio | The tenant's limit (default 100, sends plus deliveries, shared with VO2) raised before SOC follows more than one aircraft | `NFR-RES-07` | Needed before M7 |
-| `DEP-25` | Review of `realtime.messages` policies | VO2 and SOC | SOC's restrictive guard policies agreed with whatever VO2 has or adds on that table | `FR-TEL-01`, `NFR-SEC-01` | To agree in M1 |
+| `DEP-25` | Review of `realtime.messages` policies | VO2 and SOC | SOC's restrictive guard policies agreed with whatever VO2 has or adds on that table | `FR-TEL-01`, `NFR-SEC-01` | **Agreed**: VO2 has none; SOC's guards pass every other topic through (`database/migrations/0003`), as VO2 asked |
 
 ## What SOC gives back
 

@@ -39,7 +39,9 @@ class LocalBranch:
 
 
 def local_branches(git: Git) -> list[LocalBranch]:
-    output = git("for-each-ref", "--format=%(HEAD)|%(refname:short)|%(upstream:track)", "refs/heads")
+    output = git(
+        "for-each-ref", "--format=%(HEAD)|%(refname:short)|%(upstream:track)", "refs/heads"
+    )
     branches: list[LocalBranch] = []
     for line in output.splitlines():
         head, name, track = line.split("|", 2)

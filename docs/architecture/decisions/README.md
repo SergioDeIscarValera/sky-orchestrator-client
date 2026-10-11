@@ -32,6 +32,9 @@ Rules:
 | [0013](0013-narrow-vertical-slice-for-the-mvp.md) | Narrow vertical slice for the MVP | Accepted |
 | [0014](0014-units-and-reference-frames.md) | Units and reference frames match Sky Orchestrator | Accepted |
 | [0015](0015-lan-first-deployment.md) | LAN-first deployment on the mini-PC | Accepted |
-| [0016](0016-web-stack.md) | Web stack: React, React Three Fiber, a persistent scene rendered on demand | Accepted |
+| [0016](0016-web-stack.md) | Web stack: React, React Three Fiber, a persistent scene rendered on demand | Accepted; its test environment superseded by ADR-0020 |
 | [0017](0017-backend-stack.md) | Backend stack: small asyncio services, one database connection each | Accepted |
 | [0018](0018-the-site-model-is-baked-once.md) | The site model is baked once and served as static assets | Accepted |
+| [0019](0019-one-configuration-contract-no-fallbacks.md) | One configuration contract, a file per service, no fallbacks | Accepted |
+| [0020](0020-web-tests-on-happy-dom-and-zod-mini.md) | The web's unit tests run on happy-dom; its schemas use Zod's mini build | Accepted |
+| [0021](0021-the-scene-camera-and-ground.md) | The scene's camera keeps its own limits; its ground is plain three.js | Accepted |

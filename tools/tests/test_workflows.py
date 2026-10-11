@@ -2,11 +2,24 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 import unittest
 from pathlib import Path
+from typing import Any
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 RULESETS = WORKFLOWS.parent / "rulesets"
+REPOSITORY = WORKFLOWS.parents[1]
+LANE_STEP = "- name: Container lane against Postgres, Realtime and Mosquitto"
+LANE_ONLY_UNITS = ("database",)
+SPLIT_BY_MARKER_UNITS = (
+    "libs/soc-db",
+    "libs/soc-realtime",
+    "services/soc-cloud",
+    "services/soc-operations",
+    "infra/check",
+)
+NOT_IN_THE_LANE = '-m "not lane"'
 
 
 def read(name: str) -> str:
@@ -64,7 +77,10 @@ def child_keys(lines: list[str], indent: int) -> list[str]:
 
 
 class Helpers(unittest.TestCase):
-    SAMPLE = "on:\n  pull_request:\n    branches: [main]\n# note\njobs:\n  a:\n    x: 1\n  b:\n    y: 2\n"
+    SAMPLE = (
+        "on:\n  pull_request:\n    branches: [main]\n# note\n"
+        "jobs:\n  a:\n    x: 1\n  b:\n    y: 2\n"
+    )
 
     def test_child_keys_of_a_block(self) -> None:
         self.assertEqual(child_keys(block(self.SAMPLE, "jobs"), 2), ["a", "b"])
@@ -76,7 +92,9 @@ class Helpers(unittest.TestCase):
         self.assertEqual(block(self.SAMPLE, "permissions"), [])
 
     def test_run_scripts_inline_and_as_blocks(self) -> None:
-        text = "steps:\n  - run: echo one\n  - run: |\n      echo two\n      echo three\n  - name: x\n"
+        text = (
+            "steps:\n  - run: echo one\n  - run: |\n      echo two\n      echo three\n  - name: x\n"
+        )
         self.assertEqual(run_scripts(text), ["echo one", "      echo two\n      echo three"])
 
 
@@ -104,24 +122,48 @@ class ContinuousIntegration(unittest.TestCase):
         self.assertIn("    name: Gate\n", self.text)
 
     def test_pull_requests_and_manual_runs_only(self) -> None:
-        self.assertEqual(child_keys(block(self.text, "on"), 2), ["pull_request", "workflow_dispatch"])
+        self.assertEqual(
+            child_keys(block(self.text, "on"), 2), ["pull_request", "workflow_dispatch"]
+        )
 
     def test_every_check_is_present(self) -> None:
         checks = (
             "tools/check_links.py",
             "tools/check_traceability.py",
+            "tools/vendor_sky_orchestrator.py --check",
             "-size +512k",
             "unittest discover -s tools/tests",
+            "uv sync --frozen --all-packages",
+            "uv run --frozen ruff check\n",
+            "uv run --frozen ruff format --check\n",
+            "mypy --python-version 3.12 tools",
+            "pytest infra/migrate/tests",
+            "pytest database/tests",
             "gitleaks detect",
         )
         for check in checks:
             with self.subTest(check=check):
                 self.assertIn(check, self.text)
 
-    def test_checks_report_independently(self) -> None:
-        steps_with_a_guard = self.text.count("!cancelled()")
-        named_steps = len(re.findall(r"^      - name: ", self.text, re.MULTILINE))
-        self.assertEqual(steps_with_a_guard, named_steps)
+    def test_the_web_gate_runs_every_script_the_web_declares(self) -> None:
+        scripts = json.loads((REPOSITORY / "apps" / "soc-web" / "package.json").read_text())[
+            "scripts"
+        ]
+        gate = self.text[self.text.index("- name: soc-web gate") :].split("\n\n")[0] + "\n"
+        for script in ("typecheck", "lint", "format:check", "test", "build", "budget", "secrets"):
+            with self.subTest(script=script):
+                self.assertIn(script, scripts)
+                self.assertIn(f"pnpm {script}\n", gate)
+        self.assertIn("pnpm install --frozen-lockfile", gate)
+
+    def test_every_step_after_the_setup_reports_independently(self) -> None:
+        steps = re.split(r"^      - ", self.text, flags=re.MULTILINE)[1:]
+        unguarded = [step.splitlines()[0] for step in steps if "!cancelled()" not in step]
+        self.assertEqual(unguarded, ["id: checkout", "id: python"])
+
+    def test_the_database_lane_runs_only_when_what_it_tests_changes(self) -> None:
+        step = self.text[self.text.index(LANE_STEP) :]
+        self.assertIn("steps.lane-changes.outputs.changed == 'true'", step.splitlines()[1])
 
 
 class PullRequestPolicy(unittest.TestCase):
@@ -144,19 +186,200 @@ class PullRequestPolicy(unittest.TestCase):
                     self.assertNotIn("${{", script)
 
 
+def workspace_dependencies(units: list[str]) -> dict[str, set[str]]:
+    projects = {
+        unit: tomllib.loads((REPOSITORY / unit / "pyproject.toml").read_text(encoding="utf-8"))
+        for unit in units
+    }
+    directory = {project["project"]["name"]: unit for unit, project in projects.items()}
+    direct = {
+        unit: {
+            directory[name]
+            for name, source in project.get("tool", {}).get("uv", {}).get("sources", {}).items()
+            if source.get("workspace")
+        }
+        for unit, project in projects.items()
+    }
+    closure = {unit: set(dependencies) for unit, dependencies in direct.items()}
+    for _ in units:
+        for dependencies in closure.values():
+            dependencies.update(*(closure[dependency] for dependency in list(dependencies)))
+    return closure
+
+
+def hook_files(hooks: str, hook_id: str) -> str | None:
+    match = re.search(rf"- id: {re.escape(hook_id)}\n(?:.*\n)*?\s+files: (.+)", hooks)
+    return match[1] if match else None
+
+
+def lane_filter(ci: str) -> str:
+    match = re.search(r"grep -qE '([^']+)'", ci[ci.index("- id: lane-changes") :])
+    assert match is not None
+    return match[1]
+
+
+def a_change_in(directory: str) -> str:
+    return f"{directory}/src/probe.py"
+
+
+class PythonUnits(unittest.TestCase):
+    def setUp(self) -> None:
+        project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+        self.units = project["tool"]["uv"]["workspace"]["members"]
+        self.ci = read("ci.yml")
+        self.hooks = (REPOSITORY / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+        self.dependencies = workspace_dependencies(self.units)
+
+    def test_a_units_hook_runs_when_a_unit_it_uses_changes(self) -> None:
+        for unit, dependencies in self.dependencies.items():
+            name = tomllib.loads((REPOSITORY / unit / "pyproject.toml").read_text())["project"]
+            files = hook_files(self.hooks, f"{name['name']}-gate")
+            if files is None:
+                continue
+            for dependency in (unit, *dependencies):
+                with self.subTest(unit=unit, dependency=dependency):
+                    self.assertRegex(a_change_in(dependency), files)
+
+    def test_the_lane_runs_when_a_unit_its_tests_use_changes(self) -> None:
+        detection = lane_filter(self.ci)
+        for unit in (*LANE_ONLY_UNITS, *SPLIT_BY_MARKER_UNITS):
+            for dependency in (unit, *self.dependencies[unit]):
+                with self.subTest(unit=unit, dependency=dependency):
+                    self.assertRegex(a_change_in(dependency), detection)
+
+    def test_the_lane_runs_when_the_web_image_changes_not_its_source(self) -> None:
+        detection = lane_filter(self.ci)
+        for path in (
+            "apps/soc-web/Dockerfile",
+            "apps/soc-web/nginx/soc-web.sh",
+            "apps/soc-web/pnpm-lock.yaml",
+            ".dockerignore",
+        ):
+            with self.subTest(path=path):
+                self.assertRegex(path, detection)
+        self.assertNotRegex("apps/soc-web/src/app/Shell.tsx", detection)
+
+    def test_the_lane_does_not_run_for_documentation(self) -> None:
+        detection = lane_filter(self.ci)
+        for path in ("docs/roadmap.md", "README.md", "tools/check_links.py"):
+            with self.subTest(path=path):
+                self.assertNotRegex(path, detection)
+
+    def test_every_unit_is_type_checked_on_its_own(self) -> None:
+        for unit in self.units:
+            with self.subTest(unit=unit):
+                self.assertIn(f"uv run --frozen mypy {unit}\n", self.ci)
+                self.assertRegex(self.hooks, rf"uv run --frozen mypy {re.escape(unit)}['\n &]")
+
+    def test_every_unit_outside_the_lane_runs_its_gate_tests(self) -> None:
+        for unit in self.units:
+            if unit in LANE_ONLY_UNITS:
+                continue
+            gate = f"uv run --frozen pytest {unit}/tests"
+            if unit in SPLIT_BY_MARKER_UNITS:
+                gate += f" {NOT_IN_THE_LANE}"
+            with self.subTest(unit=unit):
+                self.assertIn(f"{gate}\n", self.ci)
+                self.assertIn(f"{gate}'", self.hooks)
+
+    def test_every_unit_with_database_tests_runs_them_in_the_lane(self) -> None:
+        marked = {
+            unit
+            for unit in self.units
+            if any(
+                "pytest.mark.lane" in path.read_text(encoding="utf-8")
+                for path in (REPOSITORY / unit).rglob("test_*.py")
+            )
+        }
+        self.assertEqual(marked, set(SPLIT_BY_MARKER_UNITS))
+        lane = self.ci[self.ci.index(LANE_STEP) :]
+        for unit in (*LANE_ONLY_UNITS, *SPLIT_BY_MARKER_UNITS):
+            selection = "" if unit in LANE_ONLY_UNITS else " -m lane"
+            with self.subTest(unit=unit):
+                self.assertIn(f"uv run --frozen pytest {unit}/tests{selection}\n", lane)
+
+
+class Dependencies(unittest.TestCase):
+    def test_every_python_unit_builds_with_the_same_uv_build(self) -> None:
+        project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+        requirements = {
+            unit: tomllib.loads((REPOSITORY / unit / "pyproject.toml").read_text())["build-system"][
+                "requires"
+            ]
+            for unit in project["tool"]["uv"]["workspace"]["members"]
+        }
+        self.assertEqual(len({tuple(value) for value in requirements.values()}), 1, requirements)
+
+    def test_node_types_follow_the_runtime_major(self) -> None:
+        web = json.loads((REPOSITORY / "apps" / "soc-web" / "package.json").read_text())
+        dependabot = (REPOSITORY / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        npm = dependabot[dependabot.index("package-ecosystem: npm") :]
+        self.assertTrue(web["devDependencies"]["@types/node"].startswith("24."))
+        self.assertTrue(web["engines"]["node"].startswith(">=24."))
+        self.assertRegex(
+            npm,
+            r'- dependency-name: "@types/node"\n\s+update-types: \["version-update:semver-major"\]',
+        )
+
+
+class BaseImages(unittest.TestCase):
+    def setUp(self) -> None:
+        text = (REPOSITORY / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        start = text.index("package-ecosystem: docker")
+        self.docker = text[start : text.index("package-ecosystem: npm")]
+
+    def test_node_stays_on_the_lts_line_of_adr_0016(self) -> None:
+        dockerfile = (REPOSITORY / "apps" / "soc-web" / "Dockerfile").read_text()
+        self.assertIn("FROM node:24.", dockerfile)
+        self.assertRegex(
+            self.docker,
+            r'- dependency-name: "node"\n\s+update-types: \["version-update:semver-major"\]',
+        )
+
+    def test_python_stays_on_the_line_of_adr_0017(self) -> None:
+        for unit in ("services/soc-cloud", "services/soc-operations", "infra/migrate"):
+            with self.subTest(unit=unit):
+                self.assertIn("FROM python:3.14.", (REPOSITORY / unit / "Dockerfile").read_text())
+        self.assertRegex(
+            self.docker,
+            r'- dependency-name: "python"\n\s+update-types: '
+            r'\["version-update:semver-major", "version-update:semver-minor"\]',
+        )
+
+    def test_nginx_stays_on_its_stable_line(self) -> None:
+        dockerfile = (REPOSITORY / "apps" / "soc-web" / "Dockerfile").read_text()
+        minor = re.search(r"nginx-unprivileged:1\.(\d+)\.", dockerfile)
+        assert minor is not None
+        self.assertEqual(int(minor[1]) % 2, 0, "an odd nginx minor is the mainline")
+        self.assertRegex(
+            self.docker,
+            r'- dependency-name: "nginxinc/nginx-unprivileged"\n\s+update-types: '
+            r'\["version-update:semver-major", "version-update:semver-minor"\]',
+        )
+
+
 class Rulesets(unittest.TestCase):
     def setUp(self) -> None:
         self.branch_rulesets = [
-            json.loads((RULESETS / name).read_text(encoding="utf-8")) for name in ("main.json", "develop.json")
+            json.loads((RULESETS / name).read_text(encoding="utf-8"))
+            for name in ("main.json", "develop.json")
         ]
 
-    def rule(self, ruleset: dict, kind: str) -> dict:
-        return next(rule for rule in ruleset["rules"] if rule["type"] == kind)["parameters"]
+    def rule(self, ruleset: dict[str, Any], kind: str) -> dict[str, Any]:
+        parameters: dict[str, Any] = next(
+            rule for rule in ruleset["rules"] if rule["type"] == kind
+        )["parameters"]
+        return parameters
 
     def test_required_checks_are_job_names_that_exist(self) -> None:
-        job_names = set(re.findall(r"^    name: (.+)$", read("ci.yml") + read("pr-policy.yml"), re.MULTILINE))
+        job_names = set(
+            re.findall(r"^    name: (.+)$", read("ci.yml") + read("pr-policy.yml"), re.MULTILINE)
+        )
         for ruleset in self.branch_rulesets:
-            contexts = {check["context"] for check in self.rule(ruleset, "required_status_checks")["required_status_checks"]}
+            contexts = {
+                check["context"]
+                for check in self.rule(ruleset, "required_status_checks")["required_status_checks"]
+            }
             with self.subTest(ruleset=ruleset["name"]):
                 self.assertEqual(contexts, {"Gate", "Pull request policy"})
                 self.assertLessEqual(contexts, job_names)
@@ -164,7 +387,9 @@ class Rulesets(unittest.TestCase):
     def test_merge_commits_only(self) -> None:
         for ruleset in self.branch_rulesets:
             with self.subTest(ruleset=ruleset["name"]):
-                self.assertEqual(self.rule(ruleset, "pull_request")["allowed_merge_methods"], ["merge"])
+                self.assertEqual(
+                    self.rule(ruleset, "pull_request")["allowed_merge_methods"], ["merge"]
+                )
 
     def test_nobody_bypasses(self) -> None:
         for path in sorted(RULESETS.glob("*.json")):
@@ -177,7 +402,10 @@ class Release(unittest.TestCase):
         self.text = read("release.yml")
 
     def test_every_gh_pr_command_names_the_repository(self) -> None:
-        commands = [match.start() for match in re.finditer(r"\bgh (pr|release) (create|list|merge|view)\b", self.text)]
+        commands = [
+            match.start()
+            for match in re.finditer(r"\bgh (pr|release) (create|list|merge|view)\b", self.text)
+        ]
         self.assertTrue(commands)
         for start in commands:
             command = self.text[start:].split("\n\n", 1)[0]
@@ -190,6 +418,25 @@ class Release(unittest.TestCase):
     def test_the_back_merge_never_comes_from_main(self) -> None:
         self.assertIn('source="backmerge/$VERSION"', self.text)
         self.assertNotIn("--head main", self.text)
+
+    def test_every_service_image_is_published_from_its_own_dockerfile(self) -> None:
+        declared = re.search(r'SERVICES: "([^"]+)"', self.text)
+        assert declared is not None
+        published = dict(entry.split("=") for entry in declared[1].split())
+        compose = (REPOSITORY / "infra" / "compose" / "compose.yaml").read_text(encoding="utf-8")
+        self.assertEqual(set(published), set(re.findall(r"/([a-z-]+):\$\{SOC_VERSION", compose)))
+        for service, dockerfile in published.items():
+            with self.subTest(service=service):
+                self.assertTrue((REPOSITORY / dockerfile).is_file())
+
+    def test_only_the_images_job_may_write_packages(self) -> None:
+        self.assertEqual(self.text.count("packages: write"), 1)
+        images = self.text[self.text.index("  images:") : self.text.index("  back_merge:")]
+        self.assertIn("packages: write", images)
+        self.assertIn("needs: tag", images)
+
+    def test_an_image_tag_is_never_moved(self) -> None:
+        self.assertIn("Image tags are never moved", self.text)
 
 
 if __name__ == "__main__":

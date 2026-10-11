@@ -14,9 +14,10 @@ Users, organizations and the database are
 [Virtual Origen](https://github.com/SergioDeIscarValera/virtual-origen-v2)'s
 (VO2): a VO2 account signs in, a VO2 organization is the farm.
 
-> **Status: pre-alpha, M0 (foundations).** Requirements, decisions, conventions
-> and pipelines are in place; no unit runs yet. The MVP is the first real flight
-> commanded from SOC. See the [roadmap](docs/roadmap.md).
+> **Status: pre-alpha, M1 (platform and viability).** Requirements, decisions,
+> conventions and pipelines are in place (v0.1.0); the database baseline and the
+> shared Python libraries are landing, no service runs yet. The MVP is the first
+> real flight commanded from SOC. See the [roadmap](docs/roadmap.md).
 
 ---
 

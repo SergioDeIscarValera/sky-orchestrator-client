@@ -147,6 +147,13 @@ pre-commit install --install-hooks
 pre-commit install --hook-type commit-msg
 
 python3 -m unittest discover -s tools/tests
+
+uv sync --frozen --all-packages              # the Python workspace, CPython 3.14
+uv run --frozen mypy libs/soc-config         # a unit's gate: its types,
+uv run --frozen pytest libs/soc-config/tests # then its tests
+uv run --frozen pytest database/tests        # the container lane, needs Docker
+
+cd apps/soc-web && corepack enable && pnpm install   # the web, Node 24.21.0
 ```
 
 The hooks refuse commits on `main` and `develop`, and messages that break the
@@ -166,6 +173,11 @@ Merge commits only: squash and rebase are disabled, so the small commits stay in
 history. A pull request built on another one says so in its description and
 merges after it.
 
+Merge with `python3 tools/merge_when_green.py <number>`: it waits for the checks
+and merges only when every check passed and every check the rulesets require
+reported. The free private plan does not enforce the rulesets, so nothing else
+stops a red pull request from merging.
+
 The template asks for the requirements, the evidence and the failure modes.
 Since commits are one line, the description is where the reasoning lives.
 
@@ -183,6 +195,7 @@ git switch -c release/v0.2.0 && git push -u origin release/v0.2.0
 2. Update `CHANGELOG.md` by hand from the merged pull requests.
 3. Open the pull request into `main`; merge it with a merge commit.
 4. The release workflow verifies the version, tags it, publishes the release,
-   and opens the back-merge into `develop`. Merge that with a merge commit.
+   pushes the service images to GHCR at the tag, and opens the back-merge into
+   `develop`. Merge that with a merge commit.
 
 Never open a pull request from `main`: automatic branch deletion would delete it.

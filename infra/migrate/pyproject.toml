@@ -1,0 +1,13 @@
+[project]
+name = "soc-migrate"
+version = "0.1.0"
+description = "SOC's migration runner for schema soc in Virtual Origen's database"
+requires-python = ">=3.14,<3.15"
+dependencies = ["asyncpg==0.32.0"]
+
+[project.scripts]
+soc-migrate = "soc_migrate.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13"]
+build-backend = "uv_build"

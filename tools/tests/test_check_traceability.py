@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import check_traceability as ct  # noqa: E402
+import check_traceability as ct
 
 FUNCTIONAL = """# Functional requirements
 
@@ -26,7 +26,9 @@ NON_FUNCTIONAL = """# Non-functional requirements
 Text.
 """
 
-MATRIX_HEADER = "| ID | Priority | Unit | Milestone | Test | Status |\n| --- | --- | --- | --- | --- | --- |\n"
+MATRIX_HEADER = (
+    "| ID | Priority | Unit | Milestone | Test | Status |\n| --- | --- | --- | --- | --- | --- |\n"
+)
 
 
 class Repository:
@@ -85,7 +87,9 @@ class Skeleton(unittest.TestCase):
         with redirect_stdout(output):
             self.assertEqual(ct.main([str(repository.root), "--skeleton"]), 0)
         printed = output.getvalue().splitlines()
-        self.assertEqual([line.split(" | ")[0] for line in printed], ["| FR-TEL-02", "| NFR-PERF-01"])
+        self.assertEqual(
+            [line.split(" | ")[0] for line in printed], ["| FR-TEL-02", "| NFR-PERF-01"]
+        )
 
 
 class CommandLine(unittest.TestCase):

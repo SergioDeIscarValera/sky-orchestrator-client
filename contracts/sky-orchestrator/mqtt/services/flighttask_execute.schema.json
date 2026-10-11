@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/services/flighttask_execute.schema.json",
+  "title": "flighttask_execute",
+  "description": "From DJI's SDK at bef525cb: cloudapi/wayline/FlighttaskExecuteRequest.",
+  "x-version": "1.0.0",
+  "x-topic": "thing/product/{gateway_sn}/services",
+  "x-direction": "cloud_to_dock",
+  "type": "object",
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "method",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/tid"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/bid"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "method": {
+      "const": "flighttask_execute"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "flight_id"
+      ],
+      "properties": {
+        "flight_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[^<>:\"/|?*._\\\\]+$",
+          "description": "FlighttaskPrepareRequest's pattern; so-fleet's flight ids are a superset."
+        }
+      }
+    }
+  }
+}

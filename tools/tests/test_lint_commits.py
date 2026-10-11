@@ -11,8 +11,8 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import lint_commits  # noqa: E402
-from lint_commits import Commit  # noqa: E402
+import lint_commits
+from lint_commits import Commit
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 
@@ -137,11 +137,7 @@ class GitComments(unittest.TestCase):
         self.assertEqual(rules(message), set())
 
     def test_the_verbose_scissors_section_is_dropped(self) -> None:
-        message = (
-            "feat(web): add the fleet panel\n\n"
-            f"{lint_commits.SCISSORS}\n"
-            "diff --git a/x b/x\n"
-        )
+        message = f"feat(web): add the fleet panel\n\n{lint_commits.SCISSORS}\ndiff --git a/x b/x\n"
         self.assertEqual(rules(message), set())
 
     def test_a_message_of_comments_only_is_empty(self) -> None:

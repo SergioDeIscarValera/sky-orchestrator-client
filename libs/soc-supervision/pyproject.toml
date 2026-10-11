@@ -1,0 +1,13 @@
+[project]
+name = "soc-supervision"
+version = "0.1.0"
+description = "Keep one link up: connect, serve until lost, back off capped at 10 s; report every link over HTTP"
+requires-python = ">=3.14,<3.15"
+dependencies = ["aiohttp==3.14.4", "soc-log"]
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+soc-log = { workspace = true }

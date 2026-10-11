@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/osd/aircraft.schema.json",
+  "title": "Aircraft OSD",
+  "description": "Dock to cloud on thing/product/{aircraft_sn}/osd at osd_publish_hz (FR-TEL-01): the subset of cloudapi/device/OsdDockDrone the emulator has a source for, nothing else. timestamp is when the application took the sample (FR-TEL-04). A field the application or so-fleet marks stale is left out, never sent with its last value (FR-TEL-05); with nothing fresh, nothing is sent. height is not sent: DJI's is above the ellipsoid, and the aircraft only knows its height above takeoff, which is DJI's elevation.",
+  "x-version": "1.0.0",
+  "x-topic": "thing/product/{aircraft_sn}/osd",
+  "x-direction": "dock_to_cloud",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "gateway",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/own_id"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/own_id"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "gateway": {
+      "$ref": "../dji-envelope.schema.json#/$defs/sn"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "elevation": {
+          "type": "number",
+          "description": "Metres above the takeoff point."
+        },
+        "attitude_head": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "description": "Degrees, 0 north, clockwise positive."
+        },
+        "home_distance": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Metres."
+        },
+        "battery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "capacity_percent"
+          ],
+          "properties": {
+            "capacity_percent": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "position_state": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "gps_number": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "quality": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            }
+          }
+        },
+        "mode_code": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "description": "DroneModeCodeEnum."
+        }
+      }
+    }
+  }
+}

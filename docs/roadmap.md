@@ -57,12 +57,20 @@ The MVP is M5: **a first real flight commanded from SOC**
 
 | Step | Pull request |
 | --- | --- |
-| Migration runner, schema `soc` baseline, database test harness with VO2's contract surface | `feature/database/runner-and-baseline` |
-| Shared Python: declared configuration, correlated logs, the database connection, the Realtime Broadcast client | `feature/libs/foundations` |
-| `soc-cloud` skeleton: one link per stack, topology, OSD ingest, devices, the file server, health | `feature/cloud/link-skeleton` |
-| `soc-operations` skeleton: configuration, health, the intent sweep | `feature/operations/skeleton` |
-| `soc-web` skeleton: tokens, sign-in, organization first, the persistent scene, panels, runtime configuration | `feature/web/shell` |
-| Compose stack for the mini-PC, the stack check in CI, the deploy command with its flight guard | `feature/infra/stack-and-check` |
+| Migration runner, schema `soc` baseline, database test harness with VO2's contract surface | `feature/database/soc-baseline`, merged (#15) |
+| Shared Python: the configuration contract and its loader, correlated logs | `feature/libs/config-and-logs`, merged (#18) |
+| Shared Python: the one database connection, with `LISTEN`, claims and `COPY` | `feature/libs/database-connection`, merged (#19) |
+| Shared Python: the Realtime Broadcast client, with its HTTP fallback, and the supervision every link shares | `feature/libs/realtime-client`, merged (#20) |
+| The real Realtime in the database lane: private channel joins held to SOC's policies, the client end to end | `feature/database/realtime-lane`, merged (#21) |
+| Sky Orchestrator's wire contracts vendored at a pinned commit, held to their checksums | `feature/contracts/sky-orchestrator-wire`, merged (#22) |
+| `soc-cloud` skeleton: settings, the wire contract, database and Realtime links, health, the process | `feature/cloud/service-skeleton`, merged (#23) |
+| `soc-cloud` stack links: one MQTT link per stack, topology and presence, OSD ingest, `status_reply` | `feature/cloud/stack-links`, merged (#24) |
+| `soc-cloud` flight files: the dock's `flighttask_resource_get` answered from memory, the file server | `feature/cloud/flight-files`, merged (#25) |
+| `soc-cloud` command path: command intents in the database, announced, claimed once, put on the wire | `feature/database/command-intents`, merged (#26); `feature/cloud/commands`, merged (#27) |
+| Sky Orchestrator's contracts pinned to its v0.4.1 release | `feature/contracts/sky-orchestrator-v0.4.1`, merged (#28) |
+| `soc-operations` skeleton: configuration, health, the database link; its transition intents arrive with the operations in M4 | `feature/operations/skeleton`, merged (#29, fixed by #30) |
+| `soc-web` skeleton: tokens and the shell; sign-in, organization first and the runtime configuration; the persistent scene and panels | `feature/web/scaffold`, merged (#34); `feature/database/member-organizations`, merged (#35); `feature/web/sign-in`, merged (#38); `feature/web/image`, merged (#40); `feature/web/scene` |
+| Compose stack for the mini-PC, the stack check in CI, the deploy command with its flight guard | `feature/infra/images`, merged (#32): the images and the compose project; `feature/repo/release-images`, merged (#33); `feature/infra/stack-and-check` |
 | Viability session on the mini-PC, measured | `feature/infra/viability-session` |
 
 **Exit criteria**
@@ -125,7 +133,7 @@ dependency register of the requirements.
 
 | Step | Pull request |
 | --- | --- |
-| Operations, flights, files, commands, events and telemetry history in the database | `feature/database/operations` |
+| Operations, flights, files, events, telemetry history, and the operation transition requests `soc-operations` executes (ADR-0006) in the database | `feature/database/operations` |
 | `soc-operations`: the lifecycle, the checks, the simulated pass, launch and completion | `feature/operations/lifecycle` |
 | `soc-cloud`: commands on the wire, progress, the cloud geofence, telemetry history | `feature/cloud/flights` |
 | Operation wizard and preparation console | `feature/web/operation-preparation` |

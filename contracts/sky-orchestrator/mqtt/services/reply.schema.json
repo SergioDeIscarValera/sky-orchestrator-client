@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/services/reply.schema.json",
+  "title": "A service reply",
+  "description": "Dock to cloud on thing/product/{gateway_sn}/services_reply: the request's tid, bid and method, the result, and the method's output when it has one. From mqtt/services/TopicServicesResponse and ServicesReplyReceiver. A method so-gateway does not implement is answered here with a non-zero result, never dropped (NFR-COMP-02).",
+  "x-version": "1.0.0",
+  "x-topic": "thing/product/{gateway_sn}/services_reply",
+  "x-direction": "dock_to_cloud",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "method",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/tid"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/bid"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "method": {
+      "$ref": "../dji-envelope.schema.json#/$defs/method"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result"
+      ],
+      "properties": {
+        "result": {
+          "$ref": "../dji-envelope.schema.json#/$defs/result"
+        },
+        "output": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

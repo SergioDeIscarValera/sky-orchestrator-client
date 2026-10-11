@@ -128,7 +128,9 @@ def known_type(header: Header) -> Problem | None:
 def known_scope(header: Header) -> Problem | None:
     if header.scope in SCOPES:
         return None
-    return Problem("scope", f"'{header.scope}' is not an allowed scope. Allowed: {', '.join(SCOPES)}")
+    return Problem(
+        "scope", f"'{header.scope}' is not an allowed scope. Allowed: {', '.join(SCOPES)}"
+    )
 
 
 def trimmed_subject(header: Header) -> Problem | None:

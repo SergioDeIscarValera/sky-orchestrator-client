@@ -1,0 +1,26 @@
+{
+  "tid": "00000000-0000-4000-8000-000000000001",
+  "bid": "00000000-0000-4000-8000-000000000002",
+  "timestamp": 1790800000000,
+  "method": "update_topo",
+  "data": {
+    "domain": 3,
+    "type": 2,
+    "sub_type": 0,
+    "device_secret": "",
+    "nonce": "",
+    "thing_version": "1.2.0",
+    "sub_devices": [
+      {
+        "sn": "SOTESTUAV001",
+        "domain": 0,
+        "type": 91,
+        "sub_type": 0,
+        "index": "A",
+        "device_secret": "",
+        "nonce": "",
+        "thing_version": "1.2.0"
+      }
+    ]
+  }
+}

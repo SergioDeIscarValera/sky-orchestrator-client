@@ -54,6 +54,10 @@ Rules:
 **IR-ORG-01**: an organization with `deleted_at` set gives no access in SOC, even
 to its members: SOC checks it, because Virtual Origen's `is_member` does not.
 
+**IR-ORG-02**: the web learns a user's organizations from
+`soc.member_organizations()`: id, name, the user's role, latitude, longitude and
+time zone, live memberships of live organizations only, ordered by name.
+
 ---
 
 ## IR-MOD — Aircraft model
@@ -304,7 +308,12 @@ Owner: the requester creates it (a pilot through an RPC, or `soc-operations`);
 **IR-CMD-01**: a command moves forward only (`pending → sent → accepted |
 refused | timed_out`; `pending → expired` when claimed after
 `command_intent_ttl_s`; `failed` before sending); the database refuses any other
-change.
+change, and any change to what was asked.
+
+**IR-CMD-02**: `soc-cloud` moves a command only through `soc.claim_command_intent`,
+`soc.record_command_reply`, `soc.time_out_command_intent` and
+`soc.fail_command_intent`, each one conditional update judged by the database's
+clock: run twice, the second does nothing.
 
 ---
 
@@ -380,6 +389,13 @@ Owner: the baking tool (`FR-DEP-05`). Retention: until re-baked.
 | `sources` | jsonb | Datasets, dates and licences |
 | `baked_at` | timestamptz | |
 
+## IR-TRQ — Operation transition request · open
+
+The intent `soc-operations` executes (ADR-0006): a member asking an operation to
+move (prepare checks, simulate, launch, finish), with its author, its outcome and
+its refusal reason. Specified with the operations data model in M4; until then
+the state machine of `FR-OPS-02` has no requests to execute.
+
 ## IR-INC — Incident · reserved
 
 Reserved for `FR-FLE-07`: automatic incidents derived from `safety` events and
@@ -390,12 +406,15 @@ incidents entered by hand. Not built in the MVP.
 ## IR-CFG — Configuration
 
 Schema: `contracts/config/soc-config.schema.json`, the single source of every key
-with its type, unit, range, default and the units that read it (`FR-DEP-03`).
+with its type, unit, range, default and the units that read it (`FR-DEP-03`), and
+of every environment variable each service reads, with its rule (ADR-0019). Each
+service's file holds exactly its keys, all required: a default is what a new file
+starts from, never applied at load.
 
 | Key | Default | Notes |
 | --- | --- | --- |
 | `served_organizations` | none | Required. Fail closed (`NFR-SEC-03`) |
-| `stacks` | none | Required by `soc-cloud`: each stack's name, broker, file server and HTTP endpoints, credentials by environment variable name |
+| `stacks` | none | Required by `soc-cloud`: each stack's name, broker, `so-wayline` API and the flight file URL the dock reaches, credentials by environment variable name |
 | `telemetry_stale_after_ms` | 3000 | `FR-TEL-02` |
 | `telemetry_lost_after_ms` | 10000 | `FR-TEL-02` |
 | `telemetry_batch_s` | 5 | `FR-TEL-04`, `NFR-RES-06` |
@@ -414,6 +433,13 @@ with its type, unit, range, default and the units that read it (`FR-DEP-03`).
 
 **IR-CFG-01**: the safety-relevant keys have no permissive fallback; a missing
 one stops the service (`FR-SAF-05`).
+
+**IR-CFG-02**: secrets live only in the environment. The file names a secret by
+its variable (`password_env`, `token_env`), never holds it, and a named variable
+that is unset or weak stops the service (`NFR-SEC-04`).
+
+**IR-CFG-03**: a loaded file is identified by the SHA-256 of its canonical form,
+logged at start with the contract version.
 
 ---
 
@@ -441,3 +467,6 @@ this document updated first.
 | Date | Change |
 | --- | --- |
 | 2026-10-07 | Initial set, MVP scope. |
+| 2026-10-10 | IR-CFG: the environment is declared in the contract, files hold every key, IR-CFG-02 and IR-CFG-03 (ADR-0019). |
+| 2026-10-10 | IR-CMD-01 covers what was asked; IR-CMD-02, `soc-cloud`'s four verbs (migration 0004). |
+| 2026-10-10 | IR-TRQ opened: the operation transition request ADR-0006 names had no entity. |

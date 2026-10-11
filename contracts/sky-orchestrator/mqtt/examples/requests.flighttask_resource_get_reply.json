@@ -1,0 +1,15 @@
+{
+  "tid": "00000000-0000-4000-8000-000000000019",
+  "bid": "00000000-0000-4000-8000-000000000020",
+  "timestamp": 1790800000000,
+  "method": "flighttask_resource_get",
+  "data": {
+    "result": 0,
+    "output": {
+      "file": {
+        "url": "http://192.0.2.10:8333/so-waylines/waylines/w.kmz?X-Amz-Expires=300",
+        "fingerprint": "0123456789abcdef0123456789abcdef"
+      }
+    }
+  }
+}

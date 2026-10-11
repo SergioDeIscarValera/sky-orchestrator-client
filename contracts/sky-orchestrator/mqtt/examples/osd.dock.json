@@ -1,0 +1,18 @@
+{
+  "tid": "00000000-0000-4000-8000-000000000009",
+  "bid": "00000000-0000-4000-8000-000000000010",
+  "timestamp": 1790800000000,
+  "gateway": "SOTESTDOCK01",
+  "data": {
+    "mode_code": 4,
+    "drone_in_dock": 0,
+    "cover_state": 1,
+    "emergency_stop_state": 0,
+    "sub_device": {
+      "device_sn": "SOTESTUAV001",
+      "device_model_key": "0-91-0",
+      "device_online_status": 1,
+      "device_paired": 1
+    }
+  }
+}

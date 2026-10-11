@@ -1,0 +1,4 @@
+# Newly published packages wait a day before pnpm installs them (ADR-0016);
+# Supabase's client is released several times a week and is exempt.
+minimumReleaseAgeExclude:
+  - '@supabase/*'

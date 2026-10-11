@@ -1,0 +1,50 @@
+# The Python workspace: every Python unit is a member with its own pyproject, and
+# one lockfile pins them all with hashes (ADR-0017, NFR-PORT-02).
+
+[tool.uv.workspace]
+members = ["database", "infra/migrate", "libs/soc-config", "libs/soc-log", "libs/soc-db", "libs/soc-supervision", "libs/soc-realtime", "services/soc-cloud", "services/soc-operations", "infra/check"]
+
+[dependency-groups]
+dev = [
+  "asyncpg-stubs==0.32.0",
+  "mypy==2.4.0",
+  "pytest==9.1.1",
+  "pytest-asyncio==1.4.0",
+  "ruff==0.16.10",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+# The repository tools are stdlib scripts run by the system python3 (3.12 and up).
+per-file-target-version = { "tools/**" = "py312" }
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "RUF", "ASYNC", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S105", "S106", "S108", "ASYNC110"]
+"database/src/soc_database/harness.py" = ["S603"]
+"services/soc-cloud/src/soc_cloud/testing.py" = ["S603"]
+"infra/check/src/soc_check/__init__.py" = ["S603"]
+"tools/*.py" = ["S603", "S607"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["soc_*"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+# paho-mqtt ships no annotations on Properties, which an MQTT v5 session needs.
+untyped_calls_exclude = ["paho.mqtt.properties"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+addopts = "-q --strict-markers --import-mode=importlib"
+markers = [
+  "lane: needs Docker, containers from the production images (the container lane, NFR-TEST-02)",
+]

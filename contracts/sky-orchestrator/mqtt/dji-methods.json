@@ -1,0 +1,650 @@
+{
+  "source": {
+    "repository": "dji-sdk/DJI-Cloud-API-Demo",
+    "commit": "bef525cb92772b06786c1e033719a6fa1b94bcc5",
+    "path": "cloud-sdk/src/main/java/com/dji/sdk"
+  },
+  "description": "Every DJI Cloud API method, read from DJI's SDK by tools/dji_methods.py. Generated: do not edit; regenerate from a newer commit instead.",
+  "methods": [
+    {
+      "topic": "drc/down",
+      "method": "drone_control",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "drc/down",
+      "method": "drone_emergency_stop",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "drc/down",
+      "method": "heart_beat",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "drc/up",
+      "method": "delay_info_push",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "drc/up",
+      "method": "drone_control",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "drc/up",
+      "method": "drone_emergency_stop",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "drc/up",
+      "method": "heart_beat",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "drc/up",
+      "method": "hsi_info_push",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "drc/up",
+      "method": "osd_info_push",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "airsense_warning",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "camera_photo_take_progress",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "charge_close",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "charge_open",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "cover_close",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "cover_open",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "custom_data_transmission_from_esdk",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "custom_data_transmission_from_psdk",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "device_exit_homing_notify",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "device_format",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "device_reboot",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "drc_status_notify",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "drone_close",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "drone_format",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "drone_open",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "esim_activate",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "esim_operator_switch",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "file_upload_callback",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "fileupload_progress",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "flight_areas_drone_location",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "flight_areas_sync_progress",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "flighttask_progress",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "flighttask_ready",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "fly_to_point_progress",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "highest_priority_upload_flighttask_media",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "hms",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "joystick_invalid_notify",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "offline_map_sync_progress",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "ota_progress",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "poi_status_notify",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "putter_close",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "putter_open",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "return_home_info",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "events",
+      "method": "takeoff_to_point_progress",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "property/set",
+      "method": "property_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "requests",
+      "method": "airport_bind_status",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "requests",
+      "method": "airport_organization_bind",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "requests",
+      "method": "airport_organization_get",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "requests",
+      "method": "config",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "requests",
+      "method": "flight_areas_get",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "requests",
+      "method": "flighttask_resource_get",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "requests",
+      "method": "offline_map_get",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "requests",
+      "method": "storage_config_get",
+      "direction": "dock_to_cloud"
+    },
+    {
+      "topic": "services",
+      "method": "air_conditioner_mode_switch",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "alarm_state_switch",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "battery_maintenance_switch",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "battery_store_mode_switch",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_aim",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_exposure_mode_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_exposure_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_focal_length_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_focus_mode_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_focus_value_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_look_at",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_mode_switch",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_photo_stop",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_photo_take",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_point_focus_action",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_recording_start",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_recording_stop",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "camera_screen_split",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "charge_close",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "charge_open",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "cover_close",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "cover_open",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "custom_data_transmission_to_esdk",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "custom_data_transmission_to_psdk",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "debug_mode_close",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "debug_mode_open",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "device_format",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "device_reboot",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "drc_mode_enter",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "drc_mode_exit",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "drone_close",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "drone_format",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "drone_open",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "esim_activate",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "esim_operator_switch",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "fileupload_list",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "fileupload_start",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "fileupload_update",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "flight_areas_update",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "flight_authority_grab",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "flighttask_create",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "flighttask_execute",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "flighttask_pause",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "flighttask_prepare",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "flighttask_recovery",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "flighttask_undo",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "fly_to_point",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "fly_to_point_stop",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "fly_to_point_update",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "gimbal_reset",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "ir_metering_area_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "ir_metering_mode_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "ir_metering_point_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "live_lens_change",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "live_set_quality",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "live_start_push",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "live_stop_push",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "offline_map_update",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "ota_create",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "payload_authority_grab",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "photo_storage_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "poi_circle_speed_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "poi_mode_enter",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "poi_mode_exit",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "putter_close",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "putter_open",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "return_home",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "return_home_cancel",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "sdr_workmode_switch",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "sim_slot_switch",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "supplement_light_close",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "supplement_light_open",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "takeoff_to_point",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "upload_flighttask_media_prioritize",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "services",
+      "method": "video_storage_set",
+      "direction": "cloud_to_dock"
+    },
+    {
+      "topic": "status",
+      "method": "update_topo",
+      "direction": "dock_to_cloud"
+    }
+  ]
+}

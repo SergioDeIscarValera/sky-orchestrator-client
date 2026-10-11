@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/osd/dock.schema.json",
+  "title": "Dock OSD",
+  "description": "Dock to cloud on thing/product/{gateway_sn}/osd at osd_publish_hz (FR-TEL-02): the subset of cloudapi/device/OsdDock the emulator states. There is no dock, so every field but sub_device and mode_code is synthetic, a documented constant or a rule, listed in contracts/mqtt/README.md.",
+  "x-version": "1.0.0",
+  "x-topic": "thing/product/{gateway_sn}/osd",
+  "x-direction": "dock_to_cloud",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "gateway",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/own_id"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/own_id"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "gateway": {
+      "$ref": "../dji-envelope.schema.json#/$defs/sn"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode_code",
+        "drone_in_dock",
+        "cover_state",
+        "emergency_stop_state",
+        "sub_device"
+      ],
+      "properties": {
+        "mode_code": {
+          "enum": [
+            0,
+            4
+          ],
+          "description": "DockModeCodeEnum: 0 idle, 4 working while a flight task is unfinished."
+        },
+        "drone_in_dock": {
+          "$ref": "../dji-envelope.schema.json#/$defs/flag"
+        },
+        "cover_state": {
+          "enum": [
+            0,
+            1
+          ],
+          "description": "CoverStateEnum: closed or opened."
+        },
+        "emergency_stop_state": {
+          "$ref": "../dji-envelope.schema.json#/$defs/flag"
+        },
+        "sub_device": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "device_sn",
+            "device_model_key",
+            "device_online_status",
+            "device_paired"
+          ],
+          "properties": {
+            "device_sn": {
+              "$ref": "../dji-envelope.schema.json#/$defs/sn"
+            },
+            "device_model_key": {
+              "type": "string",
+              "pattern": "^[0-9]+-[0-9]+-[0-9]+$",
+              "description": "domain-type-sub_type, as DeviceEnum serialises."
+            },
+            "device_online_status": {
+              "$ref": "../dji-envelope.schema.json#/$defs/flag"
+            },
+            "device_paired": {
+              "$ref": "../dji-envelope.schema.json#/$defs/flag"
+            }
+          }
+        }
+      }
+    }
+  }
+}

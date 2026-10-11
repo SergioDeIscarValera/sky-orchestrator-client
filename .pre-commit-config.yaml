@@ -14,9 +14,13 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: \.md$
+        exclude: (\.md$|^contracts/sky-orchestrator/)
       - id: end-of-file-fixer
+        exclude: ^contracts/sky-orchestrator/
+      # pnpm writes its lockfile as several YAML documents and parses it itself
+      # (`pnpm install --frozen-lockfile` in CI).
       - id: check-yaml
+        exclude: ^apps/soc-web/pnpm-lock\.yaml$
       - id: check-json
       - id: check-toml
       - id: check-merge-conflict
@@ -24,6 +28,7 @@ repos:
       - id: check-executables-have-shebangs
       - id: mixed-line-ending
         args: [--fix=lf]
+        exclude: ^contracts/sky-orchestrator/
       - id: check-added-large-files
         args: [--maxkb=512]
       - id: detect-private-key
@@ -60,12 +65,110 @@ repos:
         pass_filenames: false
         files: \.md$
 
+      - id: sky-orchestrator-contracts
+        name: sky orchestrator's vendored contracts are unchanged
+        entry: python3 tools/vendor_sky_orchestrator.py --check
+        language: system
+        pass_filenames: false
+        files: ^(contracts/sky-orchestrator/|tools/vendor_sky_orchestrator\.py$)
+
       - id: traceability
         name: traceability matrix equals the requirements
         entry: python3 tools/check_traceability.py
         language: system
         pass_filenames: false
         files: ^docs/requirements/
+
+      - id: python-lint
+        name: python lint and format
+        entry: bash -c 'uv run --frozen ruff check && uv run --frozen ruff format --check'
+        language: system
+        pass_filenames: false
+        files: (\.py|^pyproject\.toml)$
+
+      - id: tools-types
+        name: tools types
+        entry: uv run --frozen mypy --python-version 3.12 tools
+        language: system
+        pass_filenames: false
+        files: ^(tools/.*\.py|pyproject\.toml)$
+
+      - id: database-types
+        name: database types
+        entry: uv run --frozen mypy database
+        language: system
+        pass_filenames: false
+        files: ^(database/.*\.py|pyproject\.toml|uv\.lock)$
+
+      - id: soc-migrate-gate
+        name: soc-migrate gate
+        entry: bash -c 'uv run --frozen mypy infra/migrate && uv run --frozen pytest infra/migrate/tests'
+        language: system
+        pass_filenames: false
+        files: ^(infra/migrate/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-config-gate
+        name: soc-config gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-config && uv run --frozen pytest libs/soc-config/tests'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-config/|contracts/config/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-log-gate
+        name: soc-log gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-log && uv run --frozen pytest libs/soc-log/tests'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-log/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-supervision-gate
+        name: soc-supervision gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-supervision && uv run --frozen pytest libs/soc-supervision/tests'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-supervision/|libs/soc-log/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-db-gate
+        name: soc-db gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-db && uv run --frozen pytest libs/soc-db/tests -m "not lane"'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-db/|libs/soc-supervision/|libs/soc-log/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-cloud-gate
+        name: soc-cloud gate
+        entry: bash -c 'uv run --frozen mypy services/soc-cloud && uv run --frozen pytest services/soc-cloud/tests -m "not lane"'
+        language: system
+        pass_filenames: false
+        files: ^(services/soc-cloud/|libs/|contracts/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-operations-gate
+        name: soc-operations gate
+        entry: bash -c 'uv run --frozen mypy services/soc-operations && uv run --frozen pytest services/soc-operations/tests -m "not lane"'
+        language: system
+        pass_filenames: false
+        files: ^(services/soc-operations/|libs/|contracts/config/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-check-gate
+        name: soc-check gate
+        entry: bash -c 'uv run --frozen mypy infra/check && uv run --frozen pytest infra/check/tests -m "not lane"'
+        language: system
+        pass_filenames: false
+        files: ^(infra/check/|libs/soc-config/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-web-gate
+        name: soc-web gate
+        entry: bash -c 'cd apps/soc-web && pnpm typecheck && pnpm lint && pnpm format:check && pnpm test'
+        language: system
+        pass_filenames: false
+        files: ^apps/soc-web/
+
+      - id: soc-realtime-gate
+        name: soc-realtime gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-realtime && uv run --frozen pytest libs/soc-realtime/tests -m "not lane"'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-realtime/|libs/soc-supervision/|libs/soc-log/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
 
       - id: tools-gate-tests
         name: tools gate tests

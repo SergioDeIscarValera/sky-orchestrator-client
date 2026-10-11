@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/mqtt/services/flighttask_prepare.schema.json",
+  "title": "flighttask_prepare",
+  "description": "From DJI's SDK at bef525cb: cloudapi/wayline/FlighttaskPrepareRequest. The file is named by URL and MD5; the dock fetches it (ADR-0027). rth_altitude, out_of_control_action and exit_wayline_when_rc_lost are read and not applied: the device's own envelope governs (NFR-SAF-01, ADR-0011). 1.1.0: simulate_mission is held to DJI's SimulateMission, every field required, and must agree with the deployment's mode (FR-FLT-11, ADR-0037).",
+  "x-version": "1.1.0",
+  "x-topic": "thing/product/{gateway_sn}/services",
+  "x-direction": "cloud_to_dock",
+  "type": "object",
+  "required": [
+    "tid",
+    "bid",
+    "timestamp",
+    "method",
+    "data"
+  ],
+  "properties": {
+    "tid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/tid"
+    },
+    "bid": {
+      "$ref": "../dji-envelope.schema.json#/$defs/bid"
+    },
+    "timestamp": {
+      "$ref": "../dji-envelope.schema.json#/$defs/timestamp"
+    },
+    "method": {
+      "const": "flighttask_prepare"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "flight_id",
+        "task_type",
+        "wayline_type",
+        "file",
+        "rth_altitude",
+        "out_of_control_action",
+        "exit_wayline_when_rc_lost"
+      ],
+      "properties": {
+        "flight_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[^<>:\"/|?*._\\\\]+$",
+          "description": "FlighttaskPrepareRequest's pattern; so-fleet's flight ids are a superset."
+        },
+        "execute_time": {
+          "type": "integer",
+          "minimum": 123456789012
+        },
+        "task_type": {
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "description": "TaskTypeEnum: immediate, timed, conditional. Only immediate is implemented (FR-FLT-10)."
+        },
+        "wayline_type": {
+          "enum": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "description": "WaylineTypeEnum. Only 0, waypoint, is implemented."
+        },
+        "file": {
+          "type": "object",
+          "required": [
+            "url",
+            "fingerprint"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 4096
+            },
+            "fingerprint": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{32}$"
+            }
+          }
+        },
+        "ready_conditions": {
+          "type": "object"
+        },
+        "executable_conditions": {
+          "type": "object"
+        },
+        "break_point": {
+          "type": "object"
+        },
+        "rth_altitude": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 1500
+        },
+        "out_of_control_action": {
+          "enum": [
+            0,
+            1,
+            2
+          ]
+        },
+        "exit_wayline_when_rc_lost": {
+          "enum": [
+            0,
+            1
+          ]
+        },
+        "rth_mode": {
+          "enum": [
+            0,
+            1
+          ]
+        },
+        "simulate_mission": {
+          "type": "object",
+          "required": [
+            "is_enable",
+            "latitude",
+            "longitude"
+          ],
+          "properties": {
+            "is_enable": {
+              "enum": [
+                0,
+                1
+              ],
+              "description": "SimulateSwitchEnum: 1 asks for the simulator. It must agree with the deployment's mode, or the prepare is refused (FR-FLT-11, ADR-0037)."
+            },
+            "latitude": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90,
+              "description": "Read and not applied: the simulator flies where the deployment puts it, the geofence's centre."
+            },
+            "longitude": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "description": "Read and not applied, as latitude."
+            }
+          },
+          "description": "From DJI's SDK: SimulateMission, every field NotNull. Absent asks for a real flight."
+        },
+        "wayline_precision_type": {
+          "enum": [
+            0,
+            1
+          ],
+          "description": "NotNull for a Dock 2 in the SDK, and not sent by DJI's own demo cloud: optional here."
+        }
+      }
+    }
+  }
+}

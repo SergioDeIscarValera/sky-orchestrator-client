@@ -2,8 +2,8 @@ name: Release
 
 # Tags and publishes a release when a release or hotfix pull request merges into
 # main. The version is the one the branch declared, verified again here before
-# the tag exists. Then it opens the back-merge into develop. Service images join
-# this workflow when the services exist (M1). See docs/github-governance.md.
+# the tag exists. Then it publishes the service images at that tag and opens the
+# back-merge into develop (FR-DEP-06). See docs/github-governance.md.
 
 on:
   pull_request:
@@ -72,6 +72,52 @@ jobs:
           REPO: ${{ github.repository }}
         run: gh release create "$VERSION" --repo "$REPO" --title "$VERSION" --generate-notes --verify-tag
 
+  images:
+    name: Publish the service images
+    needs: tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    env:
+      SERVICES: "soc-cloud=services/soc-cloud/Dockerfile soc-operations=services/soc-operations/Dockerfile soc-migrate=infra/migrate/Dockerfile soc-web=apps/soc-web/Dockerfile"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.tag.outputs.version }}
+
+      - name: Sign in to the registry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+
+      # Image tags are never moved, like git tags: an existing one fails the job.
+      - name: Build and push each image at the release tag
+        env:
+          VERSION: ${{ needs.tag.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          registry="ghcr.io/${OWNER,,}/sky-orchestrator-client"
+          for entry in $SERVICES; do
+            service="${entry%%=*}"
+            dockerfile="${entry#*=}"
+            image="$registry/$service:$VERSION"
+            if docker manifest inspect "$image" >/dev/null 2>&1; then
+              echo "::error::$image already exists. Image tags are never moved." >&2
+              exit 1
+            fi
+            docker build -f "$dockerfile" -t "$image" \
+              --label "org.opencontainers.image.source=https://github.com/$REPO" \
+              --label "org.opencontainers.image.version=$VERSION" \
+              --label "org.opencontainers.image.revision=$REVISION" .
+            docker push "$image"
+          done
+
   back_merge:
     name: Open the back-merge into develop
     needs: tag
@@ -111,4 +157,4 @@ jobs:
             --base develop \
             --head "$source" \
             --title "chore(repo): back-merge $VERSION into develop" \
-            --body "Automatic back-merge so develop carries everything released in \`$VERSION\`, including its merge commit. Cut from main as a throwaway branch, deleted on merge. Merge with a merge commit (ADR-0003)."
+            --body "Automatic back-merge so develop carries everything released in \`$VERSION\`, including its merge commit. Cut from main as a throwaway branch, deleted on merge. GitHub starts no workflow for a pull request a workflow opens: close and reopen this one to run its checks, then merge it with a merge commit (ADR-0003)."
