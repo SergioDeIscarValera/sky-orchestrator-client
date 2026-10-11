@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 
+import { faviconSvg } from './src/theme/favicon.ts'
+
 /** soc-web's configuration file, or null when it is not given or not JSON: the console then says so. */
 function settingsFile(path: string | undefined): unknown {
   if (path === undefined) return null
@@ -39,8 +41,29 @@ function runtimeConfiguration(): Plugin {
   }
 }
 
+/**
+ * The console's favicon, drawn from the theme's tokens (NFR-UX-01): served at
+ * /favicon.svg in development and emitted as the same file in the build.
+ */
+function favicon(): Plugin {
+  const svg = (): string =>
+    faviconSvg(readFileSync(new URL('./src/theme/theme.css', import.meta.url), 'utf8'))
+  return {
+    name: 'soc-favicon',
+    configureServer(server) {
+      server.middlewares.use('/favicon.svg', (_request, response) => {
+        response.setHeader('content-type', 'image/svg+xml')
+        response.end(svg())
+      })
+    },
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'favicon.svg', source: svg() })
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), runtimeConfiguration()],
+  plugins: [react(), tailwindcss(), runtimeConfiguration(), favicon()],
   build: { target: 'baseline-widely-available', sourcemap: false, manifest: true },
   test: {
     environment: 'happy-dom',

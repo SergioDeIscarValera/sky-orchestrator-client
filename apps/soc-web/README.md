@@ -100,7 +100,7 @@ The other panels' content arrives with their milestones ([roadmap](../../docs/ro
 | `src/fleets`        | The catalogue's, devices' and fleets' queries and writes; `useLiveState`, which keeps the open organization's queries current from its state topic; the fleet panel, the fleet's and the aircraft's details, and their formatting |
 | `src/app`           | The application, the shell, the scene's region (loaded lazily), the shared card layout and styles                                                                                                                                 |
 | `src/scene`         | The scene: the site, the camera and its limits (`flyTo`), the ground, the palette from the tokens, the frame sampler, the map tools                                                                                               |
-| `src/theme`         | The tokens and the theme switch                                                                                                                                                                                                   |
+| `src/theme`         | The tokens, the theme switch and the favicon drawn from them                                                                                                                                                                      |
 | `src/test`          | The fakes the tests use: `FakeBackend` for components, `FakeSupabase` behind `fetch` for the Supabase implementation                                                                                                              |
 
 A query about one organization's data uses `organizationKey(id, ...)`, so that
@@ -175,6 +175,12 @@ emphasis colour, and text on the primary fill is `on-primary` (`#1e3a33`,
 and emphasis pairs are Bootstrap 5.3's derivation from Minty. The light theme's
 muted text is `#687179`, not Bootstrap's `#6c757d`, which reaches only 4.45:1
 on the page colour.
+
+The favicon (`/favicon.svg`) is the brand's dot: `src/theme/favicon.ts` reads
+`--color-primary` and `--color-casing` from the light theme's `@theme` block and
+writes the SVG, which `vite.config.ts` serves in development and emits in the
+build. `index.html` declares it, so browsers that take an SVG icon stop asking
+for `/favicon.ico`.
 
 ## Failure modes
 
