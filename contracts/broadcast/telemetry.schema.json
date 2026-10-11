@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator-client/blob/develop/contracts/broadcast/telemetry.schema.json",
+  "title": "A live telemetry sample",
+  "description": "The payload of the `sample` event on the private topic `org:<id>:soc:telemetry` (FR-TEL-01, ADR-0007): one aircraft OSD as soc-cloud read it, at the time the aircraft took it. A value the OSD lacked is null, never the previous sample's (FR-LNK-03). Units and frames are Sky Orchestrator's (ADR-0014).",
+  "x-version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stack",
+    "gateway_sn",
+    "aircraft_sn",
+    "taken_at_ms",
+    "sent_at_ms",
+    "latitude_deg",
+    "longitude_deg",
+    "height_m",
+    "heading_deg",
+    "home_distance_m",
+    "battery_pct",
+    "satellites",
+    "gps_quality",
+    "mode_code"
+  ],
+  "properties": {
+    "stack": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,30}$", "description": "The stack's configured name." },
+    "gateway_sn": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+    "aircraft_sn": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+    "taken_at_ms": { "type": "integer", "minimum": 0, "description": "When the aircraft took it: the OSD's timestamp, Unix milliseconds." },
+    "sent_at_ms": { "type": "integer", "minimum": 0, "description": "When soc-cloud broadcast it, Unix milliseconds, for the delivery latency (NFR-PERF-01)." },
+    "latitude_deg": { "type": ["number", "null"], "minimum": -90, "maximum": 90 },
+    "longitude_deg": { "type": ["number", "null"], "minimum": -180, "maximum": 180 },
+    "height_m": { "type": ["number", "null"], "description": "Above the takeoff point." },
+    "heading_deg": { "type": ["number", "null"], "description": "From true north, clockwise, as DJI reports it." },
+    "home_distance_m": { "type": ["number", "null"], "minimum": 0 },
+    "battery_pct": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+    "satellites": { "type": ["integer", "null"], "minimum": 0 },
+    "gps_quality": { "type": ["integer", "null"], "minimum": 0 },
+    "mode_code": { "type": ["integer", "null"], "minimum": 0, "description": "DJI's flight mode code." }
+  }
+}
