@@ -16,12 +16,18 @@ import {
   FIELD_OF_VIEW_DEG,
   FRAME_DISTANCE_M,
   INSPECTOR_SPAN_PX,
+  PANEL_SPAN_PX,
+  RAIL_SPAN_PX,
+  coveredBy,
   configureControls,
   flyTo,
+  follow,
   framePose,
   lowestCameraHeightM,
   overviewPose,
 } from './camera'
+import { replaySample } from '../telemetry/replay'
+import { drawnAt } from './aircraft'
 import { FLAT_SITE } from './site'
 
 CameraControls.install({
@@ -108,7 +114,7 @@ describe('the camera (FR-SCN-03)', () => {
 })
 
 describe('flying to an aircraft (FR-SCN-05)', () => {
-  it('frames it in the middle of the view the inspector leaves, at the angle the user chose', () => {
+  it('frames it in the middle of the view the cards leave free, at the angle the user chose', () => {
     const viewport = { width: 1440, height: 900 }
     const camera = { position: new Vector3(200, 400, 600), target: new Vector3(0, 0, 0) }
     const subject = new Vector3(320, 40, -150)
@@ -126,13 +132,83 @@ describe('flying to an aircraft (FR-SCN-05)', () => {
     const seen = subject.clone().project(lens)
     const pixelX = ((seen.x + 1) / 2) * viewport.width
     const pixelY = ((1 - seen.y) / 2) * viewport.height
-    expect(pixelX).toBeCloseTo((viewport.width - INSPECTOR_SPAN_PX) / 2, 0)
+    expect(pixelX).toBeCloseTo((RAIL_SPAN_PX + viewport.width - INSPECTOR_SPAN_PX) / 2, 0)
     expect(pixelY).toBeCloseTo(viewport.height / 2, 0)
+
+    const beside = framePose(subject, camera, viewport, coveredBy(true))
+    lens.position.copy(beside.position)
+    lens.lookAt(beside.target)
+    lens.updateMatrixWorld()
+    const besidePanel = ((subject.clone().project(lens).x + 1) / 2) * viewport.width
+    expect(besidePanel).toBeCloseTo((PANEL_SPAN_PX + viewport.width - INSPECTOR_SPAN_PX) / 2, 0)
   })
 
-  it('centres it on a view too narrow to leave room beside the inspector', () => {
+  it('centres it on a view too narrow to leave room between the cards', () => {
     const camera = { position: new Vector3(0, 300, 300), target: new Vector3(0, 0, 0) }
     const pose = framePose(new Vector3(10, 0, 10), camera, { width: 600, height: 900 })
     expect(pose.target.toArray()).toEqual([10, 0, 10])
+  })
+})
+
+describe('following a pinned aircraft (FR-SCN-05)', () => {
+  it('keeps one flying at 15 m/s in the central fifth of the view for a 60 s replayed track', () => {
+    const viewport = { width: 1440, height: 900 }
+    const farm = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
+    const thresholds = { telemetryStaleAfterMs: 3000, telemetryLostAfterMs: 10000 }
+    const camera = new PerspectiveCamera(
+      FIELD_OF_VIEW_DEG,
+      viewport.width / viewport.height,
+      1,
+      2e4,
+    )
+    const controls = new CameraControls(camera, document.createElement('div'))
+    configureControls(controls, FLAT_SITE, true)
+    void flyTo(controls, overviewPose(FLAT_SITE), FLAT_SITE, false)
+    controls.update(0)
+
+    // Samples at 5 Hz, received as taken; frames at 30 Hz, the aircraft drawn as the scene draws it.
+    const at = (ms: number) => {
+      const index = Math.floor(ms / 200)
+      const track = {
+        latest: { sample: replaySample(farm, index, 0), receivedAt: index * 200 },
+        previous:
+          index === 0
+            ? null
+            : { sample: replaySample(farm, index - 1, 0), receivedAt: index * 200 - 200 },
+      }
+      const drawn = drawnAt(track, farm, ms, thresholds)
+      if (drawn === null) throw new Error('nothing drawn')
+      return new Vector3(drawn.placement.x, drawn.placement.y, drawn.placement.z)
+    }
+    const pose = framePose(
+      at(0),
+      {
+        position: controls.getPosition(new Vector3()),
+        target: controls.getTarget(new Vector3()),
+      },
+      viewport,
+    )
+    void flyTo(controls, pose, FLAT_SITE, false)
+    controls.update(0)
+
+    const visible = viewport.width - RAIL_SPAN_PX - INSPECTOR_SPAN_PX
+    const middle = RAIL_SPAN_PX + visible / 2
+    const worst = { x: 0, y: 0 }
+    let previous = at(0)
+    for (let ms = 1000 / 30; ms <= 60_000; ms += 1000 / 30) {
+      const subject = at(ms)
+      void follow(controls, previous, subject, FLAT_SITE)
+      controls.update(1 / 30)
+      previous = subject
+      camera.updateMatrixWorld()
+      const seen = subject.clone().project(camera)
+      const x = ((seen.x + 1) / 2) * viewport.width - middle
+      const y = ((1 - seen.y) / 2) * viewport.height - viewport.height / 2
+      worst.x = Math.max(worst.x, Math.abs(x))
+      worst.y = Math.max(worst.y, Math.abs(y))
+    }
+    // The central fifth of the view the cards leave free: a tenth either side of its middle.
+    expect(worst.x).toBeLessThanOrEqual(visible / 10)
+    expect(worst.y).toBeLessThanOrEqual(viewport.height / 10)
   })
 })

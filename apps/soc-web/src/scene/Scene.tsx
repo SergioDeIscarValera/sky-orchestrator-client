@@ -20,7 +20,7 @@ export default function Scene({ site, organizationId, origin }: Props) {
   return (
     <Canvas {...CANVAS_SETTINGS} dpr={[...CANVAS_SETTINGS.dpr]}>
       <SceneContents site={site} />
-      <Aircraft origin={origin} />
+      <Aircraft origin={origin} site={site} />
       <Controls site={site} organizationId={organizationId} />
       <Meter />
     </Canvas>
