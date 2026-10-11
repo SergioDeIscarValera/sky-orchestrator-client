@@ -9,7 +9,7 @@ export function AccountMenu() {
   const account = useAccount()
   const backend = useBackend()
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger
         aria-label="Account"
         className="rounded-pill text-muted hover:bg-primary-subtle hover:text-primary-emphasis grid size-9 place-items-center transition-colors duration-200"
