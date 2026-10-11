@@ -33,6 +33,11 @@ The console: one persistent 3D scene of the farm with floating panels
   and the map tools bring it closer, farther, or back to the overview; with
   reduced motion it cuts instead of flying (ADR-0021). It renders only when
   something changes: no frame while idle (`NFR-RES-01`).
+- **The view in the URL** (`NFR-UX-03`): the rail opens and closes a panel
+  beside it, kept as `?panel=` with the selection, so a link shared on the LAN
+  opens the same view; a value the console cannot read is left out, and Escape
+  closes the open panel (`NFR-UX-04`). The panels' content arrives with their
+  milestones, each saying when.
 - **The scene's statistics** with `?stats` (`NFR-OBS-05`): frames rendered, the
   frame time at p95 while it moves, draw calls, triangles, geometries and
   textures; the sampler is then `window.socScene`.

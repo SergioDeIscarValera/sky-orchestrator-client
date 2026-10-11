@@ -7,7 +7,7 @@ import type { Backend } from '../backend/backend'
 import { BackendContext, useBackend } from '../backend/context'
 import { OrganizationGate } from '../organizations/OrganizationGate'
 import { Waiting } from './Centered'
-import { Shell } from './Shell'
+import { Console } from './Console'
 
 interface Props {
   readonly backend: Backend
@@ -41,7 +41,7 @@ function Session() {
       return (
         <AccountContext value={state.account}>
           <OrganizationGate key={state.account.userId}>
-            <Shell />
+            <Console />
           </OrganizationGate>
         </AccountContext>
       )

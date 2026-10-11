@@ -1,5 +1,6 @@
 import { MapTools } from '../scene/MapTools'
 import { NavigationRail } from './NavigationRail'
+import { PanelHost } from './PanelHost'
 import { SceneRegion } from './SceneRegion'
 import { TopBar } from './TopBar'
 
@@ -14,8 +15,11 @@ export function Shell() {
         <div className="self-start">
           <NavigationRail />
         </div>
-        <div className="flex items-end justify-end">
-          <MapTools />
+        <div className="flex min-h-0 flex-col items-start justify-between">
+          <PanelHost />
+          <div className="self-end">
+            <MapTools />
+          </div>
         </div>
         <aside
           aria-label="Inspector"
