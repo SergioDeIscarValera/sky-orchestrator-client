@@ -542,6 +542,9 @@ wayline, the geofence or the fleet makes a new file and returns the operation to
 ### FR-OPS-08 — Inside the device envelope · MUST
 The geofence, at its ceiling, lies inside the stack's device envelope: its
 circle and its height limit (SO's FR-WAY-11). Unknown envelope fails the check.
+The envelope SOC can read is so-wayline's (`/v1/envelope`); the phone enforces
+its own, which is set equal to it by hand and compared before a real flight
+(dependencies, "Two envelopes").
 
 **Acceptance**: a geofence one metre outside the circle fails `PF-ENVELOPE`
 naming the vertex.
@@ -550,7 +553,8 @@ naming the vertex.
 From `ready`, after explicit confirmation by a pilot, the real flight is prepared
 with the same file and executed. Refusals are shown with their meaning, told
 apart by the method that drew them (SO's ADR-0037): `314010` on a prepare, "this
-file has not completed a simulation on this stack"; `314010` on an execute, "arm
+file has not completed a simulation on this stack, or lies outside the phone's
+own envelope: the phone's record names the distance"; `314010` on an execute, "arm
 the phone, release the aircraft held from the phone's console, or confirm real
 flight on the phone's screen, and retry" (`DEP-12`; a phone whose app build has
 no simulator pass cannot fly real, SO's ADR-0040; SO does not say which before
