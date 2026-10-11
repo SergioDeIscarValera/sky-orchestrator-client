@@ -95,7 +95,7 @@ The MVP is M5: **a first real flight commanded from SOC**
 | Fleet panels: catalogue, devices seen, registration, detail, retirement | `feature/web/panels`, merged (#54, the view in the URL); `feature/web/fleet-data`, merged (#55); `feature/web/fleet-panel`, merged (#56); `feature/web/fleet-forms`, merged (#60) |
 | Aircraft in the scene: model, stalk, labels, selection, pin and follow, fly-to | `feature/web/settings`, merged (#61, the console's thresholds); `feature/web/live-telemetry`, merged (#62, the browser's telemetry and the inspector's live values); `feature/web/scene-aircraft`, merged (#70); `feature/web/scene-selection`, merged (#72); `feature/web/scene-pin`, merged (#73); `feature/web/delivery-latency`, merged (#74) |
 | Site model: the baking tool, stylised terrain, contours, markers | `feature/infra/site-bake`, merged (#75, the baking tool); `feature/web/site-terrain`, merged (#77); `feature/web/serve-site`, merged (#78); `feature/web/heights-over-terrain`, merged (#79); `feature/web/camera-over-terrain`, merged (#81) |
-| Measured: the frame time on the production build, and the exit criteria through the console | `feature/web/measure-frames`, merged (#80, `pnpm measure`); `feature/infra/console-e2e` (`infra/e2e`: the platform behind Kong, soc-cloud, a dock, the console in Chrome) |
+| Measured: the frame time on the production build, and the exit criteria through the console | `feature/web/measure-frames`, merged (#80, `pnpm measure`); `feature/infra/console-e2e` (#82, `infra/e2e`: the platform behind Kong, soc-cloud, a dock, the console in Chrome) |
 
 **Exit criteria**
 
