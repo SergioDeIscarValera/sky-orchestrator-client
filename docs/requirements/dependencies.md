@@ -34,6 +34,30 @@ pinned to Sky Orchestrator's v0.4.1 tag, the release that publishes `DEP-01` to
 SO's `infra/fly.py --stop-after S` sends `return_home` S seconds into a route: the
 reference SOC's stop path is compared with.
 
+### What SO's M4 phone session showed (2026-10-11)
+
+Every M4 step passed in the simulator on the real Mavic Air 2, through the stack
+on DJI's wire. What SOC's operation flow takes from it (M4):
+
+- **After a `314010` on execute** (`DEP-12`, the operator holds the aircraft),
+  the task stays `PREPARED`. SOC retries the execute once the operator releases,
+  or sends `flighttask_undo`; a new prepare before either is refused `319016`,
+  one task at a time (SO's FR-FLT-09).
+- **`return_home`** ends the task `COMPLETED_ABORTED` with `322283`, and the task
+  stays `RETURNING` until the aircraft is on the ground: near home it lands where
+  it is, away from home the landing waits for the pilot's stick (SO's ADR-0018).
+  SOC gives that state no timeout of its own.
+- **`link.changed_at_ms`** in `/v1/status` means when the link came up (SO PR
+  #121), no longer every change of its health.
+- **`flighttask_progress.ext.media_count`** will carry the number of files the
+  camera wrote during the task from SO's bridge contract 1.7.0 (`DEP-13` records
+  0 today; DJI's wire shape is unchanged). SOC reads nothing from it yet.
+  Downloading the images is SO's M5, which suits SOC: it has no media
+  requirement before then.
+- Measured on the phone: OSD at 5 Hz, 300 of 300 messages in 60 s for aircraft
+  and dock; clock offset −504 ± 18 ms; a 31.9 s loss of the phone's Wi-Fi
+  mid-mission survived, the task ending `COMPLETED_OK`; 13 photos, 13 files.
+
 A stack whose status cannot be read has an unknown mode, and SOC refuses to
 prepare (`FR-SAF-04`). With SO's link down, its status still carries the
 deployment's simulator mode, so `simulate_mission` can always be set from it.
