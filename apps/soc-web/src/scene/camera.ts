@@ -89,18 +89,34 @@ function boundary(site: Site): Box3 {
 
 /** How far from an aircraft the camera stops when it flies to frame it. */
 export const FRAME_DISTANCE_M = 140
-/** The inspector's width and its gutters, which the framed aircraft keeps clear of. */
+/** What the cards over the scene cover from its sides, gutters included (the shell's layout). */
+export const RAIL_SPAN_PX = 16 + 60 + 16
+export const PANEL_SPAN_PX = RAIL_SPAN_PX + 384 + 16
 export const INSPECTOR_SPAN_PX = 360 + 32
+/** Narrower than this, the free view is too small to frame in: the whole view is used. */
+const SMALLEST_FREE_PX = 320
+
+/** The pixels the cards cover on the left and on the right of the scene. */
+export interface Covered {
+  readonly leftPx: number
+  readonly rightPx: number
+}
+
+/** The rail, or the open panel beside it, on the left; the inspector on the right. */
+export function coveredBy(panelOpen: boolean): Covered {
+  return { leftPx: panelOpen ? PANEL_SPAN_PX : RAIL_SPAN_PX, rightPx: INSPECTOR_SPAN_PX }
+}
 
 /**
- * The pose that frames `subject` beside the inspector: the camera keeps the angle
- * the user chose and comes to FRAME_DISTANCE_M, with its target moved right by half
- * the inspector, so the subject sits in the middle of the view the inspector leaves.
+ * The pose that frames `subject` in the middle of the view the cards leave free:
+ * the camera keeps the angle the user chose and comes to FRAME_DISTANCE_M, its
+ * target moved sideways by as much as the free view's middle is off the screen's.
  */
 export function framePose(
   subject: Vector3,
   camera: { readonly position: Vector3; readonly target: Vector3 },
   viewportPx: { readonly width: number; readonly height: number },
+  covered: Covered = coveredBy(false),
 ): Pose {
   const direction = camera.position.clone().sub(camera.target)
   if (direction.lengthSq() === 0) direction.set(0, 1, 1)
@@ -109,8 +125,39 @@ export function framePose(
   const metresPerPixel =
     (2 * FRAME_DISTANCE_M * Math.tan(MathUtils.degToRad(FIELD_OF_VIEW_DEG) / 2)) /
     Math.max(1, viewportPx.height)
-  const shiftM =
-    viewportPx.width > INSPECTOR_SPAN_PX * 2 ? (INSPECTOR_SPAN_PX / 2) * metresPerPixel : 0
+  const free = viewportPx.width - covered.leftPx - covered.rightPx
+  // The free view's middle sits this far left of the screen's; the target goes as far right.
+  const offCentrePx = free >= SMALLEST_FREE_PX ? (covered.rightPx - covered.leftPx) / 2 : 0
+  const shiftM = offCentrePx * metresPerPixel
   const target = subject.clone().addScaledVector(right, shiftM)
   return { target, position: target.clone().addScaledVector(direction, FRAME_DISTANCE_M) }
+}
+
+/** Within this distance of its framing pose, a camera flying to a pinned subject has arrived. */
+export const ARRIVED_M = 0.5
+/** A camera flight lasts at most this long (the design's motion rules); then it follows. */
+export const LONGEST_FLIGHT_MS = 1200
+
+/**
+ * Moves the camera with a pinned subject from `from` to `to`: its target and its
+ * position shift by the subject's motion, so the user's angle and distance, and
+ * where the subject sits in the view, stay as they were (FR-SCN-05). Through
+ * flyTo, so within the camera's limits.
+ */
+export function follow(
+  controls: CameraControls,
+  from: Vector3,
+  to: Vector3,
+  site: Site,
+): Promise<void> {
+  const shift = to.clone().sub(from)
+  return flyTo(
+    controls,
+    {
+      position: controls.getPosition(new Vector3()).add(shift),
+      target: controls.getTarget(new Vector3()).add(shift),
+    },
+    site,
+    false,
+  )
 }

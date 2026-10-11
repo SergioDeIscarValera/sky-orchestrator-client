@@ -142,6 +142,18 @@ const DEVICES_BY_ORGANIZATION = new Map([
         firstSeen: '2026-10-11T10:30:00+00:00',
         lastSeen: '2026-10-11T11:58:00+00:00',
       }),
+      // The aircraft `?replay` flies in development (src/telemetry/replay.ts), on a stack of its own.
+      {
+        ...device('REPLAYUAV', {
+          online: true,
+          linkState: 'connected',
+          firmware: '10.01.0004',
+          firstSeen: '2026-10-11T08:00:00+00:00',
+          lastSeen: '2026-10-11T12:41:00+00:00',
+        }),
+        gateway_sn: 'REPLAYDOCK',
+        stacks: { name: 'replay', link_state: 'connected' },
+      },
     ],
   ],
 ])

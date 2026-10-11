@@ -5,6 +5,7 @@ import { parseRuntimeConfiguration } from '../../src/config/runtime'
 import { PASSWORD_FOR_TESTS } from '../../src/test/keys'
 import { startFakeSupabase, type FakeSupabase } from './fake-supabase.mjs'
 import { DEMO_SETTINGS, demoSupabaseKey } from './run.mjs'
+import { REPLAY } from '../../src/telemetry/replay'
 
 const EMAIL = 'pilot@farm.test'
 const NORTH = '11111111-1111-4111-8111-111111111111'
@@ -97,15 +98,22 @@ describe('the demo Supabase, read through the console backend', () => {
     )
   })
 
-  it('answers the three aircraft that stack lab announced to Finca Norte', async () => {
+  it('answers the aircraft of Finca Norte: three on stack lab, and the replay on its own', async () => {
     const devices = await backend.devices(NORTH)
     expect(
-      devices.map(({ aircraftSn, online, stack }) => [aircraftSn, online, stack.linkState]),
+      devices.map(({ aircraftSn, online, stack }) => [
+        aircraftSn,
+        online,
+        stack.name,
+        stack.linkState,
+      ]),
     ).toEqual([
-      ['1WNBH9E00A0042', true, 'connected'],
-      [NO_FLEET_AIRCRAFT, true, 'connected'],
-      ['5HPCJ4T00D2M77', true, 'unreachable'],
+      ['1WNBH9E00A0042', true, 'lab', 'connected'],
+      [NO_FLEET_AIRCRAFT, true, 'lab', 'connected'],
+      ['5HPCJ4T00D2M77', true, 'lab', 'unreachable'],
+      ['REPLAYUAV', true, 'replay', 'connected'],
     ])
+    expect(devices.at(-1)?.gatewaySn).toBe(REPLAY.gatewaySn)
   })
 
   it('answers the one fleet of Finca Norte, and nothing for Almendral', async () => {

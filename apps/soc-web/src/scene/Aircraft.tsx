@@ -1,10 +1,11 @@
 import { Html } from '@react-three/drei'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import type { Group } from 'three'
+import type CameraControlsImpl from 'camera-controls'
+import { Vector3, type Group } from 'three'
 
 import { aircraftKey, type Fleet } from '../backend/backend'
-import { useSelect, useSelection, type Selection } from '../app/router'
+import { useSelect, useSelection, useView, type Selection } from '../app/router'
 import { useSettings } from '../config/settings'
 import { useFleets } from '../fleets/data'
 import type { Geodetic } from '../geometry/projection'
@@ -19,10 +20,20 @@ import {
   type Drawn,
   type Placement,
 } from './aircraft'
-import { FIELD_OF_VIEW_DEG } from './camera'
+import {
+  ARRIVED_M,
+  FIELD_OF_VIEW_DEG,
+  LONGEST_FLIGHT_MS,
+  coveredBy,
+  flyTo,
+  follow,
+  framePose,
+} from './camera'
 import { useCameraCommands } from './commands'
 import { labelLines, richLabels } from './labels'
+import { useReducedMotion } from './motion'
 import { usePalette } from './palette'
+import type { Site } from './site'
 
 /** More aircraft than a farm flies at once. */
 const CAPACITY = 32
@@ -44,12 +55,19 @@ function selectedKey(selection: Selection | null, fleets: readonly Fleet[] | und
  * sample arrives, when one crosses a freshness threshold, and while an aircraft
  * glides; none otherwise (NFR-RES-01).
  */
-export function Aircraft({ origin }: { readonly origin: Geodetic | null }) {
+export function Aircraft({
+  origin,
+  site,
+}: {
+  readonly origin: Geodetic | null
+  readonly site: Site
+}) {
   const store = useTelemetryStore()
   const settings = useSettings()
   const palette = usePalette()
   const fleets = useFleets()
   const selection = useSelection()
+  const { panel } = useView()
   const select = useSelect()
   const invalidate = useThree((state) => state.invalidate)
   const parts = useMemo(() => createAircraftParts(CAPACITY), [])
@@ -57,6 +75,15 @@ export function Aircraft({ origin }: { readonly origin: Geodetic | null }) {
   const [hovered, setHovered] = useState<string | null>(null)
   const [labelled, setLabelled] = useState<readonly string[]>([])
   const selected = selectedKey(selection, fleets.data)
+  const pinned = useCameraCommands((state) => state.pinned)
+  const reducedMotion = useReducedMotion()
+  // Pinned, the camera first flies in to frame the aircraft, then moves with it.
+  const pin = useRef<{
+    key: string
+    arriving: boolean
+    since: number
+    at: Vector3 | null
+  } | null>(null)
 
   useEffect(
     () => () => {
@@ -100,6 +127,20 @@ export function Aircraft({ origin }: { readonly origin: Geodetic | null }) {
     invalidate()
   }, [selected, invalidate])
 
+  useEffect(() => {
+    pin.current =
+      pinned === null ? null : { key: pinned, arriving: true, since: performance.now(), at: null }
+    invalidate()
+  }, [pinned, invalidate])
+
+  // The organization's aircraft are another set once it changes: nothing stays pinned.
+  useEffect(
+    () => () => {
+      useCameraCommands.getState().pin(null)
+    },
+    [origin],
+  )
+
   useFrame((state) => {
     const now = performance.now()
     const aircraft: { key: string; drawn: Drawn }[] = []
@@ -113,6 +154,28 @@ export function Aircraft({ origin }: { readonly origin: Geodetic | null }) {
       }
     }
     placed.current = positions
+    const controls = state.controls as CameraControlsImpl | null
+    const pinnedAt = pin.current === null ? undefined : positions.get(pin.current.key)
+    if (pin.current !== null && controls !== null && pinnedAt !== undefined) {
+      const at = new Vector3(pinnedAt.x, pinnedAt.y, pinnedAt.z)
+      if (pin.current.arriving) {
+        const camera = {
+          position: controls.getPosition(new Vector3()),
+          target: controls.getTarget(new Vector3()),
+        }
+        const pose = framePose(at, camera, state.size, coveredBy(panel !== undefined))
+        void flyTo(controls, pose, site, !reducedMotion)
+        // A moving subject keeps the smoothing a few metres behind: the flight ends in time.
+        const arrived =
+          camera.target.distanceTo(pose.target) < ARRIVED_M ||
+          now - pin.current.since > LONGEST_FLIGHT_MS
+        if (arrived) pin.current.arriving = false
+        invalidate()
+      } else if (pin.current.at !== null) {
+        void follow(controls, pin.current.at, at, site)
+      }
+      pin.current.at = at
+    }
     const subject = toFrame.current === null ? undefined : positions.get(toFrame.current)
     if (subject !== undefined) {
       toFrame.current = null

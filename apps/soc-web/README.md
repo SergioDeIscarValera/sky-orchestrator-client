@@ -97,6 +97,11 @@ The console: one persistent 3D scene of the farm with floating panels
   middle of the view the inspector leaves, at the angle the user chose. The
   selected, the hovered and the alerting (stale or lost) carry a pill label
   above them with their name, height and battery; at most 20 at once.
+- **Following an aircraft** (`FR-SCN-05`): _Follow in the scene_, in the
+  inspector's live values, pins it. The camera flies in to frame it in the
+  middle of the view the cards leave free, then moves with it, keeping the
+  user's angle and distance, until unpinned, sent back to the overview, or moved
+  by the user.
 - **A development replay** with `?replay` (development builds only): a synthetic
   aircraft circles the organization at 15 m/s, sampled at 5 Hz, to look at and
   measure the scene without a stack. `pnpm budget` fails a build that ships it.
@@ -154,7 +159,7 @@ aircraft on stack `lab`: one online in a fleet, one online in no fleet, and one 
 be registered. Almendral (viewer) has no aircraft and no fleets. Fleets change in memory, and a
 restart resets them. Realtime is not faked: there is no live telemetry, and a change made elsewhere
 shows once the console reads again; `http://localhost:5199/?replay` flies a synthetic aircraft
-around Finca Norte instead. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
+around Finca Norte, listed under Seen on the wire as REPLAYUAV, to select, follow or register. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
 
 | Script                          | What it checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

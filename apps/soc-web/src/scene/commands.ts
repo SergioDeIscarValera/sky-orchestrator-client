@@ -17,11 +17,18 @@ interface Commands {
     readonly subject?: ScenePoint
   } | null
   readonly send: (command: CameraCommand, subject?: ScenePoint) => void
+  /** The aircraft the camera follows, by `aircraftKey`, until unpinned or moved by the user. */
+  readonly pinned: string | null
+  readonly pin: (aircraft: string | null) => void
 }
 
 /** The map tools and the scene's entities ask; the controls, inside the canvas, act. */
 export const useCameraCommands = create<Commands>()((set) => ({
   last: null,
+  pinned: null,
+  pin: (aircraft) => {
+    set({ pinned: aircraft })
+  },
   send: (command, subject) => {
     set(({ last }) => ({
       last: {
