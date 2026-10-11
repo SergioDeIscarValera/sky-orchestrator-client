@@ -1,10 +1,11 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 
-import { Box3, Color, Matrix4, Raycaster, Vector3 } from 'three'
+import { Box3, CircleGeometry, Color, Matrix4, Mesh, Raycaster, Vector3 } from 'three'
 
 import type { TelemetrySample } from '../telemetry/sample'
-import type { Track } from '../telemetry/store'
+import { takeoffAfter, type Track } from '../telemetry/store'
+import { SITE } from '../test/site'
 import {
   MAX_GLIDE_MS,
   MIN_SPAN_PX,
@@ -15,12 +16,15 @@ import {
   drawnAt,
   paintAircraft,
   placement,
+  restOnGround,
   screenScale,
+  takeoffLevel,
   writeAircraft,
   type Drawn,
 } from './aircraft'
 import { FIELD_OF_VIEW_DEG } from './camera'
 import type { ScenePalette } from './palette'
+import { groundOf, type Ground } from './terrain'
 
 const FARM = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
 const THRESHOLDS = { telemetryStaleAfterMs: 3000, telemetryLostAfterMs: 10000 }
@@ -59,9 +63,11 @@ function track(
   previousAt = 0,
   latestAt = 200,
 ): Track {
+  const samples = previous === null ? [sample(latest)] : [sample(previous), sample(latest)]
   return {
     latest: { sample: sample(latest), receivedAt: latestAt },
     previous: previous === null ? null : { sample: sample(previous), receivedAt: previousAt },
+    takeoff: samples.reduce(takeoffAfter, null),
   }
 }
 
@@ -129,6 +135,75 @@ describe('an aircraft in the scene (FR-SCN-04)', () => {
     expect(size.x).toBeLessThan(SPAN_M * 1.5)
     expect(size.y).toBeLessThan(0.1)
     expect(geometry.getAttribute('position').count).toBeGreaterThan(100)
+  })
+})
+
+describe('an aircraft over the terrain (FR-SCN-04, ADR-0014)', () => {
+  const ground = groundOf(SITE)
+  /** Metres east and north of the farm, as a sample's latitude and longitude. */
+  const at = (eastM: number, northM: number) => ({
+    longitudeDeg: FARM.longitudeDeg + eastM / 83_300,
+    latitudeDeg: FARM.latitudeDeg + northM / 111_000,
+  })
+
+  it('flies its height above the ground at its takeoff point, not above the ground under it', () => {
+    // Took off 50 m west and 50 m north, 5 m above the origin; now over ground 5 m below it.
+    const flight = track(
+      { ...at(-50, 50), modeCode: 0, heightM: 0 },
+      { ...at(50, -50), heightM: 30 },
+    )
+    expect(takeoffLevel(flight, FARM, ground)).toBeCloseTo(5, 1)
+    const drawn = drawnAt(flight, FARM, 1000, THRESHOLDS, ground)
+    expect(drawn?.placement.y).toBeCloseTo(35, 1)
+    expect(drawn?.placement.groundY).toBeCloseTo(-5, 1)
+  })
+
+  it('never draws under the ground beneath it, and stands on it idle or without a height', () => {
+    const takeoff = 5
+    const over = (changes: Partial<TelemetrySample>) =>
+      placement(FARM, sample({ ...at(-90, 90), ...changes }), ground, takeoff)
+    // The ground 90 m west and 90 m north is 9 m above the origin, above the takeoff level.
+    expect(over({ heightM: 2 })?.y).toBeCloseTo(9, 1)
+    expect(over({ heightM: 30, modeCode: 0 })?.y).toBeCloseTo(9, 1)
+    expect(over({ heightM: null })?.y).toBeCloseTo(9, 1)
+    expect(over({ heightM: 30 })?.y).toBeCloseTo(35, 1)
+  })
+
+  it('guesses its takeoff under where it was first seen flying, and learns it once idle', () => {
+    let takeoff = takeoffAfter(null, sample({ ...at(80, -80), modeCode: 5 }))
+    expect(takeoff).toMatchObject({ estimated: true })
+    takeoff = takeoffAfter(takeoff, sample({ ...at(-80, 80), modeCode: 5 }))
+    expect(takeoff?.longitudeDeg).toBeCloseTo(at(80, -80).longitudeDeg, 9)
+    takeoff = takeoffAfter(takeoff, sample({ ...at(-80, 80), modeCode: 0 }))
+    expect(takeoff).toMatchObject({ ...at(-80, 80), estimated: false })
+    expect(takeoffAfter(takeoff, sample({ latitudeDeg: null, modeCode: 0 }))).toBe(takeoff)
+  })
+
+  it('glides above a ridge crossed between two samples', () => {
+    // A ridge 20 m high along the north-south line through the origin.
+    const ridge: Ground = (x) => Math.max(0, 20 - Math.abs(x))
+    const glide = track({ ...at(-30, 0), heightM: 5 }, { ...at(30, 0), heightM: 5 }, 1000, 1200)
+    const halfway = drawnAt(glide, FARM, 1300, THRESHOLDS, ridge)
+    expect(halfway?.placement.x).toBeCloseTo(0, 0)
+    expect(halfway?.placement.groundY).toBeCloseTo(20, 0)
+    expect(halfway?.placement.y).toBeGreaterThanOrEqual(halfway?.placement.groundY ?? Infinity)
+  })
+
+  it('lays its disc on the slope under it, above the ground across its whole span', () => {
+    const disc = new Mesh(new CircleGeometry(4, 32).rotateX(-Math.PI / 2))
+    restOnGround(disc, ground, 20, -20, 4)
+    disc.updateMatrixWorld()
+    // The ground rises 1 m every 20 m west and every 20 m north: the disc's face leans
+    // downhill, south-east, as the slope's own normal does.
+    const up = new Vector3(0, 1, 0).applyQuaternion(disc.quaternion)
+    expect(up.angleTo(new Vector3(0.05, 1, 0.05).normalize())).toBeLessThan(1e-6)
+    const position = disc.geometry.getAttribute('position')
+    for (let index = 0; index < position.count; index += 1) {
+      const vertex = new Vector3()
+        .fromBufferAttribute(position, index)
+        .applyMatrix4(disc.matrixWorld)
+      expect(vertex.y).toBeGreaterThan(ground(vertex.x, vertex.z))
+    }
   })
 })
 
@@ -207,7 +282,7 @@ describe('drawing the aircraft (FR-SCN-04, NFR-RES-01)', () => {
     const parts = createAircraftParts(8)
     paintAircraft(parts, PALETTE)
     const drawn = (x: number, freshness: Drawn['freshness']): Drawn => ({
-      placement: { x, y: 25, z: 0, yawRad: 0 },
+      placement: { x, y: 25, z: 0, yawRad: 0, groundY: 0 },
       freshness,
       gliding: false,
     })
@@ -251,7 +326,7 @@ describe('picking an aircraft (FR-SCN-05)', () => {
   it('finds the aircraft under the pointer wherever it has flown, and only the aircraft', () => {
     const parts = createAircraftParts(8)
     const drawn = (x: number, z: number): Drawn => ({
-      placement: { x, y: 30, z, yawRad: 0 },
+      placement: { x, y: 30, z, yawRad: 0, groundY: 0 },
       freshness: 'live',
       gliding: false,
     })

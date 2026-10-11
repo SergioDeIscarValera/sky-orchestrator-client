@@ -96,10 +96,17 @@ The console: one persistent 3D scene of the farm with floating panels
   the organization with telemetry, built in code in the accent and cased, turned
   to its heading, a stalk dropping to a disc on the ground, placed on the local
   frame (ADR-0009) and kept a few dozen pixels across however far the camera is.
+  It flies at the ground of its takeoff point plus its height above takeoff
+  (ADR-0014), never under the ground beneath it, and stands on that ground while
+  idle; its disc and ring lie on the slope under them. Its takeoff point is where
+  it last stood idle (DJI's mode 0, which so-gateway sends whenever the aircraft
+  is not flying); first seen in flight, the scene assumes the ground under that
+  first position, and the inspector's _Takeoff point_ says it was not seen.
   It glides from one sample to the next over their interval and stops at the
-  latest, never past it; stale it turns muted, lost it is only a muted disc
-  where it was last known. All aircraft are four draws. The scene draws frames
-  only while one glides or crosses a threshold.
+  latest, never past it, above any ridge crossed between them; stale it turns
+  muted, lost it is only a muted disc where it was last known. All aircraft are
+  four draws. The scene draws frames only while one glides or crosses a
+  threshold.
 - **Selecting an aircraft in the scene** (`FR-SCN-05`, `FR-SCN-06`): a click
   selects its fleet, or the aircraft when it is in none, as its row in the fleet
   panel does; a soft ring marks it on the ground. A new selection, from the
@@ -113,8 +120,9 @@ The console: one persistent 3D scene of the farm with floating panels
   user's angle and distance, until unpinned, sent back to the overview, or moved
   by the user.
 - **A development replay** with `?replay` (development builds only): a synthetic
-  aircraft circles the organization at 15 m/s, sampled at 5 Hz, to look at and
-  measure the scene without a stack. `pnpm budget` fails a build that ships it.
+  aircraft stands idle for 2 s, takes off straight up to 40 m, then circles the
+  organization at 15 m/s, sampled at 5 Hz, to look at and measure the scene
+  without a stack. `pnpm budget` fails a build that ships it.
 - **The scene's statistics** with `?stats` (`NFR-OBS-05`): frames rendered, the
   frame time at p95 while it moves, the delivery of telemetry at p95 from
   soc-cloud's broadcast to the browser (`NFR-PERF-01`, honest only with the
@@ -263,7 +271,9 @@ for `/favicon.ico`.
 | No site model for the organization (a 404)                                  | The flat ground and grid, and a note saying so                                                                                                   |
 | A site model off its contract, or a grid of the wrong size                  | The note names the problem and the ground stays flat; nothing wrong is drawn                                                                     |
 | An aircraft whose sample has no position                                    | It is not drawn; the inspector says the position is unavailable                                                                                  |
-| An aircraft below its takeoff level, or without a height                    | It is drawn on the flat ground, which is the takeoff level; the inspector shows the height or that it is unavailable                             |
+| An aircraft below the ground under it, idle, or without a height            | It is drawn on the ground beneath it; the inspector shows the height above takeoff or that it is unavailable                                     |
+| An aircraft first seen in flight                                            | Its takeoff level is assumed to be the ground under its first position; the inspector's takeoff point says it was not seen                       |
+| An aircraft beyond the site model's edge                                    | It is drawn over the height of the nearest edge, so crossing it makes no jump                                                                    |
 | A viewer's change or retirement of a fleet                                  | Row security leaves the row untouched without an error; the console counts the rows returned and says nothing changed                            |
 | A fleet's write the database refuses                                        | The refusal names the field its constraint is about: the name, the model, the airframe serial, the aircraft, its stack                           |
 | A viewer opens a fleet or an aircraft seen                                  | Edit, Retire and Register stay focusable, say why they do nothing, and open nothing; the database refuses the write anyway                       |

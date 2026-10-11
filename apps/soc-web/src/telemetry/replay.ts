@@ -4,8 +4,9 @@ import type { TelemetryStore } from './store'
 
 /**
  * A synthetic flight for development and the scene's checks, never in a production
- * build: a circle around the organization at 15 m/s, sampled at 5 Hz, as SO
- * measured the phone's OSD. The circle is placed with the radii of curvature at
+ * build: idle on the ground for `idleS`, an automatic takeoff straight up at
+ * `climbMs`, then a circle around the organization at 15 m/s, sampled at 5 Hz, as
+ * SO measured the phone's OSD. The circle is placed with the radii of curvature at
  * the origin, close enough for a check of motion, not a geodesy reference.
  */
 export const REPLAY = {
@@ -15,7 +16,12 @@ export const REPLAY = {
   speedMs: 15,
   heightM: 40,
   rateHz: 5,
+  idleS: 2,
+  climbMs: 8,
 } as const
+
+/** When the replay's circle starts: after standing idle and climbing to its height. */
+export const CIRCLING_FROM_S = REPLAY.idleS + REPLAY.heightM / REPLAY.climbMs
 
 const SEMI_MAJOR_AXIS_M = 6_378_137
 const ECCENTRICITY_SQUARED = 0.00669437999014
@@ -27,7 +33,9 @@ export function replaySample(
   startedAtMs: number,
 ): TelemetrySample {
   const seconds = index / REPLAY.rateHz
-  const angle = (REPLAY.speedMs * seconds) / REPLAY.radiusM
+  const angle = (REPLAY.speedMs * Math.max(0, seconds - CIRCLING_FROM_S)) / REPLAY.radiusM
+  const idle = seconds < REPLAY.idleS
+  const climbing = !idle && seconds < CIRCLING_FROM_S
   const east = REPLAY.radiusM * Math.cos(angle)
   const north = REPLAY.radiusM * Math.sin(angle)
   const latitude = (origin.latitudeDeg * Math.PI) / 180
@@ -49,13 +57,15 @@ export function replaySample(
     latitudeDeg: origin.latitudeDeg + ((north / meridian) * 180) / Math.PI,
     longitudeDeg:
       origin.longitudeDeg + ((east / (primeVertical * Math.cos(latitude))) * 180) / Math.PI,
-    heightM: REPLAY.heightM,
+    heightM: idle ? 0 : Math.min(REPLAY.heightM, (seconds - REPLAY.idleS) * REPLAY.climbMs),
     headingDeg: heading,
-    homeDistanceM: REPLAY.radiusM,
+    // Home is where it took off, the circle's start: the chord from there.
+    homeDistanceM: 2 * REPLAY.radiusM * Math.abs(Math.sin(angle / 2)),
     batteryPct: Math.max(20, 100 - Math.floor(seconds / 30)),
     satellites: 18,
     gpsQuality: 5,
-    modeCode: 5,
+    // so-gateway's codes: 0 idle, 4 automatic takeoff, 5 wayline.
+    modeCode: idle ? 0 : climbing ? 4 : 5,
   }
 }
 

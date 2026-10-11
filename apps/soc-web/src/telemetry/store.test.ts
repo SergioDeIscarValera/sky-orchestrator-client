@@ -40,6 +40,21 @@ describe("the console's telemetry (FR-TEL-01, FR-TEL-02)", () => {
     expect(store.getState()).toBe(before)
   })
 
+  it('remembers where the aircraft last stood idle, its takeoff point (ADR-0014)', () => {
+    const store = createTelemetryStore()
+    const flying = (takenAtMs: number, longitudeDeg: number) => ({
+      ...sample(takenAtMs),
+      longitudeDeg,
+      modeCode: 5,
+    })
+    store.getState().receive(flying(1000, -4.7), 10)
+    const takeoff = () => store.getState().tracks.get('SOTESTDOCK01/SOTESTUAV001')?.takeoff
+    expect(takeoff()).toEqual({ latitudeDeg: 41.65, longitudeDeg: -4.7, estimated: true })
+    store.getState().receive(sample(1200), 20)
+    store.getState().receive(flying(1400, -4.71), 30)
+    expect(takeoff()).toEqual({ latitudeDeg: 41.65, longitudeDeg: -4.72, estimated: false })
+  })
+
   it('leaves the other aircraft as they were, so they do not draw again', () => {
     const store = createTelemetryStore()
     store.getState().receive(sample(1000, 'A1'), 10)

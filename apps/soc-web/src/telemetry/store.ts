@@ -9,10 +9,38 @@ export interface Received {
   readonly receivedAt: number
 }
 
-/** An aircraft's latest sample and the one before it, which motion is interpolated between. */
+/**
+ * Where an aircraft took off, which its height is above (ADR-0014): where it last
+ * stood idle. First seen in flight, it is guessed right under that first position.
+ */
+export interface Takeoff {
+  readonly latitudeDeg: number
+  readonly longitudeDeg: number
+  readonly estimated: boolean
+}
+
+/**
+ * An aircraft's latest sample and the one before it, which motion is interpolated
+ * between, and its takeoff point, or null before any sample with a position.
+ */
 export interface Track {
   readonly latest: Received
   readonly previous: Received | null
+  readonly takeoff: Takeoff | null
+}
+
+/** so-gateway sends DJI's mode 0, idle, whenever the aircraft is not flying (its README). */
+export const IDLE_MODE = 0
+
+/**
+ * The takeoff point after `sample`: standing idle with a position, the aircraft is
+ * where its next flight takes off from; flying, it keeps the one it has.
+ */
+export function takeoffAfter(known: Takeoff | null, sample: TelemetrySample): Takeoff | null {
+  const { latitudeDeg, longitudeDeg } = sample
+  if (latitudeDeg === null || longitudeDeg === null) return known
+  if (sample.modeCode === IDLE_MODE) return { latitudeDeg, longitudeDeg, estimated: false }
+  return known ?? { latitudeDeg, longitudeDeg, estimated: true }
 }
 
 /** How many kept deliveries the p95 is taken over: the last 600 (NFR-PERF-01). */
@@ -49,7 +77,11 @@ export function createTelemetryStore(wallClock: () => number = Date.now): Teleme
         deliveries[delivered % DELIVERY_WINDOW] = wallClock() - sample.sentAtMs
         delivered += 1
         const tracks = new Map(state.tracks)
-        tracks.set(key, { latest: { sample, receivedAt }, previous: track?.latest ?? null })
+        tracks.set(key, {
+          latest: { sample, receivedAt },
+          previous: track?.latest ?? null,
+          takeoff: takeoffAfter(track?.takeoff ?? null, sample),
+        })
         return { tracks }
       })
     },
