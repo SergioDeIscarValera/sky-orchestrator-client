@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { useEffect, useId } from 'react'
 
+import { FleetPanel } from '../fleets/FleetPanel'
 import { DESTINATIONS } from './destinations'
 import { useChangeView, useView } from './router'
 import { QUIET_BUTTON } from './styles'
@@ -44,11 +45,13 @@ export function PanelHost() {
           <X size={16} aria-hidden />
         </button>
       </div>
-      <p className="text-muted mt-3 text-sm">
-        {destination.arrives === undefined
-          ? `The ${destination.label.toLowerCase()} panel arrives next.`
-          : `${destination.label} arrive in ${destination.arrives}.`}
-      </p>
+      {destination.panel === 'fleet' ? (
+        <FleetPanel />
+      ) : (
+        <p className="text-muted mt-3 text-sm">
+          {`${destination.label} arrive in ${destination.arrives ?? 'a later milestone'}.`}
+        </p>
+      )}
     </section>
   )
 }

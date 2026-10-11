@@ -2,7 +2,7 @@ import { act, screen, waitFor } from '@testing-library/react'
 
 import { FakeBackend, NEIGHBOUR } from '../test/FakeBackend'
 import { renderApp } from '../test/render'
-import { readView } from './router'
+import { readView, select, selectionOf } from './router'
 
 async function openAt(search = '') {
   window.history.replaceState(null, '', `/${search}`)
@@ -20,6 +20,29 @@ describe('the view in the URL (NFR-UX-03)', () => {
     const fleet = '11111111-1111-4111-8111-111111111111'
     expect(readView({ panel: 'fleet', fleet })).toEqual({ panel: 'fleet', fleet })
     expect(readView({ panel: 'hangar', fleet: 'not-a-uuid', other: 1 })).toEqual({})
+  })
+
+  it('reads an aircraft by its gateway and its serial, a fleet before it, neither alone', () => {
+    const fleet = '11111111-1111-4111-8111-111111111111'
+    const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
+    expect(readView(aircraft)).toEqual(aircraft)
+    expect(readView({ ...aircraft, fleet })).toEqual({ fleet })
+    expect(readView({ gateway: 'SOTESTDOCK01' })).toEqual({})
+    expect(readView({ ...aircraft, aircraft: 'SOTEST/../UAV' })).toEqual({})
+  })
+
+  it('selects one thing at a time and keeps the panel open', () => {
+    const fleet = '11111111-1111-4111-8111-111111111111'
+    const device = { kind: 'device', gatewaySn: 'SOTESTDOCK01', aircraftSn: 'A1' } as const
+    const view = { panel: 'fleet', fleet } as const
+    expect(select(view, device)).toEqual({
+      panel: 'fleet',
+      gateway: 'SOTESTDOCK01',
+      aircraft: 'A1',
+    })
+    expect(selectionOf(select(view, device))).toEqual(device)
+    expect(select(view, null)).toEqual({ panel: 'fleet' })
+    expect(selectionOf({})).toBeNull()
   })
 
   it('opens and closes a panel from the rail, and keeps it in the URL', async () => {

@@ -69,6 +69,7 @@ export function device(aircraftSn: string, online = true): Device {
   return {
     gatewaySn: 'SOTESTDOCK01',
     aircraftSn,
+    wireModel: '0-67-0',
     online,
     firmwareVersion: '10.1.0',
     firstSeenAt: '2026-10-11T10:00:00Z',

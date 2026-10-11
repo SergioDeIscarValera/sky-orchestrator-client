@@ -1,4 +1,5 @@
 import { MapTools } from '../scene/MapTools'
+import { Inspector } from './Inspector'
 import { NavigationRail } from './NavigationRail'
 import { PanelHost } from './PanelHost'
 import { SceneRegion } from './SceneRegion'
@@ -21,13 +22,7 @@ export function Shell() {
             <MapTools />
           </div>
         </div>
-        <aside
-          aria-label="Inspector"
-          className="rounded-card bg-surface shadow-card pointer-events-auto self-start p-5"
-        >
-          <h2 className="text-sm font-semibold tracking-wider uppercase">Inspector</h2>
-          <p className="mt-2 text-sm">Nothing selected.</p>
-        </aside>
+        <Inspector />
       </div>
     </div>
   )

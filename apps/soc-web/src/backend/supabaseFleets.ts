@@ -57,6 +57,9 @@ const MODEL_ROW = z.object({
 const DEVICE_ROW = z.object({
   gateway_sn: z.string(),
   aircraft_sn: z.string(),
+  domain: z.number(),
+  type: z.number(),
+  sub_type: z.number(),
   online: z.boolean(),
   firmware_version: z.nullable(z.string()),
   first_seen_at: z.string(),
@@ -218,6 +221,7 @@ export function fleetOperations(client: SupabaseClient, channel: ChannelFactory)
       return rows(DEVICE_ROW, data, 'devices').map((row) => ({
         gatewaySn: row.gateway_sn,
         aircraftSn: row.aircraft_sn,
+        wireModel: `${String(row.domain)}-${String(row.type)}-${String(row.sub_type)}`,
         online: row.online,
         firmwareVersion: row.firmware_version,
         firstSeenAt: row.first_seen_at,

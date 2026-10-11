@@ -63,6 +63,8 @@ export type LinkState = 'connected' | 'connecting' | 'displaced' | 'unreachable'
 export interface Device {
   readonly gatewaySn: string
   readonly aircraftSn: string
+  /** DJI's model key on the wire, `domain-type-sub_type`: `0-67-0` is a Mavic Air 2 through SO. */
+  readonly wireModel: string
   readonly online: boolean
   readonly firmwareVersion: string | null
   readonly firstSeenAt: string

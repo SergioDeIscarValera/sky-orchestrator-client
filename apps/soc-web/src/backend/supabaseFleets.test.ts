@@ -150,6 +150,7 @@ describe('the catalogue, the devices and the fleets through PostgREST', () => {
     expect(await backend.devices(ORGANIZATION)).toEqual([
       expect.objectContaining({
         aircraftSn: 'SOTESTUAV001',
+        wireModel: '0-91-0',
         stack: { name: 'lab', linkState: 'connected' },
       }),
     ])
