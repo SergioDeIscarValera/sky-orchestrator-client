@@ -31,5 +31,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // A worker keeps the modules it imported for the next file (ADR-0022): the
+    // setup resets what a test leaves in the page, and no module holds a
+    // test's state.
+    pool: 'threads',
+    isolate: false,
   },
 })

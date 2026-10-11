@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 
 import { BackendError } from '../backend/backend'
 import { FakeBackend, NEIGHBOUR, NORTH, ORCHARD, PILOT } from '../test/FakeBackend'
@@ -65,7 +65,9 @@ describe('organization first (FR-AUT-02)', () => {
     const backend = new FakeBackend(PILOT)
     const { user, queryClient } = renderApp(backend)
     await user.click(await switcher(NORTH.name))
-    expect([backend.watching(NORTH.id), backend.watching(ORCHARD.id)]).toEqual([1, 0])
+    await waitFor(() => {
+      expect([backend.watching(NORTH.id), backend.watching(ORCHARD.id)]).toEqual([1, 0])
+    })
     queryClient.setQueryData(organizationKey(NORTH.id, 'fleets'), ['a fleet of the north'])
     queryClient.setQueryData(organizationKey(ORCHARD.id, 'fleets'), [])
     await user.click(await screen.findByRole('menuitemradio', { name: /Almendral/ }))
@@ -74,6 +76,9 @@ describe('organization first (FR-AUT-02)', () => {
     expect(queryClient.getQueryData(organizationKey(NORTH.id, 'fleets'))).toBeUndefined()
     expect(queryClient.getQueryData(organizationKey(ORCHARD.id, 'fleets'))).toEqual([])
     expect(window.localStorage.getItem(`soc.organization.${PILOT.userId}`)).toBe(ORCHARD.id)
-    expect([backend.watching(NORTH.id), backend.watching(ORCHARD.id)]).toEqual([0, 1])
+    // React runs the effects of a switch after the page shows it.
+    await waitFor(() => {
+      expect([backend.watching(NORTH.id), backend.watching(ORCHARD.id)]).toEqual([0, 1])
+    })
   })
 })

@@ -10,6 +10,8 @@ const INLINE_STYLE =
 const CAMERA_MOVES =
   'Move the camera through flyTo in src/scene/camera.ts: camera-controls does not apply its limits to programmatic moves (FR-SCN-03).'
 const NO_SIGN_UP = "SOC offers no sign-up: accounts are Virtual Origen's (FR-AUT-01)."
+const SHARED_MODULES =
+  "Test files share their worker's modules (ADR-0022): a module mock would leak into the next file. Pass a fake in instead."
 
 export const colourLiterals = [
   { selector: `Literal[value=${HEX_COLOUR}]`, message: TOKENS_ONLY },
@@ -52,6 +54,11 @@ export const secureContextApis = [
   { object: 'window', property: 'showSaveFilePicker', message: PLAIN_HTTP },
 ]
 
+export const moduleMocks = [
+  { object: 'vi', property: 'mock', message: SHARED_MODULES },
+  { object: 'vi', property: 'doMock', message: SHARED_MODULES },
+]
+
 const everyRuleBut = (excluded) => ({
   'no-restricted-syntax': [
     'error',
@@ -59,7 +66,7 @@ const everyRuleBut = (excluded) => ({
       .filter((selectors) => selectors !== excluded)
       .flat(),
   ],
-  'no-restricted-properties': ['error', ...secureContextApis],
+  'no-restricted-properties': ['error', ...secureContextApis, ...moduleMocks],
 })
 
 export const consoleRules = everyRuleBut(null)
