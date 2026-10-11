@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 
-import { Box3, Color, Matrix4, Vector3 } from 'three'
+import { Box3, Color, Matrix4, Raycaster, Vector3 } from 'three'
 
 import type { TelemetrySample } from '../telemetry/sample'
 import type { Track } from '../telemetry/store'
@@ -222,8 +222,11 @@ describe('drawing the aircraft (FR-SCN-04, NFR-RES-01)', () => {
       FIELD_OF_VIEW_DEG,
       900,
       PALETTE,
+      'D/stale',
     )
-    expect(parts.group.children).toHaveLength(4)
+    expect(parts.group.children).toHaveLength(5)
+    expect(parts.ring.visible).toBe(true)
+    expect(Math.round(parts.ring.position.x)).toBe(50)
     expect([parts.bodies.count, parts.casings.count, parts.discs.count]).toEqual([2, 2, 3])
     expect(parts.keys).toEqual(['D/live', 'D/stale'])
     const colour = (index: number) => {
@@ -238,6 +241,54 @@ describe('drawing the aircraft (FR-SCN-04, NFR-RES-01)', () => {
     parts.discs.getMatrixAt(2, matrix)
     expect(position.setFromMatrixPosition(matrix).toArray().map(Math.round)).toEqual([100, 0, 0])
     expect(parts.casings.material.color.getStyle()).toBe(parts.stalks.material.color.getStyle())
+    writeAircraft(parts, [], { x: 0, y: 300, z: 300 }, FIELD_OF_VIEW_DEG, 900, PALETTE, 'D/stale')
+    expect(parts.ring.visible).toBe(false)
+    disposeAircraft(parts)
+  })
+})
+
+describe('picking an aircraft (FR-SCN-05)', () => {
+  it('finds the aircraft under the pointer wherever it has flown, and only the aircraft', () => {
+    const parts = createAircraftParts(8)
+    const drawn = (x: number, z: number): Drawn => ({
+      placement: { x, y: 30, z, yawRad: 0 },
+      freshness: 'live',
+      gliding: false,
+    })
+    const hits = (x: number, z: number) => {
+      const ray = new Raycaster(new Vector3(x, 500, z), new Vector3(0, -1, 0))
+      return ray.intersectObject(parts.group, true).map((hit) => [hit.object.name, hit.instanceId])
+    }
+    const camera = { x: 0, y: 300, z: 300 }
+    writeAircraft(parts, [], camera, FIELD_OF_VIEW_DEG, 900, PALETTE)
+    expect(hits(0, 0)).toEqual([])
+    writeAircraft(
+      parts,
+      [{ key: 'D/a', drawn: drawn(0, 0) }],
+      camera,
+      FIELD_OF_VIEW_DEG,
+      900,
+      PALETTE,
+    )
+    expect(hits(0, 0)[0]).toEqual(['aircraft', 0])
+    writeAircraft(
+      parts,
+      [
+        { key: 'D/a', drawn: drawn(400, -300) },
+        { key: 'D/b', drawn: drawn(-200, 100) },
+      ],
+      camera,
+      FIELD_OF_VIEW_DEG,
+      900,
+      PALETTE,
+    )
+    expect(hits(400, -300).some(([name, instance]) => name === 'aircraft' && instance === 0)).toBe(
+      true,
+    )
+    expect(hits(-200, 100).some(([name, instance]) => name === 'aircraft' && instance === 1)).toBe(
+      true,
+    )
+    expect(hits(0, 0)).toEqual([])
     disposeAircraft(parts)
   })
 })

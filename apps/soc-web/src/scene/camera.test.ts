@@ -14,8 +14,11 @@ import {
 
 import {
   FIELD_OF_VIEW_DEG,
+  FRAME_DISTANCE_M,
+  INSPECTOR_SPAN_PX,
   configureControls,
   flyTo,
+  framePose,
   lowestCameraHeightM,
   overviewPose,
 } from './camera'
@@ -101,5 +104,35 @@ describe('the camera (FR-SCN-03)', () => {
 
   it('is at least a few metres up at its closest and lowest', () => {
     expect(lowestCameraHeightM()).toBeGreaterThan(3)
+  })
+})
+
+describe('flying to an aircraft (FR-SCN-05)', () => {
+  it('frames it in the middle of the view the inspector leaves, at the angle the user chose', () => {
+    const viewport = { width: 1440, height: 900 }
+    const camera = { position: new Vector3(200, 400, 600), target: new Vector3(0, 0, 0) }
+    const subject = new Vector3(320, 40, -150)
+    const pose = framePose(subject, camera, viewport)
+
+    expect(pose.position.distanceTo(pose.target)).toBeCloseTo(FRAME_DISTANCE_M, 6)
+    const chosen = camera.position.clone().sub(camera.target).normalize()
+    const kept = pose.position.clone().sub(pose.target).normalize()
+    expect(kept.distanceTo(chosen)).toBeLessThan(1e-9)
+
+    const lens = new PerspectiveCamera(FIELD_OF_VIEW_DEG, viewport.width / viewport.height, 1, 1e5)
+    lens.position.copy(pose.position)
+    lens.lookAt(pose.target)
+    lens.updateMatrixWorld()
+    const seen = subject.clone().project(lens)
+    const pixelX = ((seen.x + 1) / 2) * viewport.width
+    const pixelY = ((1 - seen.y) / 2) * viewport.height
+    expect(pixelX).toBeCloseTo((viewport.width - INSPECTOR_SPAN_PX) / 2, 0)
+    expect(pixelY).toBeCloseTo(viewport.height / 2, 0)
+  })
+
+  it('centres it on a view too narrow to leave room beside the inspector', () => {
+    const camera = { position: new Vector3(0, 300, 300), target: new Vector3(0, 0, 0) }
+    const pose = framePose(new Vector3(10, 0, 10), camera, { width: 600, height: 900 })
+    expect(pose.target.toArray()).toEqual([10, 0, 10])
   })
 })
