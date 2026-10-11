@@ -33,6 +33,16 @@ The console: one persistent 3D scene of the farm with floating panels
   and the map tools bring it closer, farther, or back to the overview; with
   reduced motion it cuts instead of flying (ADR-0021). It renders only when
   something changes: no frame while idle (`NFR-RES-01`).
+- **The farm's terrain** (`FR-SCN-02`, ADR-0018), when its site model has been
+  baked with `soc-site` and served at `/site/<organization>/`: IGN's ground and
+  PNOA's imagery, its hillshade baked in, tinted between the theme's darkest and
+  lightest tokens with a fifth of the original, and contours every 5 m and,
+  stronger, every 25 m, faded out on level ground. The whole grid is drawn near
+  and every fourth vertex beyond 2.5 km, where the full grid only cost the frame.
+  The scene's origin is the model's, so the aircraft and the ground share one
+  frame. IGN's attribution sits at the foot of the scene. A model that fails to
+  load is named in the note, and the ground stays flat. In development Vite
+  serves the models in `SOC_SITE_DIR`.
 - **The view in the URL** (`NFR-UX-03`): the rail opens and closes a panel
   beside it, kept as `?panel=` with the selection (`?fleet=<id>`, or an
   aircraft as `?gateway=<sn>&aircraft=<sn>`), so a link shared on the LAN opens
@@ -247,6 +257,8 @@ for `/favicon.ico`.
 | The state topic drops and rejoins                                           | Everything the console read of the organization is read again on the rejoin                                                                      |
 | A telemetry sample that breaks the contract, or one taken before the latest | Dropped: the console shows the latest sample that follows the contract, and a track never runs backwards                                         |
 | No sample for `telemetry_stale_after_ms`, then `telemetry_lost_after_ms`    | The aircraft's live values read as stale, then lost, within a few milliseconds of each threshold                                                 |
+| No site model for the organization (a 404)                                  | The flat ground and grid, and a note saying so                                                                                                   |
+| A site model off its contract, or a grid of the wrong size                  | The note names the problem and the ground stays flat; nothing wrong is drawn                                                                     |
 | An aircraft whose sample has no position                                    | It is not drawn; the inspector says the position is unavailable                                                                                  |
 | An aircraft below its takeoff level, or without a height                    | It is drawn on the flat ground, which is the takeoff level; the inspector shows the height or that it is unavailable                             |
 | A viewer's change or retirement of a fleet                                  | Row security leaves the row untouched without an error; the console counts the rows returned and says nothing changed                            |
