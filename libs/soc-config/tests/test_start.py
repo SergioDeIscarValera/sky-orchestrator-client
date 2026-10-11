@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from soc_config import ConfigurationError, Contract, start
+from soc_config.contract import CONTRACT as CONTRACT_PATH
 
 CONTRACT = Contract.read()
 Written = Callable[[str], dict[str, str]]
@@ -73,5 +74,11 @@ def test_the_file_and_the_environment_are_refused_together(written: Written) -> 
 
 
 def test_a_consumer_without_a_configuration_file_cannot_start() -> None:
+    document = json.loads(Path(CONTRACT_PATH).read_text(encoding="utf-8"))
+    document["x-environment"]["SOC_CONFIG_FILE"]["x-consumers"].remove("soc-web")
     with pytest.raises(ValueError, match="soc-web"):
-        start("soc-web", {}, CONTRACT)
+        start("soc-web", {}, Contract(document))
+
+
+def test_the_console_has_a_configuration_file_too() -> None:
+    assert problems_of("soc-web", {}) == ["SOC_CONFIG_FILE is not set"]

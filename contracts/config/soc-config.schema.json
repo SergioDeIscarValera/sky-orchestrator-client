@@ -3,7 +3,7 @@
   "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator-client/blob/develop/contracts/config/soc-config.schema.json",
   "title": "SOC configuration",
   "description": "Every tunable, once (FR-DEP-03, IR-CFG). Each consumer's configuration file holds exactly the keys that list it in x-consumers, all of them required, and nothing else; a default is what a new file starts from, never applied at load (ADR-0019). Addresses, ports and secrets come from the environment, declared in x-environment. x-unit, x-consumers, x-safety, x-constraints and x-environment are annotations; a validator ignores them.",
-  "x-version": "2.0.0",
+  "x-version": "2.1.0",
   "x-constraints": [
     "telemetry_stale_after_ms < telemetry_lost_after_ms",
     "stacks[].name are distinct",
@@ -13,8 +13,8 @@
   "x-environment": {
     "SOC_CONFIG_FILE": {
       "rule": "path",
-      "x-consumers": ["soc-cloud", "soc-operations"],
-      "description": "The service's configuration file, an absolute path."
+      "x-consumers": ["soc-cloud", "soc-operations", "soc-web"],
+      "description": "The service's configuration file, an absolute path. soc-web's is checked by soc-config before the console starts, and handed to the browser as it is (ADR-0023)."
     },
     "SOC_HEALTH_PORT": {
       "rule": "port",
