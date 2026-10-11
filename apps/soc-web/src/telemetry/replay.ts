@@ -64,7 +64,9 @@ export function startReplay(store: TelemetryStore, origin: Geodetic): () => void
   const startedAtMs = Date.now()
   let index = 0
   const feed = () => {
-    store.getState().receive(replaySample(origin, index, startedAtMs), performance.now())
+    // Sent now, as soc-cloud stamps its broadcasts, so the delivery figure reads true.
+    const sample = { ...replaySample(origin, index, startedAtMs), sentAtMs: Date.now() }
+    store.getState().receive(sample, performance.now())
     index += 1
   }
   feed()
