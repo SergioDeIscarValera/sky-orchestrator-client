@@ -26,6 +26,11 @@ On the container lane:
   built files for good, falls back to the console on any route, and stays under
   **16 MiB at rest** (2.3 MiB measured on 2026-10-11); one image serves two
   addresses (`FR-DEP-04`);
+- `soc-web` serves a site model mounted read-only at `/srv/site`: its three
+  files with their types and `Cache-Control: no-cache`, revalidated by ETag, GET
+  and HEAD only; a missing file, a folder or an organization without a model
+  answers 404, never the console; with no `/srv/site`, or an empty one, the
+  console still starts and serves (ADR-0018);
 - the compose project is valid with its example files.
 
 The stack check against Sky Orchestrator's released images arrives here next;
