@@ -31,5 +31,14 @@ updates:
       prefix: "build(repo)"
     open-pull-requests-limit: 5
 
+  # The web: one lockfile, pinned versions (ADR-0016).
+  - package-ecosystem: npm
+    directory: /apps/soc-web
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "build(web)"
+    open-pull-requests-limit: 5
+
   # Each unit's ecosystem joins this file with its manifest. Versions are pinned
   # on purpose (NFR-PORT-02): Dependabot proposes, review decides.
