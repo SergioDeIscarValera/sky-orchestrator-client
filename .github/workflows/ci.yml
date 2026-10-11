@@ -20,7 +20,7 @@ jobs:
   gate:
     # The rulesets require this exact name; renaming it drops the requirement.
     name: Gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - id: checkout
