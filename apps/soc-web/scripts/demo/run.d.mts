@@ -9,3 +9,6 @@ export declare const DEMO_SETTINGS: {
 
 /** The public anon key, built at runtime: the secret scanner refuses a key literal in the source. */
 export declare function demoSupabaseKey(): string
+
+/** Stops the Vite process group (pnpm and the dev server under it), by force after a while. */
+export declare function stopGroup(pid: number): Promise<void>
