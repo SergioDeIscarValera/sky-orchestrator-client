@@ -111,9 +111,19 @@ The first real flight waits for SOC's MVP, Sergio's call; SO's runbook for it is
   farm. SO's first-flight runbook sets so-wayline's centre, radius and maximum
   height to the phone's.
 
+The phone judges every plan against its own envelope at load, in the simulator
+too, and again at start from where the aircraft stands (SO's FR-SAF-01,
+FR-WAY-10): with the simulator on and its own configuration it refused the
+reference wayline at load on 2026-10-11 (SO #127). A simulated pass therefore
+proves the phone accepts the file, provided its configuration is the same at the
+real flight; `/v1/status`'s `config_fingerprint`, the SHA-256 of the phone's
+whole configuration, shows that remotely. SOC records it at the pass and
+requires the same value before the real prepare (`FR-OPS-06`, `FR-OPS-07`).
+
 For SOC, `/v1/envelope` is necessary and not sufficient. `PF-ENVELOPE` and
-`FR-WAY-08` check against it. Only the phone's own refusal can show a mismatch,
-so SOC's first-flight runbook compares the two by hand before the session
+`FR-WAY-08` check against it. Only the phone's own refusal can show a mismatch:
+the simulated pass under the same fingerprint is the first guard, and the
+runbook's comparison of the two envelopes by hand before the session the second
 (`FR-OPS-08`). `FR-OPS-09` reads a `314010` on a prepare as either cause.
 
 A stack whose status cannot be read has an unknown mode, and SOC refuses to
