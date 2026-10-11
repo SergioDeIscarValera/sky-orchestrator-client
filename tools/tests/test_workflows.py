@@ -287,6 +287,29 @@ class PythonUnits(unittest.TestCase):
                 self.assertIn(f"uv run --frozen pytest {unit}/tests{selection}\n", lane)
 
 
+class Dependencies(unittest.TestCase):
+    def test_every_python_unit_builds_with_the_same_uv_build(self) -> None:
+        project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+        requirements = {
+            unit: tomllib.loads((REPOSITORY / unit / "pyproject.toml").read_text())["build-system"][
+                "requires"
+            ]
+            for unit in project["tool"]["uv"]["workspace"]["members"]
+        }
+        self.assertEqual(len({tuple(value) for value in requirements.values()}), 1, requirements)
+
+    def test_node_types_follow_the_runtime_major(self) -> None:
+        web = json.loads((REPOSITORY / "apps" / "soc-web" / "package.json").read_text())
+        dependabot = (REPOSITORY / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        npm = dependabot[dependabot.index("package-ecosystem: npm") :]
+        self.assertTrue(web["devDependencies"]["@types/node"].startswith("24."))
+        self.assertTrue(web["engines"]["node"].startswith(">=24."))
+        self.assertRegex(
+            npm,
+            r'- dependency-name: "@types/node"\n\s+update-types: \["version-update:semver-major"\]',
+        )
+
+
 class Rulesets(unittest.TestCase):
     def setUp(self) -> None:
         self.branch_rulesets = [

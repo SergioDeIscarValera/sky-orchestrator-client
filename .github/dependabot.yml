@@ -39,6 +39,10 @@ updates:
     commit-message:
       prefix: "build(web)"
     open-pull-requests-limit: 5
+    # Node's types follow the runtime's major, Node 24 until ADR-0016 moves it.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # Each unit's ecosystem joins this file with its manifest. Versions are pinned
   # on purpose (NFR-PORT-02): Dependabot proposes, review decides.
