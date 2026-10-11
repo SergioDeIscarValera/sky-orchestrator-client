@@ -527,6 +527,13 @@ class PythonUnits(unittest.TestCase):
                 with self.subTest(contract=directory.name):
                     self.assertNotRegex(f"contracts/{directory.name}/probe.json", detection)
 
+    def test_the_lane_does_not_run_for_the_site_baking_tool(self) -> None:
+        # soc-site runs by hand on the mini-PC: no image copies it and no lane test reads it.
+        self.assertNotRegex("infra/site/src/soc_site/bake.py", lane_filter(self.ci))
+        for unit in ("infra/check", "infra/compose", "infra/migrate"):
+            with self.subTest(unit=unit):
+                self.assertRegex(f"{unit}/probe.py", lane_filter(self.ci))
+
     def test_every_unit_is_type_checked_on_its_own(self) -> None:
         for unit in self.units:
             with self.subTest(unit=unit):
