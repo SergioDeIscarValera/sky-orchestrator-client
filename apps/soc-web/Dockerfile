@@ -11,7 +11,7 @@ RUN pnpm install --frozen-lockfile
 COPY apps/soc-web ./
 RUN pnpm build && pnpm budget && pnpm secrets
 
-FROM nginxinc/nginx-unprivileged:1.30.5-alpine3.24-slim@sha256:3af0c10d960cc2502427fe1219c52989d309e7d65596869c60a34fd2fa2406f0
+FROM nginxinc/nginx-unprivileged:1.31.6-alpine3.24-slim@sha256:1517d8c358e2e093957ebee087afa9eb19a32f5d7ecb711b7429e369cb998224
 COPY apps/soc-web/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --chmod=0755 apps/soc-web/nginx/soc-web.sh /usr/local/bin/soc-web
 COPY --from=build /web/dist /usr/share/nginx/html
