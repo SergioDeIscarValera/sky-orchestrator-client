@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { App } from '../app/App'
+import type { Settings } from '../config/settings'
 import { FakeBackend } from './FakeBackend'
 import { PASSWORD_FOR_TESTS } from './keys'
 
@@ -10,9 +11,22 @@ export function quietQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } })
 }
 
-export function renderApp(backend = new FakeBackend(), queryClient = quietQueryClient()) {
+/** The contract's defaults, which a new soc-web file starts from. */
+export const SETTINGS: Settings = {
+  telemetryStaleAfterMs: 3000,
+  telemetryLostAfterMs: 10000,
+  geofenceWarningBandM: 5,
+  geofenceMaxVertices: 32,
+  maxArcSpacingM: 10,
+}
+
+export function renderApp(
+  backend = new FakeBackend(),
+  queryClient = quietQueryClient(),
+  settings = SETTINGS,
+) {
   const user = userEvent.setup({ delay: null })
-  const view = render(<App backend={backend} queryClient={queryClient} />)
+  const view = render(<App backend={backend} queryClient={queryClient} settings={settings} />)
   return { ...view, user, backend, queryClient }
 }
 

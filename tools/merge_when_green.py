@@ -10,7 +10,11 @@ Usage:
     merge_when_green.py 31
     merge_when_green.py 31 --repo owner/name --timeout-s 1800
 
-Exit status: 0 when merged, 1 when refused or still pending at the timeout.
+Exit status: 0 when GitHub reports the pull request merged, 1 when refused,
+still pending at the timeout, or not merged after every attempt. A merge is
+believed only from the pull request's state: right after its checks GitHub may
+still be computing whether it can merge, and with branches deleted on merge
+`gh pr merge --delete-branch` fails after a merge that worked.
 """
 
 from __future__ import annotations
@@ -28,6 +32,9 @@ RULESETS = Path(__file__).resolve().parents[1] / ".github" / "rulesets"
 REPOSITORY = "SergioDeIscarValera/sky-orchestrator-client"
 FINISHED_WELL = frozenset({"pass", "skipping"})
 PENDING = "pending"
+MERGED = "MERGED"
+MERGE_ATTEMPTS = 4
+MERGE_RETRY_S = 10.0
 
 Runner = Callable[[Sequence[str]], str]
 
@@ -121,9 +128,23 @@ def main(
         for problem in current.problems:
             print(f"  {problem}", file=sys.stderr)
         return 1
-    runner(["pr", "merge", number, "--repo", arguments.repo, "--merge", "--delete-branch"])
-    print(f"#{number} merged: {', '.join(sorted(check.name for check in checks))} passed")
-    return 0
+    state = ""
+    for attempt in range(MERGE_ATTEMPTS):
+        if attempt > 0:
+            sleep(MERGE_RETRY_S)
+        runner(["pr", "merge", number, "--repo", arguments.repo, "--merge", "--delete-branch"])
+        state = runner(
+            ["pr", "view", number, "--repo", arguments.repo, "--json", "state", "--jq", ".state"]
+        ).strip()
+        if state == MERGED:
+            print(f"#{number} merged: {', '.join(sorted(check.name for check in checks))} passed")
+            return 0
+    print(
+        f"#{number} is green but was not merged: GitHub reports it {state or 'unknown'} "
+        f"after {MERGE_ATTEMPTS} attempts",
+        file=sys.stderr,
+    )
+    return 1
 
 
 if __name__ == "__main__":

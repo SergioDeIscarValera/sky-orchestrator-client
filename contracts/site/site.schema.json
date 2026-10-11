@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator-client/blob/develop/contracts/site/site.schema.json",
+  "title": "An organization's site model",
+  "description": "site.json, written by soc-site bake beside elevation.f32 and imagery.png, and read by the console (ADR-0018, FR-DEP-05, FR-SCN-02). Both assets lie on the organization's local frame (ADR-0009): a square twice half_size_m across, centred on the origin, rows from north to south and columns from west to east.",
+  "x-version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "origin", "frame", "half_size_m", "elevation", "imagery", "sources", "attribution", "baked_by"],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "sha256", "fetched_at", "licence"],
+      "properties": {
+        "url": { "type": "string", "pattern": "^https://" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "fetched_at": { "type": "string", "description": "When soc-site fetch downloaded it, ISO 8601 with its offset." },
+        "licence": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+\\.[0-9]+$" },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latitude_deg", "longitude_deg"],
+      "properties": {
+        "latitude_deg": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude_deg": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+    "frame": { "type": "string" },
+    "half_size_m": { "type": "number", "exclusiveMinimum": 0, "maximum": 5000 },
+    "elevation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "encoding", "vertices", "spacing_m", "minimum_m", "maximum_m", "at_origin_m", "sha256"],
+      "properties": {
+        "file": { "const": "elevation.f32" },
+        "encoding": { "type": "string" },
+        "vertices": { "type": "integer", "minimum": 3, "maximum": 513, "description": "Per side, odd, so one vertex sits on the origin." },
+        "spacing_m": { "type": "number", "exclusiveMinimum": 0 },
+        "minimum_m": { "type": "number" },
+        "maximum_m": { "type": "number" },
+        "at_origin_m": { "type": "number", "description": "The ground's height at the origin, above mean sea level, as the source gives it." },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "imagery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "encoding", "texels", "shade_share", "sun", "sha256"],
+      "properties": {
+        "file": { "const": "imagery.png" },
+        "encoding": { "type": "string" },
+        "texels": { "type": "integer", "minimum": 16, "maximum": 2048 },
+        "shade_share": { "type": "number", "minimum": 0, "maximum": 1 },
+        "sun": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["azimuth_deg", "altitude_deg"],
+          "properties": {
+            "azimuth_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+            "altitude_deg": { "type": "number", "minimum": 0, "maximum": 90 }
+          }
+        },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elevation", "imagery"],
+      "properties": {
+        "elevation": { "$ref": "#/$defs/source" },
+        "imagery": { "$ref": "#/$defs/source" }
+      }
+    },
+    "attribution": { "type": "string", "minLength": 1, "description": "Shown at the foot of the scene, as the sources' licences require." },
+    "baked_by": { "type": "string" }
+  }
+}

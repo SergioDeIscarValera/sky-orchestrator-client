@@ -1,8 +1,11 @@
 import { z } from '../schema'
+import { settingsOf, settingsSchema, type Settings } from './settings'
 
 export interface RuntimeConfiguration {
   readonly supabaseUrl: string
   readonly supabaseKey: string
+  /** soc-web's configuration file, as the container was given it (ADR-0023). */
+  readonly settings: Settings
 }
 
 export class ConfigurationError extends Error {
@@ -27,6 +30,7 @@ const schema = z.strictObject({
       }
     }),
   ),
+  settings: settingsSchema,
 })
 
 export async function loadRuntimeConfiguration(
@@ -62,6 +66,7 @@ export function parseRuntimeConfiguration(raw: unknown): RuntimeConfiguration {
   return {
     supabaseUrl: parsed.data.supabase_url.replace(/\/$/, ''),
     supabaseKey: parsed.data.supabase_key,
+    settings: settingsOf(parsed.data.settings),
   }
 }
 

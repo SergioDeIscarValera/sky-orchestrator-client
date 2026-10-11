@@ -8,6 +8,7 @@ const LIGHT = {
   border: 'gainsboro',
   muted: 'gray',
   primary: 'teal',
+  casing: 'darkslategray',
 }
 const DARK = {
   page: 'black',
@@ -15,6 +16,7 @@ const DARK = {
   border: 'slategray',
   muted: 'silver',
   primary: 'teal',
+  casing: 'whitesmoke',
 }
 
 function theme(name: 'light' | 'dark', tokens: typeof LIGHT): void {
@@ -34,6 +36,7 @@ describe("the scene's palette (FR-SCN-08)", () => {
       gridMinor: 'gainsboro',
       gridMajor: 'gray',
       accent: 'teal',
+      casing: 'darkslategray',
     })
   })
 

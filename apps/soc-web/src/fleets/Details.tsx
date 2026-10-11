@@ -1,0 +1,73 @@
+import { useId, type ReactNode } from 'react'
+
+import { useSelect } from '../app/router'
+import { QUIET_BUTTON } from '../app/styles'
+
+export function Details({
+  title,
+  aside,
+  rows,
+}: {
+  readonly title: string
+  /** Said of the whole section, beside its title. */
+  readonly aside?: ReactNode
+  readonly rows: readonly (readonly [string, ReactNode])[]
+}) {
+  const heading = useId()
+  return (
+    <section aria-labelledby={heading} className="mt-5">
+      <div className="flex items-center justify-between gap-3">
+        <h4 id={heading} className="text-muted text-xs font-semibold tracking-wider uppercase">
+          {title}
+        </h4>
+        {aside}
+      </div>
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="text-muted">{label}</dt>
+            <dd className="text-heading min-w-0 text-right break-words">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
+
+/** What a stale link or a retired fleet leaves selected, with the way out. */
+export function Gone({ children }: { readonly children: ReactNode }) {
+  const select = useSelect()
+  return (
+    <div>
+      <p className="text-sm">{children}</p>
+      <button
+        type="button"
+        className={`${QUIET_BUTTON} mt-3 -ml-3`}
+        onClick={() => {
+          select(null)
+        }}
+      >
+        Clear the selection
+      </button>
+    </div>
+  )
+}
+
+export function Waiting({ children }: { readonly children: ReactNode }) {
+  return <p className="text-muted text-sm">{children}</p>
+}
+
+/** Why a viewer's buttons are off; the buttons point at it. */
+export function ReadOnlyReason({
+  id,
+  organization,
+}: {
+  readonly id: string
+  readonly organization: string
+}) {
+  return (
+    <p id={id} className="text-muted mt-2 text-xs">
+      Your role in {organization} only reads: editors and owners change fleets.
+    </p>
+  )
+}

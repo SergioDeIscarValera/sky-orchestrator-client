@@ -23,7 +23,7 @@ permissions:
 jobs:
   policy:
     name: Pull request policy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       # The release notes group pull requests by label (.github/release.yml); the

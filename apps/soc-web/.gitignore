@@ -1,3 +1,5 @@
 node_modules
 dist
 *.tsbuildinfo
+soc-web.json
+dist-measure

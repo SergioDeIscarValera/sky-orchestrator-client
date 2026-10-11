@@ -1,5 +1,17 @@
+/**
+ * A card over the scene. In the dark theme its shadow is lost on the dark ground,
+ * which is the card's own colour, so a hairline in the border token outlines it.
+ */
+export const CARD = 'rounded-card bg-surface shadow-card dark:border-border dark:border'
+
 export const PRIMARY_BUTTON =
   'rounded-pill bg-primary text-on-primary font-heading inline-flex h-11 items-center justify-center gap-2 px-5 text-sm font-semibold transition-[filter] duration-200 hover:brightness-95 disabled:cursor-wait disabled:opacity-70'
+
+/** A button the user's role cannot use: still focusable, pointing at the reason. */
+export const UNAVAILABLE = 'aria-disabled:cursor-not-allowed aria-disabled:opacity-60'
+
+export const DANGER_BUTTON =
+  'rounded-pill bg-danger-subtle text-danger-emphasis font-heading inline-flex h-11 items-center justify-center gap-2 px-5 text-sm font-semibold transition-[filter] duration-200 hover:brightness-95 disabled:cursor-wait disabled:opacity-70'
 
 export const QUIET_BUTTON =
   'rounded-pill text-muted hover:bg-primary-subtle hover:text-primary-emphasis inline-flex h-9 items-center gap-2 px-3 text-sm transition-colors duration-200'

@@ -1,0 +1,113 @@
+import { Crosshair } from 'lucide-react'
+
+import { QUIET_BUTTON } from '../app/styles'
+import { aircraftKey } from '../backend/backend'
+import { Details } from '../fleets/Details'
+import { useCameraCommands } from '../scene/commands'
+import { useTrack } from './context'
+import { useFreshness, type Freshness } from './freshness'
+import { formatAge, formatCoordinates, formatHeading, formatMetres, modeName } from './format'
+import type { Takeoff } from './store'
+
+const TONE: Readonly<Record<Freshness, string>> = {
+  live: 'bg-success-subtle text-success-emphasis',
+  stale: 'bg-warning-subtle text-warning-emphasis',
+  lost: 'bg-danger-subtle text-danger-emphasis',
+}
+
+const WORD: Readonly<Record<Freshness, string>> = {
+  live: 'Live',
+  stale: 'Stale',
+  lost: 'Lost',
+}
+
+function unavailable(value: string | null) {
+  return value ?? <span className="text-muted">Unavailable</span>
+}
+
+/** Where the height is measured from; not seen idle, the scene guesses it (ADR-0014). */
+function takeoffPoint(takeoff: Takeoff | null) {
+  if (takeoff === null) return unavailable(null)
+  if (takeoff.estimated) {
+    return <span className="text-muted">Not seen; the scene assumes its first position</span>
+  }
+  return formatCoordinates(takeoff.latitudeDeg, takeoff.longitudeDeg)
+}
+
+/**
+ * What the aircraft last said and how long ago (FR-TEL-02, FR-TEL-03, FR-FLE-04). A value
+ * the sample lacks reads as unavailable, never zero; so do the values Sky Orchestrator does
+ * not send yet (DEP-08, DEP-09).
+ */
+export function LiveValues({
+  gatewaySn,
+  aircraftSn,
+}: {
+  readonly gatewaySn: string
+  readonly aircraftSn: string
+}) {
+  const track = useTrack(gatewaySn, aircraftSn)
+  const { freshness, ageMs } = useFreshness(track?.latest.receivedAt ?? null)
+
+  if (track === undefined || freshness === null || ageMs === null) {
+    return <Details title="Live" rows={[['Telemetry', 'No sample since the console opened']]} />
+  }
+  const sample = track.latest.sample
+  return (
+    <>
+      <FollowButton aircraft={aircraftKey(gatewaySn, aircraftSn)} />
+      <Details
+        title="Live"
+        aside={
+          <span
+            className={`rounded-pill inline-flex h-6 items-center px-2.5 text-xs font-medium tracking-normal normal-case ${TONE[freshness]}`}
+          >
+            {WORD[freshness]}, {formatAge(ageMs)} ago
+          </span>
+        }
+        rows={[
+          ['Position', unavailable(formatCoordinates(sample.latitudeDeg, sample.longitudeDeg))],
+          ['Height above takeoff', unavailable(formatMetres(sample.heightM))],
+          ['Takeoff point', takeoffPoint(track.takeoff)],
+          ['Heading', unavailable(formatHeading(sample.headingDeg))],
+          ['Distance from home', unavailable(formatMetres(sample.homeDistanceM))],
+          [
+            'Battery',
+            unavailable(sample.batteryPct === null ? null : `${String(sample.batteryPct)} %`),
+          ],
+          [
+            'Satellites',
+            unavailable(sample.satellites === null ? null : String(sample.satellites)),
+          ],
+          [
+            'Positioning quality',
+            unavailable(sample.gpsQuality === null ? null : String(sample.gpsQuality)),
+          ],
+          ['Flight mode', unavailable(modeName(sample.modeCode))],
+          ['Horizontal speed', unavailable(null)],
+          ['Vertical speed', unavailable(null)],
+          ['Flight time left', unavailable(null)],
+          ['Link quality', unavailable(null)],
+        ]}
+      />
+    </>
+  )
+}
+
+/** Pins the aircraft: the scene's camera follows it until unpinned or moved (FR-SCN-05). */
+function FollowButton({ aircraft }: { readonly aircraft: string }) {
+  const following = useCameraCommands((state) => state.pinned === aircraft)
+  return (
+    <button
+      type="button"
+      aria-pressed={following}
+      className={`${QUIET_BUTTON} aria-pressed:bg-primary-subtle aria-pressed:text-primary-emphasis mt-4 -ml-3`}
+      onClick={() => {
+        useCameraCommands.getState().pin(following ? null : aircraft)
+      }}
+    >
+      <Crosshair size={16} aria-hidden />
+      {following ? 'Following in the scene' : 'Follow in the scene'}
+    </button>
+  )
+}

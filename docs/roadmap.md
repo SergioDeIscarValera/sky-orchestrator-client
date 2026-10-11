@@ -10,18 +10,21 @@ Each milestone ends in a release, and each line of its plan is one pull request
 made of small commits, one domain each ([ADR-0003](architecture/decisions/0003-git-flow-and-conventional-commits.md)).
 Each milestone has **exit criteria**: falsifiable statements, not a feeling of
 progress. A milestone is closed when every criterion is demonstrated.
+Every milestone gets at least one release (Sergio's rule, 2026-10-11): one
+whose criteria are not all demonstrated is released all the same, its open
+criteria named in the changelog's Known limitations, and closes once they are.
 
 The MVP is M5: **a first real flight commanded from SOC**
 ([ADR-0013](architecture/decisions/0013-narrow-vertical-slice-for-the-mvp.md)).
 
-| Milestone | Release | Outcome |
-| --- | --- | --- |
-| M0 Foundations | v0.1.0 | Repository, conventions, pipelines, requirements, decisions |
-| M1 Platform and viability | v0.2.0 | Every unit runs, measured where the design could break |
-| M2 Live fleet | v0.3.0 | A registered aircraft's live telemetry in 3D, on the farm's terrain |
-| M3 Mission design | v0.4.0 | Geofences and waylines drawn, baked, validated, turned into files SO accepts |
-| M4 Operations | v0.5.0 | A whole operation flown from the web against SO's fake bridge |
-| M5 First real flight | v0.6.0 | **MVP**: the same, with the real aircraft |
+| Milestone | Release | Outcome | State on 2026-10-11 |
+| --- | --- | --- | --- |
+| M0 Foundations | v0.1.0 | Repository, conventions, pipelines, requirements, decisions | Closed, released |
+| M1 Platform and viability | v0.2.0 | Every unit runs, measured where the design could break | Released with 4 of 7 criteria demonstrated; 3 wait on the mini-PC's box steps and read access to SO's packages |
+| M2 Live fleet | v0.3.0 | A registered aircraft's live telemetry in 3D, on the farm's terrain | Closed, released: 5 of 5 criteria, in the console end to end |
+| M3 Mission design | v0.4.0 | Geofences and waylines drawn, baked, validated, turned into files SO accepts | Next; the local frame already in (`soc-geo`) |
+| M4 Operations | v0.5.0 | A whole operation flown from the web against SO's fake bridge | Planned |
+| M5 First real flight | v0.6.0 | **MVP**: the same, with the real aircraft | Planned |
 
 ---
 
@@ -53,7 +56,10 @@ The MVP is M5: **a first real flight commanded from SOC**
 
 ---
 
-## M1 — Platform and viability · v0.2.0
+## M1 — Platform and viability · *released 2026-10-11, v0.2.0, three criteria open*
+
+Released by decision, one release per milestone: the open criteria need the
+mini-PC and read access to Sky Orchestrator's packages, and close there.
 
 | Step | Pull request |
 | --- | --- |
@@ -69,40 +75,41 @@ The MVP is M5: **a first real flight commanded from SOC**
 | `soc-cloud` command path: command intents in the database, announced, claimed once, put on the wire | `feature/database/command-intents`, merged (#26); `feature/cloud/commands`, merged (#27) |
 | Sky Orchestrator's contracts pinned to its v0.4.1 release | `feature/contracts/sky-orchestrator-v0.4.1`, merged (#28) |
 | `soc-operations` skeleton: configuration, health, the database link; its transition intents arrive with the operations in M4 | `feature/operations/skeleton`, merged (#29, fixed by #30) |
-| `soc-web` skeleton: tokens and the shell; sign-in, organization first and the runtime configuration; the persistent scene and panels | `feature/web/scaffold`, merged (#34); `feature/database/member-organizations`, merged (#35); `feature/web/sign-in`, merged (#38); `feature/web/image`, merged (#40); `feature/web/scene` |
-| Compose stack for the mini-PC, the stack check in CI, the deploy command with its flight guard | `feature/infra/images`, merged (#32): the images and the compose project; `feature/repo/release-images`, merged (#33); `feature/infra/stack-and-check` |
-| Viability session on the mini-PC, measured | `feature/infra/viability-session` |
+| `soc-web` skeleton: tokens and the shell; sign-in, organization first and the runtime configuration; the persistent scene and panels | `feature/web/scaffold`, merged (#34); `feature/database/member-organizations`, merged (#35); `feature/web/sign-in`, merged (#38); `feature/web/image`, merged (#40); `feature/web/scene`, merged (#43) |
+| Compose stack for the mini-PC, the stack check in CI, the deploy command with its flight guard | `feature/infra/images`, merged (#32): the images and the compose project; `feature/repo/release-images`, merged (#33); `feature/infra/stack-and-check`, waiting for read access to Sky Orchestrator's packages on GHCR |
+| Viability session on the mini-PC, measured | `feature/infra/viability-session`, waiting for the box steps (`DEP-21`) |
 
 **Exit criteria**
 
-- [ ] Broadcast on a private channel delivers samples from `soc-cloud` to a member's browser on the mini-PC with p95 ≤ 150 ms, refuses a non-member, and still does after the Realtime container is recreated; the tenant's limits and every policy on `realtime.messages` read and recorded (`DEP-23`, `DEP-25`, `RISK-07`)
-- [ ] A pilot's command reaches `soc-cloud` through `pg_notify` within 50 ms at p95, and a command committed while `soc-cloud` was down runs once when it returns, or expires (ADR-0006)
-- [ ] `soc-cloud` answers `flighttask_resource_get` within 500 ms at p99 against SO v0.4.0 with its fake bridge, and SO's dock downloads the file from `soc-cloud` (`FR-LNK-04`, `FR-LNK-05`)
-- [ ] A VO2 user signs in to SOC and sees only their organizations (`FR-AUT-01`, `FR-AUT-02`)
-- [ ] The scene renders nothing while idle and stays within 20 ms per frame at p95 on the operator's laptop (`NFR-RES-01`, `NFR-PERF-06`)
-- [ ] Every container healthy within 60 s, within its declared limits (`FR-DEP-01`, `NFR-RES-05`)
-- [ ] Migrations apply twice with no change the second time; row-level security tested per role (`FR-DEP-02`, `NFR-SEC-01`)
+- [ ] Broadcast on a private channel delivers samples from `soc-cloud` to a member's browser on the mini-PC with p95 ≤ 150 ms, refuses a non-member, and still does after the Realtime container is recreated; the tenant's limits and every policy on `realtime.messages` read and recorded (`DEP-23`, `DEP-25`, `RISK-07`). Proven on the same Realtime and Postgres versions: on the container lane a non-member is refused, and in the console end to end a browser receives every sample within 28 ms at p95 over ten minutes; on the box in the viability session
+- [x] A pilot's command reaches `soc-cloud` through `pg_notify` within 50 ms at p95, and a command committed while `soc-cloud` was down runs once when it returns, or expires (ADR-0006): both on the container lane, `services/soc-cloud/tests/test_against_platform.py`
+- [ ] `soc-cloud` answers `flighttask_resource_get` within 500 ms at p99 against SO v0.4.0 with its fake bridge, and SO's dock downloads the file from `soc-cloud` (`FR-LNK-04`, `FR-LNK-05`). Against a dock speaking SO's contract: p99 under 500 ms over 100 requests and the exact bytes downloaded; against SO's own images once their packages can be read
+- [x] A VO2 user signs in to SOC and sees only their organizations (`FR-AUT-01`, `FR-AUT-02`): in Chrome through GoTrue v2.189.0 behind Kong, the version VO2 runs (`infra/e2e`), and `soc.member_organizations` returns live memberships only (`database/tests/test_member_organizations.py`)
+- [x] The scene renders nothing while idle and stays within 20 ms per frame at p95 on the operator's laptop (`NFR-RES-01`, `NFR-PERF-06`): 0 frames over 30 s idle; 17.6 ms at p95 along `pnpm measure`'s 60 s path with two aircraft at 1920×1080, on an Intel UHD below the Iris Xe class of `ASM-02` (2026-10-11)
+- [ ] Every container healthy within 60 s, within its declared limits (`FR-DEP-01`, `NFR-RES-05`). SOC's images, each on its own: `soc-operations` healthy within 60 s under 64 MiB, `soc-web` under 16 MiB (`infra/check`); the whole stack's timed bring-up arrives with the stack check
+- [x] Migrations apply twice with no change the second time; row-level security tested per role (`FR-DEP-02`, `NFR-SEC-01`): the migration image applies them once, then nothing (`infra/check`); every table's policies tested per role (`database/tests`)
 
 ---
 
-## M2 — Live fleet · v0.3.0
+## M2 — Live fleet · *closed 2026-10-11, v0.3.0*
 
 | Step | Pull request |
 | --- | --- |
-| Aircraft catalogue: the sourced JSON, its schema and its loading migration | `feature/contracts/aircraft-catalogue` |
-| Fleets, devices and stacks in the database, with their policies and RPCs | `feature/database/fleets` |
-| Live telemetry: Broadcast fan-out, presence, stack status, latency instruments | `feature/cloud/live-telemetry` |
-| Fleet panels: catalogue, devices seen, registration, detail, retirement | `feature/web/fleet-panels` |
-| Aircraft in the scene: model, stalk, labels, selection, pin and follow, fly-to | `feature/web/aircraft-in-the-scene` |
-| Site model: the baking tool, stylised terrain, contours, markers | `feature/infra/site-model` |
+| Aircraft catalogue: the sourced JSON, its schema and its loading migration | `feature/contracts/aircraft-models`, merged (#45), 38 models |
+| Fleets, devices and stacks in the database, with their policies and RPCs | `feature/database/fleets`, merged (#48) |
+| Live telemetry: Broadcast fan-out, presence, stack status, latency instruments | `feature/libs/stack-organization`, merged (#50); `feature/cloud/presence`, merged (#51); `feature/cloud/live-telemetry`, merged (#52); `feature/cloud/latency`, merged (#53) |
+| Fleet panels: catalogue, devices seen, registration, detail, retirement | `feature/web/panels`, merged (#54, the view in the URL); `feature/web/fleet-data`, merged (#55); `feature/web/fleet-panel`, merged (#56); `feature/web/fleet-forms`, merged (#60) |
+| Aircraft in the scene: model, stalk, labels, selection, pin and follow, fly-to | `feature/web/settings`, merged (#61, the console's thresholds); `feature/web/live-telemetry`, merged (#62, the browser's telemetry and the inspector's live values); `feature/web/scene-aircraft`, merged (#70); `feature/web/scene-selection`, merged (#72); `feature/web/scene-pin`, merged (#73); `feature/web/delivery-latency`, merged (#74) |
+| Site model: the baking tool, stylised terrain, contours, markers | `feature/infra/site-bake`, merged (#75, the baking tool); `feature/web/site-terrain`, merged (#77); `feature/web/serve-site`, merged (#78); `feature/web/heights-over-terrain`, merged (#79); `feature/web/camera-over-terrain`, merged (#81) |
+| Measured: the frame time on the production build, and the exit criteria through the console | `feature/web/measure-frames`, merged (#80, `pnpm measure`); `feature/infra/console-e2e` (#82, `infra/e2e`: the platform behind Kong, soc-cloud, a dock, the console in Chrome) |
 
 **Exit criteria**
 
-- [ ] A device announced by SO appears within 2 s and is registered as a fleet (`FR-FLE-02`, `FR-FLE-03`)
-- [ ] The fleet's telemetry moves its aircraft in the scene, p95 ≤ 150 ms from `soc-cloud` to the browser (`FR-TEL-01`, `NFR-PERF-01`)
-- [ ] A frozen feed turns stale within 100 ms of the threshold; nothing is drawn past the last sample (`FR-TEL-02`)
-- [ ] A pinned fleet at 15 m/s stays in the central fifth of the view (`FR-SCN-05`)
-- [ ] The farm's site model is baked from its sources, reproducibly, within 8 MB (`FR-DEP-05`, `NFR-PERF-05`)
+- [x] A device announced by SO appears within 2 s and is registered as a fleet (`FR-FLE-02`, `FR-FLE-03`): 87 to 423 ms in Chrome, from a dock speaking SO's vendored contract, registered through the console's form (`infra/e2e`); against SO's own images in the stack session
+- [x] The fleet's telemetry moves its aircraft in the scene, p95 ≤ 150 ms from `soc-cloud` to the browser (`FR-TEL-01`, `NFR-PERF-01`): from the dock's publish to the browser, 15 to 36 ms at p95 (`infra/e2e`)
+- [x] A frozen feed turns stale within 100 ms of the threshold; nothing is drawn past the last sample (`FR-TEL-02`): Stale 2999 to 3001 ms after the last sample in Chrome (`infra/e2e`); the glide's 2,000-case fuzz
+- [x] A pinned fleet at 15 m/s stays in the central fifth of the view (`FR-SCN-05`): the follow test over 60 s of the replay
+- [x] The farm's site model is baked from its sources, reproducibly, within 8 MB (`FR-DEP-05`, `NFR-PERF-05`): `soc-site`, Finca Norte's bake 3.1 MB
 
 ---
 
@@ -110,7 +117,7 @@ The MVP is M5: **a first real flight commanded from SOC**
 
 | Step | Pull request |
 | --- | --- |
-| Geometry golden vectors and the design schema; Python predicates passing them | `feature/libs/geometry` |
+| Geometry golden vectors and the design schema; Python predicates passing them | `feature/libs/projection` (the local frame and its vectors, brought forward for the scene's aircraft in M2); `feature/libs/geometry` |
 | The TypeScript geometry engine: projection, predicates, circle, grid, hull and margin, bake | `feature/web/geometry-engine` |
 | Geofences and waylines in the database | `feature/database/geofences-and-waylines` |
 | Geofence editor and generation from waylines | `feature/web/geofence-editor` |
@@ -154,7 +161,7 @@ dependency register of the requirements.
 
 | Step | Pull request |
 | --- | --- |
-| The field session runbook | `feature/repo/first-flight-runbook` |
+| The field session runbook, with the phone's envelope compared to so-wayline's | `feature/repo/first-flight-runbook` |
 | Session one: the phone in DJI's simulator through SO, commanded from SOC | `feature/repo/simulator-session` |
 | Session two: the real aircraft, the operator on the controller | `feature/repo/first-real-flight` |
 | Fixes found in the sessions, each with its regression test | `bugfix/<scope>/<slug>` |

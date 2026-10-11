@@ -62,3 +62,13 @@ heights above takeoff only mean something drawn over the real ground.
 - Imagery is as old as the last bake and IGN's last flight over the area; the site
   records both dates.
 - The baking tool needs the internet once, run by hand on the mini-PC.
+
+## Notes
+
+- 2026-10-11: the console finds a site model by its path, `/site/<organization>/`,
+  served read-only from soc-web's volume; a 404 means none. The record in
+  `soc.site_models` waits for a service that needs to know a site's model, such as
+  `soc-operations` checking heights over the terrain.
+- 2026-10-11: the terrain is drawn at two levels of detail: the full grid near,
+  every fourth vertex beyond 2.5 km, where 257² vertices at the overview cost the
+  laptop 4 to 8 ms a frame without showing (`NFR-PERF-06`).

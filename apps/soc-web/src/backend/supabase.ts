@@ -8,6 +8,9 @@ import {
 import { z } from '../schema'
 
 import type { RuntimeConfiguration } from '../config/runtime'
+import { fleetOperations, type ChannelFactory } from './supabaseFleets'
+import { loadSite } from '../scene/siteModel'
+import { telemetryOperations } from './supabaseTelemetry'
 import {
   BackendError,
   type Account,
@@ -47,10 +50,11 @@ const TOO_MANY_REQUESTS = 429
 export interface SupabaseOptions {
   readonly fetch?: typeof fetch
   readonly autoRefreshToken?: boolean
+  readonly channel?: ChannelFactory
 }
 
 export function supabaseBackend(
-  configuration: RuntimeConfiguration,
+  configuration: Pick<RuntimeConfiguration, 'supabaseUrl' | 'supabaseKey'>,
   options: SupabaseOptions = {},
 ): Backend {
   const client = createClient(configuration.supabaseUrl, configuration.supabaseKey, {
@@ -63,8 +67,14 @@ export function supabaseBackend(
     global: options.fetch === undefined ? {} : { fetch: options.fetch },
   })
 
+  const channel: ChannelFactory =
+    options.channel ?? ((topic) => client.channel(topic, { config: { private: true } }))
+
   return {
     address: configuration.supabaseUrl,
+    ...fleetOperations(client, channel),
+    ...telemetryOperations(channel),
+    siteModel: (organizationId: string) => loadSite(organizationId),
 
     onAccountChange(listener) {
       const { data } = client.auth.onAuthStateChange((_event, session) => {

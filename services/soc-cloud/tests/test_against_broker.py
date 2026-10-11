@@ -39,6 +39,7 @@ class Cloud:
         self.down_reasons: list[str | None] = []
         stack = Stack(
             name="lab",
+            organization=uuid.UUID("6f1c2b9e-4d2a-4c1e-9a7b-2f3e4d5c6b7a"),
             broker=Broker(
                 host="127.0.0.1",
                 port=broker.port,

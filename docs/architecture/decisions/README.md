@@ -38,3 +38,5 @@ Rules:
 | [0019](0019-one-configuration-contract-no-fallbacks.md) | One configuration contract, a file per service, no fallbacks | Accepted |
 | [0020](0020-web-tests-on-happy-dom-and-zod-mini.md) | The web's unit tests run on happy-dom; its schemas use Zod's mini build | Accepted |
 | [0021](0021-the-scene-camera-and-ground.md) | The scene's camera keeps its own limits; its ground is plain three.js | Accepted |
+| [0022](0022-web-test-files-share-their-workers-modules.md) | The web's test files share their worker's modules | Accepted |
+| [0023](0023-the-console-reads-its-own-configuration-file.md) | The console reads its own configuration file, checked before it starts | Accepted |

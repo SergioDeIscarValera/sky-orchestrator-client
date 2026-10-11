@@ -2,7 +2,8 @@
 #
 #   cp .env.example .env              # the version, the networks, the web's port
 #   cp soc-cloud.env.example soc-cloud.env ... and fill the secrets and addresses
-#   uv run soc-config example soc-cloud > soc-cloud.json ... and fill the blanks
+#   uv run soc-config example soc-cloud > soc-cloud.json ... and soc-operations,
+#   soc-web; fill the blanks
 #   docker compose up -d
 #
 # SOC joins Virtual Origen's and Sky Orchestrator's networks and adds nothing to
@@ -69,10 +70,35 @@ services:
 
   # The browser talks to Supabase itself (ADR-0006), so the web joins no network
   # but its own; its address and public key are written at start (FR-DEP-04).
+  # The console's file is checked by soc-config, the contract's one
+  # implementation, before the console hands it to browsers (ADR-0023);
+  # soc-cloud's image carries soc-config. It reaches no network.
+  soc-web-check:
+    <<: *hardened
+    image: ${SOC_REGISTRY:-ghcr.io/sergiodeiscarvalera/sky-orchestrator-client}/soc-cloud:${SOC_VERSION:?set SOC_VERSION}
+    restart: "no"
+    entrypoint: ["soc-config", "check", "soc-web", "/etc/soc/soc-web.json"]
+    healthcheck: {disable: true}
+    network_mode: none
+    volumes:
+      - ./soc-web.json:/etc/soc/soc-web.json:ro
+    deploy:
+      resources:
+        limits: {memory: 64M, cpus: "0.25"}
+
   soc-web:
     <<: *hardened
     image: ${SOC_REGISTRY:-ghcr.io/sergiodeiscarvalera/sky-orchestrator-client}/soc-web:${SOC_VERSION:?set SOC_VERSION}
+    depends_on:
+      soc-web-check: {condition: service_completed_successfully}
     env_file: [soc-web.env]
+    environment:
+      SOC_CONFIG_FILE: /etc/soc/soc-web.json
+    volumes:
+      - ./soc-web.json:/etc/soc/soc-web.json:ro
+      # The organizations' site models, baked once (ADR-0018); without one, the console
+      # shows a flat ground, and without the folder the console still starts.
+      - ./site:/srv/site:ro
     tmpfs: ["/tmp:size=4m"]
     ports: ["${SOC_WEB_PORT:?set SOC_WEB_PORT}:8080"]
     deploy:

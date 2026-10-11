@@ -51,6 +51,15 @@
   --font-body: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --ease-calm: cubic-bezier(0.2, 0, 0, 1);
+
+  --animate-appear: appear 200ms var(--ease-calm);
+
+  @keyframes appear {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
 }
 
 [data-theme='dark'] {

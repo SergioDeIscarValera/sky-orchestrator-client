@@ -129,6 +129,12 @@ a member's own send is dropped; the socket joins again after the container
 restarts. What only the box can show remains: VO2's tenant settings and ES256
 keys, the latency, and a recreate rather than a restart.
 
+**Status, 2026-10-11**: the console end to end (`infra/e2e`) now runs the
+browser's path on the same versions behind Kong 3.9.1: every sample of a
+ten-minute run reaches Chrome in order, 28 ms at p95 from the dock's publish.
+M2's console is built on Broadcast before the box measurement, which waits for
+the box steps (`DEP-21`); the fallback stays designed, not built.
+
 **Trigger**: the M1 session fails any Broadcast criterion.
 
 ---
@@ -173,6 +179,13 @@ worst moment.
 **Mitigation**: on-demand rendering, no post-processing, a stylised terrain of
 bounded size, budgets measured in M1 on the real laptop (`NFR-PERF-06`,
 `NFR-RES-*`).
+
+**Status, 2026-10-11**: reduced. `pnpm measure` drives the production build along
+the scripted 60 s camera path with two aircraft at 1920×1080: 17.6 ms at p95, 60
+frames a second, over the baked terrain and the flat ground, on an Intel UHD
+below the Iris Xe class of `ASM-02`; 0 frames while idle. The terrain draws its
+far grid at a quarter of the vertices, which brought its overview from 21 to 26 ms
+down to 17.5 ms.
 
 **Trigger**: frame time above 20 ms at p95 on the scripted camera path.
 

@@ -9,7 +9,8 @@ Orchestrator ([ADR-0015](../docs/architecture/decisions/0015-lan-first-deploymen
 | `migrate/` | SOC's migration runner and its ledger | M1 |
 | [`check/`](check/README.md) | The images built and run as the mini-PC runs them; the stack check, everything up from nothing, healthy within 60 s, tested, removed | M1, the images here |
 | `deploy/` | The deploy command, which refuses while a flight is unfinished | M1 |
-| `site/` | The site model baking tool | M2 |
+| [`site/`](site/README.md) | The site model baking tool, `soc-site` | M2, here |
+| [`e2e/`](e2e/README.md) | The console end to end: Virtual Origen's platform behind Kong, `soc-cloud`, a dock on the wire and the console's image, worked in Chrome; M2's exit criteria measured | M2, here |
 
 What SOC never does on the mini-PC: add services to Virtual Origen's or Sky
 Orchestrator's compose projects, publish a port Virtual Origen or Sky
@@ -41,11 +42,20 @@ docker build -f services/soc-cloud/Dockerfile -t soc-cloud:local .
 for secrets run in the image build) and served by
 `nginxinc/nginx-unprivileged:1.30.5-alpine3.24-slim`, both pinned by digest, as
 user 10001:10001. It writes `/config.json` and its security headers into a 4 MB
-`/tmp` at start, from `SOC_WEB_SUPABASE_URL` and `SOC_WEB_SUPABASE_KEY`, and
-refuses to start on a bad address or any key but the public one. 19.5 MB, 2.3
+`/tmp` at start, from `SOC_WEB_SUPABASE_URL`, `SOC_WEB_SUPABASE_KEY` and its own
+configuration file (`SOC_CONFIG_FILE`, ADR-0023), and refuses to start on a bad
+address, any key but the public one, or a file it cannot read. 19.5 MB, 2.3
 MiB at rest.
 
 ## Deploying on the mini-PC
+
+Bake each organization's site model first, from the repository root. A model is optional: an organization without one gets a flat ground (ADR-0018).
+
+1. Fetch IGN's elevation and imagery for the organization's area; this step needs the internet: `uv run soc-site fetch --latitude <latitude> --longitude <longitude> --half-size-m 1000 --sources site/sources`.
+2. Bake the model, offline and the same bytes every time: `uv run soc-site bake --sources site/sources --out site/model`.
+3. Copy the model into the compose project: `mkdir -p infra/compose/site/<organization-id> && cp site/model/* infra/compose/site/<organization-id>/`. Make the folder before `docker compose up`, or Docker creates `site/` as root; the files must be world-readable, since soc-web reads them as user 10001.
+
+Then deploy the stack:
 
 ```bash
 cd infra/compose
@@ -56,6 +66,7 @@ cp soc-operations.env.example soc-operations.env
 cp soc-web.env.example soc-web.env                 # the address browsers reach Supabase at
 uv run soc-config example soc-cloud > soc-cloud.json             # fill the blanks
 uv run soc-config example soc-operations > soc-operations.json
+uv run soc-config example soc-web > soc-web.json                 # the console's thresholds
 uv run soc-config check soc-cloud soc-cloud.json
 docker compose up -d
 ```
@@ -63,4 +74,6 @@ docker compose up -d
 The console then answers on the mini-PC's LAN address, port 8088. The filled
 files are ignored by git. `soc-migrate` runs first and the services
 start only once it has succeeded; never run it during Virtual Origen's own
-deploy.
+deploy. The console starts only once `soc-web-check` has accepted
+`soc-web.json` with `soc-config check soc-web` (ADR-0023); `docker compose logs
+soc-web-check` names every problem of a file it refused.

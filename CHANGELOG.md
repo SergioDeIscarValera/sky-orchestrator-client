@@ -10,6 +10,86 @@ requests it merged.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-11
+
+M2 (live fleet) closed: a registered aircraft's live telemetry in 3D, on the
+farm's terrain. Its five exit criteria are measured through the console itself,
+in Chrome, by the console end to end (#82).
+
+### Added
+
+- The aircraft catalogue, sourced figure by figure, and its loading migration;
+  stacks, devices and fleets in the database, with their policies, each stack
+  naming the organization it flies for (#45, #48, #50).
+- `soc-cloud`: each stack's link, devices and firmware recorded for the console;
+  every telemetry sample fanned out to its organization's members over Realtime
+  Broadcast; the latencies it can see logged every minute (#51, #52, #53).
+- `soc-geo`: the local frame, the east-north tangent plane at the organization,
+  and its inverse, held to golden vectors from PROJ (#66).
+- Sky Orchestrator's v0.4.2 contracts vendored: real flight behind two keys,
+  deadlines with `319999` as an unknown outcome, `media_count` (#68).
+- The console:
+  - the panels opened from the rail, the view kept in the URL (#54);
+  - fleets read and written through Supabase and kept live from the state
+    topic; the fleet panel and the inspector; registering, editing and retiring
+    fleets (#55, #56, #60);
+  - its own configuration file, checked before it starts (#61);
+  - each aircraft's live telemetry with its age, stale and lost at the
+    thresholds (#62);
+  - the organization's aircraft in the scene, gliding between samples; selected,
+    labelled and framed beside the inspector; pinned and followed (#70, #72, #73);
+  - the farm's baked terrain, tinted, with contours and two levels of detail,
+    and the aircraft flying at their takeoff point's ground plus their height,
+    the takeoff point shown in the inspector (#77, #79);
+  - the camera and its target kept over the terrain (#81);
+  - the favicon drawn from the tokens; `pnpm demo` against a fake Supabase;
+    telemetry's delivery at p95 in `?stats`; `pnpm measure`, the frame time on
+    the production build along a scripted path (#69, #71, #74, #80).
+- `soc-site`: a site model fetched from IGN once and baked offline, the same
+  bytes every time, within 8 MB (Finca Norte's 3.1 MB); served read-only by the
+  console's image at `/site/<organization>/` (#75, #78).
+- `infra/e2e`: the console end to end in CI, on Virtual Origen's platform behind
+  Kong, with `soc-cloud`, a dock speaking Sky Orchestrator's contract and the
+  console's image, worked in Chrome (#82).
+
+### Changed
+
+- Every CI job runs on `ubuntu-24.04`; the change detectors read the changed
+  paths from a variable, and every web check runs (#49, #76).
+- The web's test files share their worker's modules: the suite in CI from 10.7 s
+  to 2.8 s (#59).
+- Sky Orchestrator's real-flight unlock, its simulator check and `316010`, the
+  phone's own envelope, the phone's configuration fingerprint of the simulated
+  pass and an execute answered `319999` recorded for M4 (#57, #58, #63, #65,
+  #67).
+
+### Fixed
+
+- `tools/merge_when_green.py` reports a merge only once GitHub says the pull
+  request is merged (#64).
+
+### Measured
+
+- An aircraft announced appears in the console 87 to 423 ms later, and is
+  registered through its form (`FR-FLE-02`, `FR-FLE-03`, within 2 s).
+- Telemetry from the dock's publish to Chrome: 28 ms at p95 and 45 ms at p99
+  over ten minutes at 5 Hz, 3,002 samples in order (`NFR-PERF-01`, 150 and
+  300 ms).
+- A silent dock reads Stale 2,993 to 3,001 ms after the last sample (`FR-TEL-02`,
+  3,000 ms ± 100).
+- The frame time along the scripted 60 s path with two aircraft at 1920×1080:
+  17.6 ms at p95 on an Intel UHD below the operator's laptop class
+  (`NFR-PERF-06`, 20 ms).
+
+### Known limitations
+
+- Against Sky Orchestrator's own images: a dock speaking its contract stands in
+  until SOC can read its packages on GHCR.
+- On the mini-PC: nothing is measured on the box yet (`DEP-21`).
+- A ridge between the camera and its target can hide the target; the camera
+  stays above the ground.
+- `?stats` shows no GPU memory in bytes.
+
 ## [0.2.0] — 2026-10-11
 
 M1 (platform and viability), released with three of its exit criteria still

@@ -11,5 +11,6 @@ if (typeof window !== 'undefined') {
     window.localStorage.clear()
     delete document.documentElement.dataset.theme
     document.documentElement.removeAttribute('style')
+    window.history.replaceState(null, '', '/')
   })
 }

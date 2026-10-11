@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react'
 
 import { Brand } from './Brand'
+import { CARD } from './styles'
 
 export function Centered({ children }: { readonly children: ReactNode }) {
   return <div className="bg-page grid min-h-dvh place-items-center p-4">{children}</div>
@@ -16,10 +17,7 @@ export function Card({
   const heading = useId()
   return (
     <Centered>
-      <main
-        aria-labelledby={heading}
-        className="rounded-card bg-surface shadow-card w-full max-w-md p-8"
-      >
+      <main aria-labelledby={heading} className={`${CARD} w-full max-w-md p-8`}>
         <Brand />
         <h1 id={heading} className="mt-6 text-xl font-semibold">
           {title}

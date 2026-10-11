@@ -39,7 +39,9 @@ function pairs(): [string, string][] {
     [token, 'surface'] as [string, string],
   ])
   const pills = HUES.map((hue) => [`${hue}-emphasis`, `${hue}-subtle`] as [string, string])
-  return [...text, ...pills, ['on-primary', 'primary']]
+  // Links and field errors are an emphasis colour straight on the card.
+  const onCard = HUES.map((hue) => [`${hue}-emphasis`, 'surface'] as [string, string])
+  return [...text, ...pills, ...onCard, ['on-primary', 'primary']]
 }
 
 describe.each([

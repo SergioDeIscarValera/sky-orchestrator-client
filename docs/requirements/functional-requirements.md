@@ -241,7 +241,10 @@ other path answers 404; no port is published on the host.
 Wire command intents (prepare, execute, pause, recovery, return home, undo) are
 sent on `services` with `tid` = the intent's id and `bid` = the flight id. The
 reply's result is recorded on the intent with its latency; no reply within
-`command_reply_timeout_s` marks it timed out.
+`command_reply_timeout_s` marks it timed out. A `319999` to an execute or a
+recovery records an unknown outcome, not a refusal: Sky Orchestrator gave up
+waiting for the phone, which may still have started (SO's ADR-0041); the
+flight's progress settles it (`FR-LNK-07`).
 
 **Acceptance**: each verb against Sky Orchestrator's fake bridge stack records
 `accepted` with result 0; a redelivered intent is sent once.
@@ -512,6 +515,7 @@ The checks, each blocking unless marked:
 | `PF-SO-DRYRUN` | Sky Orchestrator's dry run accepts the flight file |
 | `PF-ENVELOPE` | The geofence lies inside the stack's device envelope (`FR-OPS-08`) |
 | `PF-MODE` | The stack's simulator mode is known |
+| `PF-SIMULATOR` | The phone's simulator agrees with the stack's mode: on in simulator mode, off in real mode (`simulator_active` in the stack's status) |
 | `PF-ARMED` | The operator armed the phone, with at least `min_arming_left_s` left |
 | `PF-IDLE` | The stack has no unfinished flight |
 | `PF-CLOCK` | The stack's clock offset is within its bound (warning, not blocking) |
@@ -525,22 +529,33 @@ prepare with `simulate_mission` (`is_enable` 1, with the latitude and longitude
 SO requires and does not apply), then execute. `ok` leads to
 `simulated`; anything else back to `preparing` with the reason
 ([ADR-0011](../architecture/decisions/0011-simulate-then-fly-the-same-file.md)).
+The pass records the phone's `config_fingerprint` from the stack's status: the
+phone judges the file against its own envelope at load, in the simulator too,
+so the pass proves the phone accepts the file under that configuration.
 
 **Acceptance**: against the fake bridge stack, a simulated pass reaches
 `simulated`; an aborted one returns to `preparing` with its end reason.
 
 ### FR-OPS-07 — Ready · MUST
 An operation is `ready` while: its simulation of this exact file ended `ok`, the
-stack reports real mode, and every blocking check passes. A change to the
+stack reports real mode, the phone's `config_fingerprint` is the one recorded at
+that simulation, and every blocking check passes. A different or unknown
+fingerprint means the phone's configuration changed since the pass, envelope
+included: simulate again. A change to the
 wayline, the geofence or the fleet makes a new file and returns the operation to
 `planned`.
 
 **Acceptance**: editing the wayline of a `simulated` operation returns it to
-`planned` and discards the readiness.
+`planned` and discards the readiness; a stack status with another
+`config_fingerprint` than the pass's keeps the operation from `ready`, naming
+both.
 
 ### FR-OPS-08 — Inside the device envelope · MUST
 The geofence, at its ceiling, lies inside the stack's device envelope: its
 circle and its height limit (SO's FR-WAY-11). Unknown envelope fails the check.
+The envelope SOC can read is so-wayline's (`/v1/envelope`); the phone enforces
+its own, which is set equal to it by hand and compared before a real flight
+(dependencies, "Two envelopes").
 
 **Acceptance**: a geofence one metre outside the circle fails `PF-ENVELOPE`
 naming the vertex.
@@ -549,9 +564,17 @@ naming the vertex.
 From `ready`, after explicit confirmation by a pilot, the real flight is prepared
 with the same file and executed. Refusals are shown with their meaning, told
 apart by the method that drew them (SO's ADR-0037): `314010` on a prepare, "this
-file has not completed a simulation on this stack"; `314010` on an execute, "arm
-the phone, or release the aircraft held from the phone's console, and retry"
-(`DEP-12`); `319015` "the stack's mode is not known yet"; `319004` "the
+file has not completed a simulation on this stack, or lies outside the phone's
+own envelope: the phone's record names the distance"; `314010` on an execute, "arm
+the phone, release the aircraft held from the phone's console, or confirm real
+flight on the phone's screen, and retry" (`DEP-12`; a phone whose app build has
+no simulator pass cannot fly real, SO's ADR-0040; SO does not say which before
+the MVP, `DEP-26`); `316010` on an execute, told apart by the stack's status: "the
+link to the phone is down", "turn the phone's simulator off", or in simulator
+mode "turn the phone's simulator on"; `319999` on an execute, "the outcome is not known yet": SOC reads the flight's
+progress and the stack's status, and a task still `PREPARED` is executed again
+or undone, while a moving one is flying (`DEP-27`); `319015` "the stack's mode
+is not known yet"; `319004` "the
 task was prepared under the other mode: cancel it and prepare again"; `314003`
 "Sky Orchestrator refused the file".
 

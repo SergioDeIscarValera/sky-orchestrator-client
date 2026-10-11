@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from soc_cloud.link.messages import DockOsd, SubDevice, TopologyData
+from soc_cloud.presence import Device
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,15 @@ class Topology:
 
     def gateways(self) -> set[str]:
         return set(self._gateways)
+
+    def devices(self, gateway: str) -> list[Device]:
+        """Every aircraft the gateway lists, each online or not as it is now."""
+        state = self._gateways.get(gateway, Gateway())
+        online = state.online()
+        return [
+            Device(sn, listed.domain, listed.type, listed.sub_type, sn in online)
+            for sn, listed in sorted(state.listed.items())
+        ]
 
     def gateway_of(self, aircraft: str) -> str | None:
         return next(

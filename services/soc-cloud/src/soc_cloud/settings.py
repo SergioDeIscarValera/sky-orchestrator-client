@@ -30,6 +30,7 @@ class Api(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
 
 class Stack(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     name: str
+    organization: uuid.UUID
     broker: Broker
     api: Api
     flight_files_url: str

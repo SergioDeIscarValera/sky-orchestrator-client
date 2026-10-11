@@ -1,6 +1,7 @@
 import { Minus, Plus, Scan } from 'lucide-react'
 
 import { useCameraCommands, type CameraCommand } from './commands'
+import { CARD } from '../app/styles'
 
 const TOOLS: readonly { command: CameraCommand; label: string; Icon: typeof Plus }[] = [
   { command: 'closer', label: 'Closer', Icon: Plus },
@@ -14,7 +15,7 @@ export function MapTools() {
     <div
       role="toolbar"
       aria-label="Map tools"
-      className="rounded-card bg-surface shadow-card pointer-events-auto flex flex-col gap-1 p-2"
+      className={`${CARD} pointer-events-auto flex flex-col gap-1 p-2`}
     >
       {TOOLS.map(({ command, label, Icon }) => (
         <button

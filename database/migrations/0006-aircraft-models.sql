@@ -1,0 +1,2078 @@
+-- The aircraft catalogue (FR-FLE-01, IR-MOD): the models Mobile SDK V4 supports,
+-- with DJI's published figures, each one's source kept beside it. Every signed-in
+-- user reads it; only a migration writes it, from contracts/catalogue.
+
+create type soc.msdk_v4_support as enum ('full', 'partial');
+
+create table soc.aircraft_models (
+  model                   text primary key check (model ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
+  display_name            text not null,
+  msdk_v4_enum            text,
+  msdk_v4_support         soc.msdk_v4_support not null,
+  support_notes           text not null,
+  max_horizontal_speed_ms numeric check (max_horizontal_speed_ms > 0),
+  max_ascent_speed_ms     numeric check (max_ascent_speed_ms > 0),
+  max_descent_speed_ms    numeric check (max_descent_speed_ms > 0),
+  max_flight_time_s       integer check (max_flight_time_s > 0),
+  max_service_ceiling_m   numeric check (max_service_ceiling_m > 0),
+  max_wind_resistance_ms  numeric check (max_wind_resistance_ms > 0),
+  weight_g                integer check (weight_g > 0),
+  camera                  jsonb not null check (jsonb_typeof(camera) = 'object'),
+  thermal                 jsonb not null check (jsonb_typeof(thermal) = 'object'),
+  sources                 jsonb not null check (jsonb_typeof(sources) = 'object'),
+  source_urls             text[] not null check (cardinality(source_urls) > 0)
+);
+
+alter table soc.aircraft_models enable row level security;
+
+create policy aircraft_models_read on soc.aircraft_models for select
+  to authenticated using (true);
+
+grant select on soc.aircraft_models to authenticated;
+
+-- The value of a published figure, or null where DJI publishes none (IR-MOD-01).
+create function soc.published(figure jsonb)
+returns text
+language sql
+immutable
+set search_path = soc, pg_temp
+as $$
+  select case when jsonb_typeof(figure) = 'object' then figure->>'value' end;
+$$;
+
+-- Upserts every model of a catalogue that follows
+-- contracts/catalogue/aircraft-models.schema.json. Models are never removed: a
+-- fleet keeps the model it was registered with.
+create function soc.load_aircraft_models(catalogue jsonb)
+returns integer
+language sql
+set search_path = soc, pg_temp
+as $$
+  with models as (
+    select entry,
+           jsonb_strip_nulls(jsonb_build_object(
+             'msdk_v4_support', entry->>'support_source',
+             'max_horizontal_speed_ms', entry->'max_horizontal_speed_ms'->>'source',
+             'max_ascent_speed_ms', entry->'max_ascent_speed_ms'->>'source',
+             'max_descent_speed_ms', entry->'max_descent_speed_ms'->>'source',
+             'max_flight_time_s', entry->'max_flight_time_s'->>'source',
+             'max_service_ceiling_m', entry->'max_service_ceiling_m'->>'source',
+             'max_wind_resistance_ms', entry->'max_wind_resistance_ms'->>'source',
+             'weight_g', entry->'weight_g'->>'source',
+             'camera.sensor', entry->'camera'->'sensor'->>'source',
+             'camera.photo_resolution', entry->'camera'->'photo_resolution'->>'source',
+             'camera.video_resolution', entry->'camera'->'video_resolution'->>'source',
+             'camera.zoom', entry->'camera'->'zoom'->>'source',
+             'thermal.capability', entry->'thermal'->'capability'->>'source',
+             'thermal.resolution', entry->'thermal'->'resolution'->>'source'
+           )) as sources
+    from jsonb_array_elements(catalogue->'models') as entry
+  ),
+  loaded as (
+    insert into soc.aircraft_models
+    select entry->>'model',
+           entry->>'display_name',
+           entry->>'msdk_v4_enum',
+           (entry->>'msdk_v4_support')::soc.msdk_v4_support,
+           entry->>'support_notes',
+           soc.published(entry->'max_horizontal_speed_ms')::numeric,
+           soc.published(entry->'max_ascent_speed_ms')::numeric,
+           soc.published(entry->'max_descent_speed_ms')::numeric,
+           soc.published(entry->'max_flight_time_s')::integer,
+           soc.published(entry->'max_service_ceiling_m')::numeric,
+           soc.published(entry->'max_wind_resistance_ms')::numeric,
+           soc.published(entry->'weight_g')::integer,
+           jsonb_build_object(
+             'sensor', soc.published(entry->'camera'->'sensor'),
+             'photo_resolution', soc.published(entry->'camera'->'photo_resolution'),
+             'video_resolution', soc.published(entry->'camera'->'video_resolution'),
+             'zoom', soc.published(entry->'camera'->'zoom')
+           ),
+           jsonb_build_object(
+             'capability', soc.published(entry->'thermal'->'capability'),
+             'resolution', soc.published(entry->'thermal'->'resolution')
+           ),
+           sources,
+           array(select distinct url from jsonb_each_text(sources) as source(field, url) order by url)
+    from models
+    on conflict (model) do update set
+      display_name = excluded.display_name,
+      msdk_v4_enum = excluded.msdk_v4_enum,
+      msdk_v4_support = excluded.msdk_v4_support,
+      support_notes = excluded.support_notes,
+      max_horizontal_speed_ms = excluded.max_horizontal_speed_ms,
+      max_ascent_speed_ms = excluded.max_ascent_speed_ms,
+      max_descent_speed_ms = excluded.max_descent_speed_ms,
+      max_flight_time_s = excluded.max_flight_time_s,
+      max_service_ceiling_m = excluded.max_service_ceiling_m,
+      max_wind_resistance_ms = excluded.max_wind_resistance_ms,
+      weight_g = excluded.weight_g,
+      camera = excluded.camera,
+      thermal = excluded.thermal,
+      sources = excluded.sources,
+      source_urls = excluded.source_urls
+    returning 1
+  )
+  select count(*)::integer from loaded;
+$$;
+
+revoke execute on function soc.load_aircraft_models(jsonb) from public, anon, authenticated;
+revoke execute on function soc.published(jsonb) from public, anon, authenticated;
+
+-- Loaded from contracts/catalogue/aircraft-models.json by
+-- tools/catalogue_migration.py; a changed catalogue is a new migration.
+select soc.load_aircraft_models($catalogue$
+{
+  "models": [
+    {
+      "model": "dji-air-2s",
+      "display_name": "DJI Air 2S",
+      "msdk_v4_enum": "DJI_AIR_2S",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported by DJI Air 2S: the flight orientation setting (Aircraft Heading, Course Lock or Home Lock) and the low battery warning threshold setting (DJIFlightController); the stick pull-back of a waypoint mission (DJIWaypointMission class description); the SPOTLIGHT_PRO ActiveTrack mode (DJIActiveTrackMission); the self-discharge period setting for smart batteries (DJIBattery).",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/FlightController/DJIFlightController.html",
+      "max_horizontal_speed_ms": {
+        "value": 19.0,
+        "source": "https://www.dji.com/support/product/air-2s"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/air-2s"
+      },
+      "max_descent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/air-2s"
+      },
+      "max_flight_time_s": {
+        "value": 1860,
+        "source": "https://www.dji.com/support/product/air-2s"
+      },
+      "max_service_ceiling_m": {
+        "value": 5000,
+        "source": "https://www.dji.com/support/product/air-2s"
+      },
+      "max_wind_resistance_ms": {
+        "value": 10.7,
+        "source": "https://www.dji.com/support/product/air-2s"
+      },
+      "weight_g": {
+        "value": 595,
+        "source": "https://www.dji.com/support/product/air-2s"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1\" CMOS / Effective Pixels: 20 MP; 2.4μm Pixel Size",
+          "source": "https://www.dji.com/support/product/air-2s"
+        },
+        "photo_resolution": {
+          "value": "5472×3648",
+          "source": "https://www.dji.com/support/product/air-2s"
+        },
+        "video_resolution": {
+          "value": "5472×3078 @ 30 fps",
+          "source": "https://www.dji.com/support/product/air-2s"
+        },
+        "zoom": {
+          "value": "Digital Zoom: Zoom recording is not available while recording 10-bit videos and 120fps videos. / 4K/30fps: 4x; / 2.7K/60fps: 4x; / 2.7K/30fps: 6x; / 1080p/60fps: 6x; / 1080p/30fps: 8x",
+          "source": "https://www.dji.com/support/product/air-2s"
+        }
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/air-2s"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "dji-mini-2",
+      "display_name": "DJI Mini 2",
+      "msdk_v4_enum": "DJI_MINI_2",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported by DJI Mini 2: the flight orientation setting (Aircraft Heading, Course Lock or Home Lock) and the low battery warning threshold setting (DJIFlightController); the storage location setting for photos and videos (DJICamera); the stick pull-back of a waypoint mission (DJIWaypointMission class description).",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/FlightController/DJIFlightController.html",
+      "max_horizontal_speed_ms": {
+        "value": 16.0,
+        "source": "https://www.dji.com/support/product/mini-2"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/mini-2"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.5,
+        "source": "https://www.dji.com/support/product/mini-2"
+      },
+      "max_flight_time_s": {
+        "value": 1860,
+        "source": "https://www.dji.com/support/product/mini-2"
+      },
+      "max_service_ceiling_m": {
+        "value": 4000,
+        "source": "https://www.dji.com/support/product/mini-2"
+      },
+      "max_wind_resistance_ms": {
+        "value": 8.5,
+        "source": "https://www.dji.com/support/product/mini-2"
+      },
+      "weight_g": null,
+      "camera": {
+        "sensor": {
+          "value": "1/2.3” CMOS / Effective Pixels: 12 MP",
+          "source": "https://www.dji.com/support/product/mini-2"
+        },
+        "photo_resolution": {
+          "value": "4000×3000",
+          "source": "https://www.dji.com/support/product/mini-2"
+        },
+        "video_resolution": {
+          "value": "3840×2160 @ 30 fps",
+          "source": "https://www.dji.com/support/product/mini-2"
+        },
+        "zoom": {
+          "value": "Zoom Range: 4K: 2x / 2.7K: 3x / FHD: 4x",
+          "source": "https://www.dji.com/support/product/mini-2"
+        }
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/mini-2"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "dji-mini-se",
+      "display_name": "DJI Mini SE",
+      "msdk_v4_enum": "DJI_MINI_SE",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported by DJI Mini SE: the flight orientation setting (Aircraft Heading, Course Lock or Home Lock) and the low battery warning threshold setting (DJIFlightController); the storage location setting for photos and videos (DJICamera); the stick pull-back of a waypoint mission (DJIWaypointMission class description).",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/FlightController/DJIFlightController.html",
+      "max_horizontal_speed_ms": {
+        "value": 13.0,
+        "source": "https://www.dji.com/support/product/mini-se"
+      },
+      "max_ascent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/mini-se"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/mini-se"
+      },
+      "max_flight_time_s": {
+        "value": 1800,
+        "source": "https://www.dji.com/support/product/mini-se"
+      },
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": {
+        "value": 10.5,
+        "source": "https://www.dji.com/support/product/mini-se"
+      },
+      "weight_g": null,
+      "camera": {
+        "sensor": {
+          "value": "1/2.3” CMOS / Effective Pixels: 12 MP",
+          "source": "https://www.dji.com/support/product/mini-se"
+        },
+        "photo_resolution": {
+          "value": "4000×3000",
+          "source": "https://www.dji.com/support/product/mini-se"
+        },
+        "video_resolution": {
+          "value": "2720×1530 @ 30 fps",
+          "source": "https://www.dji.com/support/product/mini-se"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/mini-se"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "inspire-1",
+      "display_name": "Inspire 1",
+      "msdk_v4_enum": "INSPIRE_1",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 21.94,
+        "source": "https://www.dji.com/support/product/inspire-1"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/inspire-1"
+      },
+      "max_descent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/inspire-1"
+      },
+      "max_flight_time_s": {
+        "value": 1080,
+        "source": "https://www.dji.com/support/product/inspire-1"
+      },
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": {
+        "value": 10.0,
+        "source": "https://www.dji.com/support/product/inspire-1"
+      },
+      "weight_g": {
+        "value": 2845,
+        "source": "https://www.dji.com/support/product/inspire-1"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "inspire-1-pro",
+      "display_name": "Inspire 1 Pro",
+      "msdk_v4_enum": "INSPIRE_1_PRO",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": null,
+      "max_ascent_speed_ms": null,
+      "max_descent_speed_ms": null,
+      "max_flight_time_s": null,
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": null,
+      "weight_g": null,
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "inspire-1-raw",
+      "display_name": "Inspire 1 RAW",
+      "msdk_v4_enum": "INSPIRE_1_RAW",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": null,
+      "max_ascent_speed_ms": null,
+      "max_descent_speed_ms": null,
+      "max_flight_time_s": null,
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": null,
+      "weight_g": null,
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "inspire-2",
+      "display_name": "Inspire 2",
+      "msdk_v4_enum": "INSPIRE_2",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 26.11,
+        "source": "https://www.dji.com/support/product/inspire-2"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/inspire-2"
+      },
+      "max_descent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/inspire-2"
+      },
+      "max_flight_time_s": {
+        "value": 1620,
+        "source": "https://www.dji.com/support/product/inspire-2"
+      },
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": {
+        "value": 10.0,
+        "source": "https://www.dji.com/support/product/inspire-2"
+      },
+      "weight_g": {
+        "value": 3440,
+        "source": "https://www.dji.com/support/product/inspire-2"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/inspire-2"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-100",
+      "display_name": "Matrice 100",
+      "msdk_v4_enum": "MATRICE_100",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 22.0,
+        "source": "https://www.dji.com/support/product/matrice100"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice100"
+      },
+      "max_descent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/matrice100"
+      },
+      "max_flight_time_s": null,
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": {
+        "value": 10.0,
+        "source": "https://www.dji.com/support/product/matrice100"
+      },
+      "weight_g": {
+        "value": 2355,
+        "source": "https://www.dji.com/support/product/matrice100"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-200",
+      "display_name": "Matrice 200",
+      "msdk_v4_enum": null,
+      "msdk_v4_support": "full",
+      "support_notes": "Not in the V4 DJIAircraftModelName enum; listed in DJI's Mobile SDK supported-products table (hardware introduction page, dated 2020-05-23). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html",
+      "max_horizontal_speed_ms": {
+        "value": 23.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_flight_time_s": {
+        "value": 2280,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_service_ceiling_m": {
+        "value": 3000,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_wind_resistance_ms": {
+        "value": 12.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "weight_g": {
+        "value": 3800,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-200-v2",
+      "display_name": "Matrice 200 V2",
+      "msdk_v4_enum": "MATRICE_200_V2",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 22.5,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_flight_time_s": {
+        "value": 2280,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_service_ceiling_m": {
+        "value": 3000,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_wind_resistance_ms": {
+        "value": 12.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "weight_g": {
+        "value": 4690,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-210",
+      "display_name": "Matrice 210",
+      "msdk_v4_enum": "MATRICE_210",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 23.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_flight_time_s": {
+        "value": 2280,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_service_ceiling_m": {
+        "value": 3000,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_wind_resistance_ms": {
+        "value": 12.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "weight_g": {
+        "value": 3840,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-210-rtk",
+      "display_name": "Matrice 210 RTK",
+      "msdk_v4_enum": "MATRICE_210_RTK",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 23.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_flight_time_s": {
+        "value": 1920,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_service_ceiling_m": {
+        "value": 3000,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "max_wind_resistance_ms": {
+        "value": 12.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "weight_g": {
+        "value": 4420,
+        "source": "https://www.dji.com/support/product/matrice-200-series"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-210-rtk-v2",
+      "display_name": "Matrice 210 RTK V2",
+      "msdk_v4_enum": "MATRICE_210_RTK_V2",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 22.5,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_flight_time_s": {
+        "value": 1980,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_service_ceiling_m": {
+        "value": 3000,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_wind_resistance_ms": {
+        "value": 12.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "weight_g": {
+        "value": 4910,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-210-v2",
+      "display_name": "Matrice 210 V2",
+      "msdk_v4_enum": "MATRICE_210_V2",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 22.5,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_flight_time_s": {
+        "value": 2040,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_service_ceiling_m": {
+        "value": 3000,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "max_wind_resistance_ms": {
+        "value": 12.0,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "weight_g": {
+        "value": 4800,
+        "source": "https://www.dji.com/support/product/matrice-200-series-v2"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-300-rtk",
+      "display_name": "Matrice 300 RTK",
+      "msdk_v4_enum": "MATRICE_300_RTK",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported by Matrice 300 RTK: the stick pull-back of a waypoint mission (DJIWaypointMission class description, listed with Spark, the Mini series, Mavic Air 2 and DJI Air 2S). The V2 waypoint mission page names no model restriction.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/Missions/DJIWaypointMission.html",
+      "max_horizontal_speed_ms": {
+        "value": 23.0,
+        "source": "https://www.dji.com/support/product/matrice-300"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/matrice-300"
+      },
+      "max_descent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice-300"
+      },
+      "max_flight_time_s": {
+        "value": 3300,
+        "source": "https://www.dji.com/support/product/matrice-300"
+      },
+      "max_service_ceiling_m": {
+        "value": 5000,
+        "source": "https://www.dji.com/support/product/matrice-300"
+      },
+      "max_wind_resistance_ms": {
+        "value": 12.0,
+        "source": "https://www.dji.com/support/product/matrice-300"
+      },
+      "weight_g": {
+        "value": 6300,
+        "source": "https://www.dji.com/support/product/matrice-300"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-350-rtk",
+      "display_name": "Matrice 350 RTK",
+      "msdk_v4_enum": null,
+      "msdk_v4_support": "full",
+      "support_notes": "Not in the V4 DJIAircraftModelName enum, so msdk_v4_enum is null. DJI's V4 reference names it in feature notes (DJIFlightController: 'Only supported by M300 RTK and M350 RTK.') and in aircraft index notes (DJIBattery, DJICamera, DJIGimbal, DJIRemoteController). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/FlightController/DJIFlightController.html",
+      "max_horizontal_speed_ms": {
+        "value": 23.0,
+        "source": "https://www.dji.com/support/product/matrice-350-rtk"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/matrice-350-rtk"
+      },
+      "max_descent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice-350-rtk"
+      },
+      "max_flight_time_s": {
+        "value": 3300,
+        "source": "https://www.dji.com/support/product/matrice-350-rtk"
+      },
+      "max_service_ceiling_m": {
+        "value": 5000,
+        "source": "https://www.dji.com/support/product/matrice-350-rtk"
+      },
+      "max_wind_resistance_ms": {
+        "value": 12.0,
+        "source": "https://www.dji.com/support/product/matrice-350-rtk"
+      },
+      "weight_g": {
+        "value": 6470,
+        "source": "https://www.dji.com/support/product/matrice-350-rtk"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://www.dji.com/support/product/matrice-350-rtk"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-600",
+      "display_name": "Matrice 600",
+      "msdk_v4_enum": "MATRICE_600",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 18.0,
+        "source": "https://www.dji.com/support/product/matrice600"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice600"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/matrice600"
+      },
+      "max_flight_time_s": null,
+      "max_service_ceiling_m": {
+        "value": 2500,
+        "source": "https://www.dji.com/support/product/matrice600"
+      },
+      "max_wind_resistance_ms": {
+        "value": 8.0,
+        "source": "https://www.dji.com/support/product/matrice600"
+      },
+      "weight_g": {
+        "value": 9100,
+        "source": "https://www.dji.com/support/product/matrice600"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "matrice-600-pro",
+      "display_name": "Matrice 600 Pro",
+      "msdk_v4_enum": "MATRICE_600_PRO",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 18.06,
+        "source": "https://www.dji.com/support/product/matrice600-pro"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/matrice600-pro"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/matrice600-pro"
+      },
+      "max_flight_time_s": null,
+      "max_service_ceiling_m": {
+        "value": 2500,
+        "source": "https://www.dji.com/support/product/matrice600-pro"
+      },
+      "max_wind_resistance_ms": {
+        "value": 8.0,
+        "source": "https://www.dji.com/support/product/matrice600-pro"
+      },
+      "weight_g": {
+        "value": 9500,
+        "source": "https://www.dji.com/support/product/matrice600-pro"
+      },
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "payload",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "mavic-2-enterprise",
+      "display_name": "Mavic 2 Enterprise",
+      "msdk_v4_enum": "MAVIC_2_ENTERPRISE",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 20.0,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "max_flight_time_s": {
+        "value": 1860,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "max_wind_resistance_ms": {
+        "value": 10.56,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "weight_g": {
+        "value": 905,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3” CMOS； / Effective pixels:12 Megapixels",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+        },
+        "photo_resolution": {
+          "value": "4000×3000",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+        },
+        "video_resolution": {
+          "value": "3840×2160 @ 30 fps",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "mavic-2-enterprise-advanced",
+      "display_name": "Mavic 2 Enterprise Advanced",
+      "msdk_v4_enum": "MAVIC_2_ENTERPRISE_ADVANCED",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported by Mavic 2 Enterprise Advanced: enabling and disabling tripod mode (DJIFlightController: 'Not supported by Mavic 2 Enterprise Advanced.').",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/FlightController/DJIFlightController.html",
+      "max_horizontal_speed_ms": {
+        "value": 20.0,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+      },
+      "max_descent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+      },
+      "max_flight_time_s": {
+        "value": 1860,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+      },
+      "max_wind_resistance_ms": {
+        "value": 10.0,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+      },
+      "weight_g": {
+        "value": 909,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2” CMOS, Effective Pixels: 48 M",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+        },
+        "photo_resolution": {
+          "value": "8000×6000",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+        },
+        "video_resolution": {
+          "value": "3840×2160 @ 30 fps",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+        },
+        "zoom": {
+          "value": "Digital Zoom: 32×",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+        }
+      },
+      "thermal": {
+        "capability": {
+          "value": "integrated",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+        },
+        "resolution": {
+          "value": "640×512",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise-advanced"
+        }
+      }
+    },
+    {
+      "model": "mavic-2-enterprise-dual",
+      "display_name": "Mavic 2 Enterprise Dual",
+      "msdk_v4_enum": "MAVIC_2_ENTERPRISE_DUAL",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported by Mavic 2 Enterprise Dual: the photo file format setting (DJICamera, PHOTO_FILE_FORMAT: 'Not supported by Z30 camera and Mavic 2 Enterprise Dual as the photo file format for Z30 is always JPEG.').",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/Camera/DJICamera.html",
+      "max_horizontal_speed_ms": {
+        "value": 20.0,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "max_flight_time_s": {
+        "value": 1860,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "max_wind_resistance_ms": {
+        "value": 10.56,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "weight_g": {
+        "value": 899,
+        "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3\" CMOS; Effective pixels: 12M",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+        },
+        "photo_resolution": {
+          "value": "4056×3040",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+        },
+        "video_resolution": {
+          "value": "3840×2160 @ 30 fps",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "integrated",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+        },
+        "resolution": {
+          "value": "160×120",
+          "source": "https://www.dji.com/support/product/mavic-2-enterprise"
+        }
+      }
+    },
+    {
+      "model": "mavic-2-pro",
+      "display_name": "Mavic 2 Pro",
+      "msdk_v4_enum": "MAVIC_2_PRO",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 20.0,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "max_flight_time_s": {
+        "value": 1860,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": {
+        "value": 10.56,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "weight_g": {
+        "value": 907,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1” CMOS / Effective Pixels: 20 million",
+          "source": "https://www.dji.com/support/product/mavic-2"
+        },
+        "photo_resolution": {
+          "value": "5472×3648",
+          "source": "https://www.dji.com/support/product/mavic-2"
+        },
+        "video_resolution": {
+          "value": "3840×2160 @ 30 fps",
+          "source": "https://www.dji.com/support/product/mavic-2"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/mavic-2"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "mavic-2-zoom",
+      "display_name": "Mavic 2 Zoom",
+      "msdk_v4_enum": "MAVIC_2_ZOOM",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 20.0,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "max_flight_time_s": {
+        "value": 1860,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": {
+        "value": 10.56,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "weight_g": {
+        "value": 905,
+        "source": "https://www.dji.com/support/product/mavic-2"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3\" CMOS / Effective Pixels: 12 million",
+          "source": "https://www.dji.com/support/product/mavic-2"
+        },
+        "photo_resolution": {
+          "value": "4000×3000",
+          "source": "https://www.dji.com/support/product/mavic-2"
+        },
+        "video_resolution": {
+          "value": "3840×2160 @ 30 fps",
+          "source": "https://www.dji.com/support/product/mavic-2"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/mavic-2"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "mavic-air",
+      "display_name": "Mavic Air",
+      "msdk_v4_enum": "MAVIC_AIR",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported: the level 2 cell voltage behavior setting (DJIBattery: 'It is not supported by Mavic Air.'). DJICamera: 'For Mavic Air, getFormat is not used and it will ignore the value.'",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/Battery/DJIBattery.html",
+      "max_horizontal_speed_ms": {
+        "value": 19.0,
+        "source": "https://www.dji.com/support/product/mavic-air"
+      },
+      "max_ascent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/mavic-air"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/mavic-air"
+      },
+      "max_flight_time_s": {
+        "value": 1260,
+        "source": "https://www.dji.com/support/product/mavic-air"
+      },
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": {
+        "value": 10.56,
+        "source": "https://www.dji.com/support/product/mavic-air"
+      },
+      "weight_g": {
+        "value": 430,
+        "source": "https://www.dji.com/support/product/mavic-air"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3” CMOS / Effective Pixels: 12 MP",
+          "source": "https://www.dji.com/support/product/mavic-air"
+        },
+        "photo_resolution": {
+          "value": "4056×3040",
+          "source": "https://www.dji.com/support/product/mavic-air"
+        },
+        "video_resolution": {
+          "value": "3840×2160 @ 30 fps",
+          "source": "https://www.dji.com/support/product/mavic-air"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/mavic-air"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "mavic-air-2",
+      "display_name": "Mavic Air 2",
+      "msdk_v4_enum": "MAVIC_AIR_2",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported by Mavic Air 2: the flight orientation setting (Aircraft Heading, Course Lock or Home Lock) and the low battery warning threshold setting (DJIFlightController); the stick pull-back of a waypoint mission (DJIWaypointMission class description); the SPOTLIGHT_PRO ActiveTrack mode (DJIActiveTrackMission); the self-discharge period setting for smart batteries (DJIBattery).",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/FlightController/DJIFlightController.html",
+      "max_horizontal_speed_ms": {
+        "value": 19.0,
+        "source": "https://www.dji.com/support/product/mavic-air-2"
+      },
+      "max_ascent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/mavic-air-2"
+      },
+      "max_descent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/mavic-air-2"
+      },
+      "max_flight_time_s": {
+        "value": 2040,
+        "source": "https://www.dji.com/support/product/mavic-air-2"
+      },
+      "max_service_ceiling_m": {
+        "value": 5000,
+        "source": "https://www.dji.com/support/product/mavic-air-2"
+      },
+      "max_wind_resistance_ms": {
+        "value": 8.5,
+        "source": "https://www.dji.com/support/product/mavic-air-2"
+      },
+      "weight_g": {
+        "value": 570,
+        "source": "https://www.dji.com/support/product/mavic-air-2"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2\" CMOS / Effective Pixels: 12 MP and 48 MP",
+          "source": "https://www.dji.com/support/product/mavic-air-2"
+        },
+        "photo_resolution": {
+          "value": "8000×6000",
+          "source": "https://www.dji.com/support/product/mavic-air-2"
+        },
+        "video_resolution": {
+          "value": "3840×2160 @ 60 fps",
+          "source": "https://www.dji.com/support/product/mavic-air-2"
+        },
+        "zoom": {
+          "value": "Zoom: Available",
+          "source": "https://www.dji.com/support/product/mavic-air-2"
+        }
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/mavic-air-2"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "mavic-mini",
+      "display_name": "Mavic Mini",
+      "msdk_v4_enum": "MAVIC_MINI",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported by Mavic Mini: the flight orientation setting (Aircraft Heading, Course Lock or Home Lock) and the low battery warning threshold setting (DJIFlightController); the storage location setting for photos and videos (DJICamera); the stick pull-back of a waypoint mission (DJIWaypointMission class description).",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/FlightController/DJIFlightController.html",
+      "max_horizontal_speed_ms": {
+        "value": 13.0,
+        "source": "https://www.dji.com/support/product/mavic-mini"
+      },
+      "max_ascent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/mavic-mini"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/mavic-mini"
+      },
+      "max_flight_time_s": {
+        "value": 1800,
+        "source": "https://www.dji.com/support/product/mavic-mini"
+      },
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": {
+        "value": 8.0,
+        "source": "https://www.dji.com/support/product/mavic-mini"
+      },
+      "weight_g": {
+        "value": 249,
+        "source": "https://www.dji.com/support/product/mavic-mini"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3” CMOS / Effective Pixels: 12 MP",
+          "source": "https://www.dji.com/support/product/mavic-mini"
+        },
+        "photo_resolution": {
+          "value": "4000×3000",
+          "source": "https://www.dji.com/support/product/mavic-mini"
+        },
+        "video_resolution": {
+          "value": "2720×1530 @ 30 fps",
+          "source": "https://www.dji.com/support/product/mavic-mini"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/mavic-mini"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "mavic-pro",
+      "display_name": "Mavic Pro",
+      "msdk_v4_enum": "MAVIC_PRO",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported when using the WiFi connection: virtual stick control (DJIFlightController: 'Not supported by Mavic Pro when using the WiFi connection'); the stick pull-back of a waypoint mission and the FollowMe mission (DJIWaypointMission, DJIFollowMeMission: 'It is not supported by Mavic Pro when using WiFi connection.').",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/FlightController/DJIFlightController.html",
+      "max_horizontal_speed_ms": {
+        "value": 18.06,
+        "source": "https://www.dji.com/support/product/mavic"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/mavic"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/mavic"
+      },
+      "max_flight_time_s": {
+        "value": 1620,
+        "source": "https://www.dji.com/support/product/mavic"
+      },
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": null,
+      "weight_g": {
+        "value": 734,
+        "source": "https://www.dji.com/support/product/mavic"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3” (CMOS), Effective pixels:12.35 M (Total pixels:12.71M)",
+          "source": "https://www.dji.com/support/product/mavic"
+        },
+        "photo_resolution": {
+          "value": "4000×3000",
+          "source": "https://www.dji.com/support/product/mavic"
+        },
+        "video_resolution": {
+          "value": "4096×2160 @ 24 fps",
+          "source": "https://www.dji.com/support/product/mavic"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/mavic"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "phantom-3-4k",
+      "display_name": "Phantom 3 4K",
+      "msdk_v4_enum": "Phantom_3_4K",
+      "msdk_v4_support": "full",
+      "support_notes": "In the V4 enum as Phantom_3_4K (not written to msdk_v4_enum: the schema pattern allows uppercase only). Listed in DJI's supported-products table as a fixed-camera aircraft. No DJI spec page is reachable, so its spec values are null. No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": null,
+      "max_ascent_speed_ms": null,
+      "max_descent_speed_ms": null,
+      "max_flight_time_s": null,
+      "max_service_ceiling_m": null,
+      "max_wind_resistance_ms": null,
+      "weight_g": null,
+      "camera": {
+        "sensor": null,
+        "photo_resolution": null,
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "phantom-3-advanced",
+      "display_name": "Phantom 3 Advanced",
+      "msdk_v4_enum": "PHANTOM_3_ADVANCED",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 16.0,
+        "source": "https://www.dji.com/support/product/phantom-3-adv"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/phantom-3-adv"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/phantom-3-adv"
+      },
+      "max_flight_time_s": {
+        "value": 1380,
+        "source": "https://www.dji.com/support/product/phantom-3-adv"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/phantom-3-adv"
+      },
+      "max_wind_resistance_ms": null,
+      "weight_g": {
+        "value": 1280,
+        "source": "https://www.dji.com/support/product/phantom-3-adv"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3” CMOS / Effective pixels: 12.4 M (total pixels: 12.76 M)",
+          "source": "https://www.dji.com/support/product/phantom-3-adv"
+        },
+        "photo_resolution": {
+          "value": "4000×3000",
+          "source": "https://www.dji.com/support/product/phantom-3-adv"
+        },
+        "video_resolution": {
+          "value": "2704×1520 @ 30 fps",
+          "source": "https://www.dji.com/support/product/phantom-3-adv"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/phantom-3-adv"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "phantom-3-professional",
+      "display_name": "Phantom 3 Professional",
+      "msdk_v4_enum": "PHANTOM_3_PROFESSIONAL",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 16.0,
+        "source": "https://www.dji.com/support/product/phantom-3-pro"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/phantom-3-pro"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/phantom-3-pro"
+      },
+      "max_flight_time_s": {
+        "value": 1380,
+        "source": "https://www.dji.com/support/product/phantom-3-pro"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/phantom-3-pro"
+      },
+      "max_wind_resistance_ms": null,
+      "weight_g": {
+        "value": 1280,
+        "source": "https://www.dji.com/support/product/phantom-3-pro"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3” CMOS / Effective pixels: 12.4 M (total pixels: 12.76 M)",
+          "source": "https://www.dji.com/support/product/phantom-3-pro"
+        },
+        "photo_resolution": {
+          "value": "4000×3000",
+          "source": "https://www.dji.com/support/product/phantom-3-pro"
+        },
+        "video_resolution": {
+          "value": "4096×2160 @ 25 fps",
+          "source": "https://www.dji.com/support/product/phantom-3-pro"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/phantom-3-pro"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "phantom-3-standard",
+      "display_name": "Phantom 3 Standard",
+      "msdk_v4_enum": "PHANTOM_3_STANDARD",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 16.0,
+        "source": "https://www.dji.com/support/product/phantom-3-standard"
+      },
+      "max_ascent_speed_ms": {
+        "value": 5.0,
+        "source": "https://www.dji.com/support/product/phantom-3-standard"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/phantom-3-standard"
+      },
+      "max_flight_time_s": {
+        "value": 1500,
+        "source": "https://www.dji.com/support/product/phantom-3-standard"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/phantom-3-standard"
+      },
+      "max_wind_resistance_ms": null,
+      "weight_g": {
+        "value": 1216,
+        "source": "https://www.dji.com/support/product/phantom-3-standard"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3” CMOS / Effective pixels:12 M",
+          "source": "https://www.dji.com/support/product/phantom-3-standard"
+        },
+        "photo_resolution": {
+          "value": "4000×3000",
+          "source": "https://www.dji.com/support/product/phantom-3-standard"
+        },
+        "video_resolution": {
+          "value": "2704×1520 @ 30 fps",
+          "source": "https://www.dji.com/support/product/phantom-3-standard"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/phantom-3-standard"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "phantom-4",
+      "display_name": "Phantom 4",
+      "msdk_v4_enum": "PHANTOM_4",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 20.0,
+        "source": "https://www.dji.com/support/product/phantom-4"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/phantom-4"
+      },
+      "max_descent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/phantom-4"
+      },
+      "max_flight_time_s": {
+        "value": 1680,
+        "source": "https://www.dji.com/support/product/phantom-4"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/phantom-4"
+      },
+      "max_wind_resistance_ms": {
+        "value": 10.0,
+        "source": "https://www.dji.com/support/product/phantom-4"
+      },
+      "weight_g": {
+        "value": 1380,
+        "source": "https://www.dji.com/support/product/phantom-4"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3” CMOS / Effective pixels:12.4 M",
+          "source": "https://www.dji.com/support/product/phantom-4"
+        },
+        "photo_resolution": {
+          "value": "4000×3000",
+          "source": "https://www.dji.com/support/product/phantom-4"
+        },
+        "video_resolution": {
+          "value": "4096×2160 @ 25 fps",
+          "source": "https://www.dji.com/support/product/phantom-4"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/phantom-4"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "phantom-4-advanced",
+      "display_name": "Phantom 4 Advanced",
+      "msdk_v4_enum": null,
+      "msdk_v4_support": "full",
+      "support_notes": "Not in the V4 DJIAircraftModelName enum; listed in DJI's Mobile SDK supported-products table (hardware introduction page, dated 2020-05-23). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html",
+      "max_horizontal_speed_ms": {
+        "value": 20.0,
+        "source": "https://www.dji.com/support/product/phantom-4-adv"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/phantom-4-adv"
+      },
+      "max_descent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/phantom-4-adv"
+      },
+      "max_flight_time_s": {
+        "value": 1800,
+        "source": "https://www.dji.com/support/product/phantom-4-adv"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/phantom-4-adv"
+      },
+      "max_wind_resistance_ms": {
+        "value": 10.0,
+        "source": "https://www.dji.com/support/product/phantom-4-adv"
+      },
+      "weight_g": {
+        "value": 1368,
+        "source": "https://www.dji.com/support/product/phantom-4-adv"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1’’ CMOS / Effective pixels: 20M",
+          "source": "https://www.dji.com/support/product/phantom-4-adv"
+        },
+        "photo_resolution": {
+          "value": "5472×3648",
+          "source": "https://www.dji.com/support/product/phantom-4-adv"
+        },
+        "video_resolution": {
+          "value": "4096×2160 @ 60 fps",
+          "source": "https://www.dji.com/support/product/phantom-4-adv"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/phantom-4-adv"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "phantom-4-multispectral",
+      "display_name": "Phantom 4 Multispectral",
+      "msdk_v4_enum": "P_4_MULTISPECTRAL",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 16.11,
+        "source": "https://www.dji.com/support/product/p4-multispectral"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/p4-multispectral"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/p4-multispectral"
+      },
+      "max_flight_time_s": {
+        "value": 1620,
+        "source": "https://www.dji.com/support/product/p4-multispectral"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/p4-multispectral"
+      },
+      "max_wind_resistance_ms": null,
+      "weight_g": {
+        "value": 1487,
+        "source": "https://www.dji.com/support/product/p4-multispectral"
+      },
+      "camera": {
+        "sensor": {
+          "value": "Six 1/2.9” CMOS, including one RGB sensor for visible light imaging and five monochrome sensors for multispectral imaging. / Each Sensor: Effective pixels 2.08 MP (2.12 MP in total)",
+          "source": "https://www.dji.com/support/product/p4-multispectral"
+        },
+        "photo_resolution": {
+          "value": "1600×1300",
+          "source": "https://www.dji.com/support/product/p4-multispectral"
+        },
+        "video_resolution": null,
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/p4-multispectral"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "phantom-4-pro",
+      "display_name": "Phantom 4 Pro",
+      "msdk_v4_enum": "PHANTOM_4_PRO",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 20.0,
+        "source": "https://www.dji.com/support/product/phantom-4-pro"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/phantom-4-pro"
+      },
+      "max_descent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/phantom-4-pro"
+      },
+      "max_flight_time_s": {
+        "value": 1800,
+        "source": "https://www.dji.com/support/product/phantom-4-pro"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/phantom-4-pro"
+      },
+      "max_wind_resistance_ms": {
+        "value": 10.0,
+        "source": "https://www.dji.com/support/product/phantom-4-pro"
+      },
+      "weight_g": {
+        "value": 1388,
+        "source": "https://www.dji.com/support/product/phantom-4-pro"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1’’ CMOS / Effective pixels: 20M",
+          "source": "https://www.dji.com/support/product/phantom-4-pro"
+        },
+        "photo_resolution": {
+          "value": "5472×3648",
+          "source": "https://www.dji.com/support/product/phantom-4-pro"
+        },
+        "video_resolution": {
+          "value": "4096×2160 @ 60 fps",
+          "source": "https://www.dji.com/support/product/phantom-4-pro"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/phantom-4-pro"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "phantom-4-pro-v2",
+      "display_name": "Phantom 4 Pro V2",
+      "msdk_v4_enum": "PHANTOM_4_PRO_V2",
+      "msdk_v4_support": "full",
+      "support_notes": "Listed in the V4 DJIAircraftModelName enum (DJIBaseProduct page). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/api-reference/android-api/BaseClasses/DJIBaseProduct.html",
+      "max_horizontal_speed_ms": {
+        "value": 20.0,
+        "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+      },
+      "max_descent_speed_ms": {
+        "value": 4.0,
+        "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+      },
+      "max_flight_time_s": {
+        "value": 1800,
+        "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+      },
+      "max_wind_resistance_ms": {
+        "value": 10.0,
+        "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+      },
+      "weight_g": {
+        "value": 1375,
+        "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1-inch CMOS / Effective pixels: 20M",
+          "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+        },
+        "photo_resolution": {
+          "value": "5472×3648",
+          "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+        },
+        "video_resolution": {
+          "value": "4096×2160 @ 60 fps",
+          "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/phantom-4-pro-v2"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "phantom-4-rtk",
+      "display_name": "Phantom 4 RTK",
+      "msdk_v4_enum": null,
+      "msdk_v4_support": "full",
+      "support_notes": "Not in the V4 DJIAircraftModelName enum; listed in DJI's Mobile SDK supported-products table (hardware introduction page, dated 2020-05-23). No model-specific restriction found in the V4 reference pages checked.",
+      "support_source": "https://developer.dji.com/mobile-sdk/documentation/introduction/product_introduction.html",
+      "max_horizontal_speed_ms": {
+        "value": 16.11,
+        "source": "https://www.dji.com/support/product/phantom-4-rtk"
+      },
+      "max_ascent_speed_ms": {
+        "value": 6.0,
+        "source": "https://www.dji.com/support/product/phantom-4-rtk"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/phantom-4-rtk"
+      },
+      "max_flight_time_s": {
+        "value": 1800,
+        "source": "https://www.dji.com/support/product/phantom-4-rtk"
+      },
+      "max_service_ceiling_m": {
+        "value": 6000,
+        "source": "https://www.dji.com/support/product/phantom-4-rtk"
+      },
+      "max_wind_resistance_ms": null,
+      "weight_g": {
+        "value": 1391,
+        "source": "https://www.dji.com/support/product/phantom-4-rtk"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1\" CMOS; Effective pixels: 20 M",
+          "source": "https://www.dji.com/support/product/phantom-4-rtk"
+        },
+        "photo_resolution": {
+          "value": "5472×3648",
+          "source": "https://www.dji.com/support/product/phantom-4-rtk"
+        },
+        "video_resolution": {
+          "value": "3840×2160 @ 30 fps",
+          "source": "https://www.dji.com/support/product/phantom-4-rtk"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/phantom-4-rtk"
+        },
+        "resolution": null
+      }
+    },
+    {
+      "model": "spark",
+      "display_name": "Spark",
+      "msdk_v4_enum": "Spark",
+      "msdk_v4_support": "partial",
+      "support_notes": "Not supported by Spark: the FollowMe mission (DJIFollowMeMission: 'It is not supported by Spark.'); the stick pull-back of a waypoint mission (DJIWaypointMission class description); the self-discharge period setting for smart batteries (DJIBattery). Enum constant 'Spark' is not written to msdk_v4_enum (schema pattern).",
+      "support_source": "https://developer.dji.com/api-reference/android-api/Components/Missions/DJIFollowMeMission.html",
+      "max_horizontal_speed_ms": {
+        "value": 13.89,
+        "source": "https://www.dji.com/support/product/spark"
+      },
+      "max_ascent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/spark"
+      },
+      "max_descent_speed_ms": {
+        "value": 3.0,
+        "source": "https://www.dji.com/support/product/spark"
+      },
+      "max_flight_time_s": {
+        "value": 960,
+        "source": "https://www.dji.com/support/product/spark"
+      },
+      "max_service_ceiling_m": {
+        "value": 4000,
+        "source": "https://www.dji.com/support/product/spark"
+      },
+      "max_wind_resistance_ms": null,
+      "weight_g": {
+        "value": 300,
+        "source": "https://www.dji.com/support/product/spark"
+      },
+      "camera": {
+        "sensor": {
+          "value": "1/2.3\" CMOS / Effective pixels: 12 MP",
+          "source": "https://www.dji.com/support/product/spark"
+        },
+        "photo_resolution": {
+          "value": "3968×2976",
+          "source": "https://www.dji.com/support/product/spark"
+        },
+        "video_resolution": {
+          "value": "1920×1080 @ 30 fps",
+          "source": "https://www.dji.com/support/product/spark"
+        },
+        "zoom": null
+      },
+      "thermal": {
+        "capability": {
+          "value": "none",
+          "source": "https://www.dji.com/support/product/spark"
+        },
+        "resolution": null
+      }
+    }
+  ]
+}
+$catalogue$::jsonb);

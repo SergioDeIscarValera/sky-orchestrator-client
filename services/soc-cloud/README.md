@@ -19,6 +19,9 @@ The skeleton every later part plugs into:
 | One MQTT v5 link per stack as `cloud-client`, persistent session, supervised (`FR-LNK-01`) | `link/stack.py` |
 | Topology and presence: online while listed by `update_topo` and reported online by the dock (`FR-LNK-02`) | `link/topology.py` |
 | Each aircraft OSD as one sample at its own time, a missing field unavailable (`FR-LNK-03`) | `link/telemetry.py` |
+| Live telemetry to the browsers: each sample as a `sample` event on its stack's organization's `org:<id>:soc:telemetry` (`contracts/broadcast/telemetry.schema.json`), at most `broadcast_max_rate_hz` per aircraft with the latest sample winning, on the socket or through Realtime's HTTP endpoint (`FR-TEL-01`, `NFR-RES-07`) | `fanout.py`, through `soc-realtime` |
+| The latencies it can see, logged every minute as one `latency` line with each one's count, p50, p95 and p99: `telemetry_hold_ms` (read to broadcast), `telemetry_age_ms` (the aircraft's timestamp to the read, with the remote controller's clock offset in it), `command_publish_ms` (request to publish) and `command_reply_ms` (publish to DJI's reply) (`NFR-OBS-04`) | `latency.py` |
+| What each stack reports, recorded for the console: its link state per dock, the devices it announces with their presence, each aircraft's firmware from `state`; only the latest of each, stacks before their devices, everything again after the database comes back (`FR-FLE-02`, `FR-LNK-02`, `IR-STK`, `IR-DEV`) | `presence.py`, through `soc.record_stack`, `soc.record_topology`, `soc.record_firmware` |
 | `update_topo` acknowledged with `status_reply` (`FR-LNK-11`); `flighttask_resource_get` answered on `requests_reply` (`FR-LNK-04`) | `link/stack.py` |
 | Flight files kept as exact bytes in memory, offered with their MD5, served at `/files/<128-bit token>.kmz` on `SOC_FLIGHT_FILES_PORT`, retired `flight_file_grace_s` after the flight ends (`FR-LNK-05`, `NFR-SEC-06`, [ADR-0008](../../docs/architecture/decisions/0008-flight-files-served-on-sky-orchestrators-network.md)) | `files.py` |
 | Command intents put on the wire: announced by `pg_notify`, swept on every reconnection, checked against their schema, claimed or expired, published with tid = intent and bid = flight, settled by their `services_reply` or timed out (`FR-LNK-06`, ADR-0006) | `commands.py` |
@@ -27,8 +30,8 @@ The skeleton every later part plugs into:
 
 The topics read are those a DJI cloud reads (`link/topics.py`): `status`,
 `osd`, `state`, `events`, `requests`, `services_reply`, `property/set_reply`,
-at QoS 1. The samples are kept in memory; the fan-out to the browsers and the
-devices in the database arrive in M2, and the flight files enter the registry
+at QoS 1. The history of each flight's samples arrives with the flights (M4),
+and the flight files enter the registry
 from `soc.flight_files` with the operations in M4 ([roadmap](../../docs/roadmap.md)).
 Each stack offers the files at its own `flight_files_url`: the address the dock
 reaches `soc-cloud` at on that stack's network.
@@ -39,6 +42,10 @@ reaches `soc-cloud` at on that stack's network.
 uv run soc-config example soc-cloud > /etc/soc/soc-cloud.json   # then fill the blanks
 SOC_CONFIG_FILE=/etc/soc/soc-cloud.json ... uv run soc-cloud
 ```
+
+Each stack names the organization its aircraft fly for, one of
+`served_organizations` (contract 2.0.0): its stack, devices, fleets, telemetry
+and commands are that organization's.
 
 Every variable it reads is declared in `contracts/config/soc-config.schema.json`
 (`x-environment`), plus the broker password and API token each stack names. At
@@ -86,6 +93,10 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
   50 ms from commit to claim**, each published once and accepted; a command
   committed while `soc-cloud` was away runs once when it returns, and a stale one
   expires.
+- In the console end to end (`infra/e2e`), the service runs in its process on
+  one stack behind Kong, as on the mini-PC, while a dock announces and flies an
+  aircraft: the console shows it within 2 s and every sample reaches Chrome in
+  order, 28 ms at p95 from the dock's publish.
 
 ## Failure modes
 
@@ -94,6 +105,7 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
 | A missing or invalid setting, variable or stack secret | The process exits with status 2 before opening any connection, naming every problem |
 | Postgres unreachable, or the password refused | The database link stays down, retried up to every 10 s; `/ready` answers 503 naming the error |
 | Realtime unreachable, a join refused, a heartbeat unanswered | The socket is replaced under supervision; `/ready` answers 503 meanwhile; telemetry falls back to HTTP once it flows |
+| Realtime's socket and HTTP endpoint both unreachable | The samples due are dropped, counted and logged as `telemetry_dropped`; the next ones go out as soon as either is back; nothing old is replayed |
 | A stack's broker unreachable, or the password refused | That stack's link stays down, retried up to every 10 s; `/ready` answers 503 naming it; the other stacks are unaffected |
 | Another client connects as `cloud-client` | The broker ends SOC's session; SOC logs `link_displaced`, health names it, and it takes the session back after the backoff. Mosquitto 2.0.22 ends a taken-over session with a normal DISCONNECT, not reason 142, so a clean end from the server is read as a takeover |
 | A message from the dock SOC cannot read | Dropped with a `message_unreadable` line; the link stays up |
@@ -102,6 +114,8 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
 | A request for any path but a live file's | The same 404, whether the token is unknown, malformed, retired or the path is a directory |
 | Other bytes kept for a flight that already has a file | Refused with `FlightFileConflictError`: what flies is what was kept (`IR-FIL-01`) |
 | The flight file port cannot be bound | The process ends with status 1 and `service_failed` |
+| The database away while stacks report | The latest of each report is kept and written when it is back, every one of them again; nothing reported meanwhile is lost, nothing stale is written last |
+| The database refuses a report (a serial it does not accept, a stack moved to another organization while it has fleets) | `presence_refused` names it; that report is dropped, the others are written |
 | A command for a dock no connected stack has announced | It waits; it runs when a stack announces the dock, or expires once `command_intent_ttl_s` has passed |
 | A command claimed but not published (the broker dropped) | It stays `sent` and times out after `command_reply_timeout_s`: nothing claims it twice |
 | A command its schema refuses | `failed` before anything is sent, with every problem logged |

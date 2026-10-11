@@ -72,6 +72,13 @@ repos:
         pass_filenames: false
         files: ^(contracts/sky-orchestrator/|tools/vendor_sky_orchestrator\.py$)
 
+      - id: aircraft-catalogue
+        name: aircraft catalogue valid, sourced and loaded as it is
+        entry: uv run --frozen python tools/catalogue_migration.py --check
+        language: system
+        pass_filenames: false
+        files: ^(contracts/catalogue/|database/migrations/|tools/catalogue_migration\.py$)
+
       - id: traceability
         name: traceability matrix equals the requirements
         entry: python3 tools/check_traceability.py
@@ -156,12 +163,34 @@ repos:
         pass_filenames: false
         files: ^(infra/check/|libs/soc-config/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
 
+      - id: soc-e2e-gate
+        name: soc-e2e gate
+        entry: bash -c 'uv run --frozen mypy infra/e2e && uv run --frozen pytest infra/e2e/tests -m "not lane"'
+        language: system
+        pass_filenames: false
+        files: ^(infra/(e2e|check|migrate)/|libs/|services/soc-cloud/|database/|contracts/sky-orchestrator/|pyproject\.toml$|uv\.lock$)
+
       - id: soc-web-gate
         name: soc-web gate
         entry: bash -c 'cd apps/soc-web && pnpm typecheck && pnpm lint && pnpm format:check && pnpm test'
         language: system
         pass_filenames: false
-        files: ^apps/soc-web/
+        # The web's tests read these contracts and hold its mirrors equal to them.
+        files: ^(apps/soc-web/|contracts/(config|broadcast|geometry|site)/)
+
+      - id: soc-geo-gate
+        name: soc-geo gate
+        entry: bash -c 'uv run --frozen mypy libs/soc-geo && uv run --frozen pytest libs/soc-geo/tests'
+        language: system
+        pass_filenames: false
+        files: ^(libs/soc-geo/|contracts/geometry/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-site-gate
+        name: soc-site gate
+        entry: bash -c 'uv run --frozen mypy infra/site && uv run --frozen pytest infra/site/tests'
+        language: system
+        pass_filenames: false
+        files: ^(infra/site/|libs/soc-geo/|contracts/site/|pyproject\.toml$|uv\.lock$)
 
       - id: soc-realtime-gate
         name: soc-realtime gate

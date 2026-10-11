@@ -67,7 +67,7 @@ migration. Retention: permanent. Read only for every user.
 
 | Attribute | Type | Notes |
 | --- | --- | --- |
-| `model_key` | text | Primary key, kebab case, e.g. `mavic-air-2` |
+| `model` | text | Primary key, kebab case, e.g. `mavic-air-2` |
 | `display_name` | text | |
 | `msdk_v4_enum` | text, nullable | The Mobile SDK V4 `Model` value |
 | `msdk_v4_support` | enum | `full`, `partial` |
@@ -80,9 +80,13 @@ migration. Retention: permanent. Read only for every user.
 | `weight_g` | integer, nullable | |
 | `camera` | jsonb | Sensor, photo resolution, video resolution and frame rate, zoom |
 | `thermal` | jsonb | Integrated or supported through payloads, resolution |
+| `sources` | jsonb | Each published figure's name and the URL it was read from |
 | `source_urls` | text[] | Where every value came from |
 
 **IR-MOD-01**: a value DJI does not publish is `null`, never an estimate.
+
+**IR-MOD-02**: models are loaded by migrations from the catalogue and never
+removed; a fleet keeps the model it was registered with.
 
 ---
 
@@ -95,7 +99,7 @@ Retention: while configured.
 | --- | --- | --- |
 | `gateway_sn` | text | Primary key, the emulated dock's serial |
 | `name` | text | From configuration |
-| `organization_id` | uuid | The organization the stack serves |
+| `organization_id` | uuid | The organization the stack serves: the stack's `organization` in the configuration (contract 2.0.0) |
 | `link_state` | enum | `connected`, `connecting`, `displaced`, `unreachable` |
 | `status` | jsonb | Sky Orchestrator's stack status (SO's FR-DEV-07), as last read, with its read time |
 | `envelope` | jsonb | The active device envelope (SO's FR-WAY-11), with its fingerprint |
@@ -132,10 +136,10 @@ Retention: permanent; retiring is a soft delete.
 | `id` | uuid | |
 | `organization_id` | uuid | |
 | `name` | text | |
-| `model_key` | text | `IR-MOD` |
+| `model` | text | `IR-MOD` |
 | `airframe_serial` | text | As printed on the aircraft |
 | `controller_serial` | text, nullable | Recorded only |
-| `gateway_sn`, `aircraft_sn` | text | Wire identity, unique among live fleets |
+| `gateway_sn`, `aircraft_sn` | text | Wire identity, unique among live fleets; a device its organization's stack has seen |
 | `flight_time_before_soc_s` | integer | Default 0 |
 | `created_at`, `updated_at`, `deleted_at` | timestamptz | |
 

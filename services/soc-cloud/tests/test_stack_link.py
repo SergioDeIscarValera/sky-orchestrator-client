@@ -4,7 +4,8 @@ import asyncio
 import copy
 import json
 import socket
-from collections.abc import Callable
+import uuid
+from collections.abc import Callable, Sequence
 from typing import Any, cast
 
 import aiomqtt
@@ -14,6 +15,7 @@ import soc_config
 from soc_cloud.link import topics
 from soc_cloud.link.stack import FileOffer, StackLink
 from soc_cloud.link.telemetry import Sample
+from soc_cloud.presence import Device, LinkState
 from soc_cloud.settings import Api, Broker, Stack, StackCredentials
 from soc_cloud.testing import FakeClient
 from soc_cloud.wire import MQTT, WireContract
@@ -25,6 +27,7 @@ AIRCRAFT = "SOTESTUAV001"
 NOW_S = 1790800001.5
 STACK = Stack(
     name="lab",
+    organization=uuid.UUID("6f1c2b9e-4d2a-4c1e-9a7b-2f3e4d5c6b7a"),
     broker=Broker(
         host="so-mosquitto",
         port=1883,
@@ -45,8 +48,28 @@ def example(name: str) -> dict[str, Any]:
     return loaded
 
 
+class FakePresence:
+    def __init__(self) -> None:
+        self.links: list[tuple[str, LinkState]] = []
+        self.topologies: list[tuple[str, list[Device]]] = []
+        self.versions: list[tuple[str, str, str]] = []
+
+    def link(self, gateway: str, state: LinkState) -> None:
+        self.links.append((gateway, state))
+
+    def topology(self, gateway: str, devices: Sequence[Device]) -> None:
+        self.topologies.append((gateway, list(devices)))
+
+    def firmware(self, gateway: str, aircraft: str, version: str) -> None:
+        self.versions.append((gateway, aircraft, version))
+
+    def online(self) -> list[bool]:
+        return [device.online for device in self.topologies[-1][1]]
+
+
 class Harness:
     def __init__(self, files: Callable[[str], FileOffer | None] | None = None) -> None:
+        self.presence = FakePresence()
         self.samples: list[Sample] = []
         self.clients: list[FakeClient] = []
         self.down_reasons: list[str | None] = []
@@ -56,6 +79,7 @@ class Harness:
             WIRE,
             on_sample=self.samples.append,
             files=files or (lambda _flight: None),
+            presence=self.presence,
             client_factory=self.client,
             backoff=Backoff(initial_s=0.001),
             sleep=self.back_off,
@@ -156,6 +180,50 @@ async def test_dropping_the_aircraft_from_the_topology_takes_it_offline() -> Non
     await harness.receive(f"sys/product/{DOCK}/status", empty)
     assert harness.link.topology.online() == set()
     assert harness.link.topology.gateway_of(AIRCRAFT) is None
+
+
+async def test_each_announcement_and_change_of_presence_reaches_the_console() -> None:
+    harness = Harness()
+    await harness.receive(f"sys/product/{DOCK}/status", example("sys.update_topo"))
+    assert harness.presence.links == [(DOCK, LinkState.CONNECTING)]
+    assert harness.presence.topologies == [(DOCK, [Device(AIRCRAFT, 0, 91, 0, online=False)])]
+    await harness.receive(f"thing/product/{DOCK}/osd", dock_osd(online=1))
+    assert harness.presence.online() == [True]
+    await harness.receive(f"thing/product/{DOCK}/osd", dock_osd(online=1))
+    assert len(harness.presence.topologies) == 2
+    empty = example("sys.update_topo")
+    empty["data"]["sub_devices"] = []
+    await harness.receive(f"sys/product/{DOCK}/status", empty)
+    assert harness.presence.topologies[-1] == (DOCK, [])
+
+
+async def test_an_aircrafts_firmware_is_recorded_and_the_docks_is_not() -> None:
+    harness = Harness()
+    state = example("state.aircraft")
+    await harness.receive(f"thing/product/{AIRCRAFT}/state", state)
+    await harness.receive(f"thing/product/{DOCK}/state", example("state.dock"))
+    assert harness.presence.versions == [(DOCK, AIRCRAFT, state["data"]["firmware_version"])]
+
+
+async def test_the_link_state_of_each_known_dock_follows_the_session() -> None:
+    harness = Harness()
+    task = asyncio.create_task(harness.link.run())
+    await until(lambda: harness.link.health.up)
+    await harness.receive(f"sys/product/{DOCK}/status", example("sys.update_topo"))
+    harness.clients[0].take_over()
+    await until(lambda: len(harness.clients) == 2 and harness.link.health.up)
+    harness.clients[1].lose()
+    await until(lambda: len(harness.clients) == 3 and harness.link.health.up)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert [state for _, state in harness.presence.links] == [
+        LinkState.CONNECTED,
+        LinkState.DISPLACED,
+        LinkState.CONNECTED,
+        LinkState.UNREACHABLE,
+        LinkState.CONNECTED,
+    ]
 
 
 async def test_an_aircraft_osd_is_one_sample_at_its_own_time() -> None:
