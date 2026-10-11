@@ -8,7 +8,7 @@ requirements enforceable. A convention nothing checks is a preference.
 | Lane | When | Cost | Bound |
 | --- | --- | --- | --- |
 | **Gate** | Every commit (pre-commit) and every pull request | Free locally, seconds in CI | Under 2 s per unit (`NFR-TEST-01`) |
-| **Container lane** | Pull requests touching `database/`, `infra/migrate/`, `libs/`, `contracts/` or a service whose tests use it | Ephemeral Postgres, Realtime and Mosquitto from the production images | About a minute (`NFR-TEST-02`) |
+| **Container lane** | Pull requests touching `database/`, `infra/check/`, `infra/compose/`, `infra/migrate/`, `libs/`, `services/`, the `broadcast`, `catalogue`, `config` and `sky-orchestrator` contracts, or the web image's files | Ephemeral Postgres, Realtime and Mosquitto from the production images | About 3.5 minutes: 211 to 217 s, measured 2026-10-11 (`NFR-TEST-02`) |
 | **End to end** | Pull requests touching what it runs, and every release | Supabase and Sky Orchestrator in containers | Minutes (`NFR-TEST-03`) |
 | **Field sessions** | Before a release is flown | The aircraft and the operator | A runbook, recorded |
 
@@ -30,9 +30,11 @@ hand:
 | Python lint and format over the whole repository | `NFR-MNT-06` |
 | Strict types for `tools/` at Python 3.12, and for `database` | `NFR-MNT-06` |
 | One gate per Python unit, its strict types then its tests: `soc-migrate`, `soc-config`, `soc-log`, `soc-supervision`, `soc-db`, `soc-realtime`, `soc-cloud`, `soc-operations` and `soc-check` (without their `lane` tests) | `NFR-MNT-06`, `NFR-TEST-01` |
-| Container lane: `database`'s tests and the `lane`-marked tests of `soc-db`, `soc-realtime`, `soc-cloud`, `soc-operations` and `soc-check` (SOC's images built and run, the web's among them), against Postgres 17.6.1.136, Realtime v2.102.3 and Mosquitto 2.0.22, when `database/`, `infra/`, `libs/`, `services/`, `contracts/`, the Python lockfile, `.dockerignore` or the web image's files (its Dockerfile, `nginx/`, its manifest and lockfile) change | `NFR-TEST-02`, `NFR-SEC-07`, `FR-DEP-04` |
+| Container lane: `database`'s tests and the `lane`-marked tests of `soc-db`, `soc-realtime`, `soc-cloud`, `soc-operations` and `soc-check` (SOC's images built and run, the web's among them), against Postgres 17.6.1.136, Realtime v2.102.3 and Mosquitto 2.0.22, when `database/`, `infra/check/`, `infra/compose/`, `infra/migrate/`, `libs/`, `services/`, the `broadcast`, `catalogue`, `config` and `sky-orchestrator` contracts, the Python lockfile, `.dockerignore` or the web image's files (its Dockerfile, `nginx/`, its manifest, lockfile and `pnpm-workspace.yaml`) change | `NFR-TEST-02`, `NFR-SEC-07`, `FR-DEP-04` |
 | `soc-web` gate, when the web changes: types, lint, format, unit tests, the build, its loading budget and the search of the built files for secrets, on Node 24.21.0 and pnpm 12.10.1 | `NFR-UX-01`, `NFR-UX-02`, `NFR-PORT-04`, `NFR-PERF-05`, `NFR-SEC-02` |
 | Secret scan over the full history (gitleaks) | `NFR-SEC-04` |
+
+The two change detectors (the container lane's and the web's) list the changed paths once and match them from that variable, not from a pipe, so a long list cannot make a match read as no match, and a failing `git diff` fails its step instead of skipping the lane. The `soc-web gate` runs every check after the install and then fails, naming each check that failed, so one red run shows every problem; only the install stops it, since nothing can run without it.
 
 `pr-policy.yml`, one job named `Pull request policy`: changelog label, branch
 name and direction, version admissibility on release branches, title and commits
