@@ -21,7 +21,7 @@ jobs:
       github.event.pull_request.merged == true &&
       (startsWith(github.event.pull_request.head.ref, 'release/') ||
        startsWith(github.event.pull_request.head.ref, 'hotfix/'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -75,7 +75,7 @@ jobs:
   images:
     name: Publish the service images
     needs: tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -121,7 +121,7 @@ jobs:
   back_merge:
     name: Open the back-merge into develop
     needs: tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       # Never from main itself: automatic head-branch deletion would delete main

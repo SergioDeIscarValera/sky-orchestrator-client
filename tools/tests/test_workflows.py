@@ -10,6 +10,8 @@ from typing import Any
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 RULESETS = WORKFLOWS.parent / "rulesets"
 REPOSITORY = WORKFLOWS.parents[1]
+# GitHub's image by version: ubuntu-latest moves to a new release on GitHub's date.
+RUNNER = "ubuntu-24.04"
 LANE_STEP = "- name: Container lane against Postgres, Realtime and Mosquitto"
 LANE_ONLY_UNITS = ("database",)
 SPLIT_BY_MARKER_UNITS = (
@@ -105,6 +107,14 @@ class EveryWorkflow(unittest.TestCase):
             jobs = child_keys(block(text, "jobs"), 2)
             with self.subTest(workflow=workflow.name):
                 self.assertEqual(text.count("timeout-minutes:"), len(jobs))
+
+    def test_every_job_runs_on_a_pinned_runner_image(self) -> None:
+        for workflow in sorted(WORKFLOWS.glob("*.yml")):
+            text = workflow.read_text(encoding="utf-8")
+            runners = re.findall(r"runs-on: (\S+)", text)
+            with self.subTest(workflow=workflow.name):
+                self.assertEqual(len(runners), len(child_keys(block(text, "jobs"), 2)))
+                self.assertEqual(set(runners), {RUNNER})
 
     def test_every_action_is_pinned_to_a_released_version(self) -> None:
         for workflow in sorted(WORKFLOWS.glob("*.yml")):
