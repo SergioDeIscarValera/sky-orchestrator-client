@@ -1,6 +1,7 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 
 import { useCameraCommands } from '../scene/commands'
+import type { TelemetrySample } from '../telemetry/sample'
 import { FakeBackend, NORTH, ORCHARD, PILOT } from '../test/FakeBackend'
 import { renderApp } from '../test/render'
 
@@ -10,6 +11,26 @@ async function openedOn(organizationId: string, search = '') {
   const rendered = renderApp(new FakeBackend(PILOT))
   await screen.findByRole('banner')
   return rendered
+}
+
+/** A sample of the lab stack's test aircraft, as soc-cloud broadcast it at `sentAtMs`. */
+function broadcast(sentAtMs: number): TelemetrySample {
+  return {
+    stack: 'lab',
+    gatewaySn: 'SOTESTDOCK01',
+    aircraftSn: 'SOTESTUAV001',
+    takenAtMs: sentAtMs - 4,
+    sentAtMs,
+    latitudeDeg: 41.65,
+    longitudeDeg: -4.72,
+    heightM: 10,
+    headingDeg: 0,
+    homeDistanceM: 0,
+    batteryPct: 90,
+    satellites: 14,
+    gpsQuality: 5,
+    modeCode: 0,
+  }
 }
 
 afterEach(() => {
@@ -52,10 +73,22 @@ describe('the scene region (FR-SCN-01)', () => {
   it('shows frames, frame time, draw calls and memory with ?stats (NFR-OBS-05)', async () => {
     await openedOn(NORTH.id, '?stats')
     const stats = screen.getByLabelText('Scene statistics')
-    for (const name of ['frames', 'p95', 'draw calls', 'geometries', 'textures']) {
+    for (const name of ['frames', 'p95', 'delivery p95', 'draw calls', 'geometries', 'textures']) {
       expect(within(stats).getByText(name)).toBeInTheDocument()
     }
     expect(Reflect.has(window, 'socScene')).toBe(true)
+  })
+
+  it('shows the delivery p95 of the telemetry the console has received (NFR-PERF-01)', async () => {
+    const { backend } = await openedOn(NORTH.id, '?stats')
+    const deliveryP95 = () =>
+      within(screen.getByLabelText('Scene statistics')).getByText('delivery p95').nextElementSibling
+    expect(deliveryP95()).toHaveTextContent(/^–$/)
+    backend.sample(NORTH.id, broadcast(Date.now() - 40))
+    await waitFor(() => {
+      expect(Number.parseFloat(deliveryP95()?.textContent ?? '')).toBeGreaterThanOrEqual(40)
+    })
+    expect(deliveryP95()).toHaveTextContent(/^\d+\.\d ms$/)
   })
 })
 

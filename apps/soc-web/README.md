@@ -106,8 +106,10 @@ The console: one persistent 3D scene of the farm with floating panels
   aircraft circles the organization at 15 m/s, sampled at 5 Hz, to look at and
   measure the scene without a stack. `pnpm budget` fails a build that ships it.
 - **The scene's statistics** with `?stats` (`NFR-OBS-05`): frames rendered, the
-  frame time at p95 while it moves, draw calls, triangles, geometries and
-  textures; the sampler is then `window.socScene`.
+  frame time at p95 while it moves, the delivery of telemetry at p95 from
+  soc-cloud's broadcast to the browser (`NFR-PERF-01`, honest only with the
+  mini-PC's and the browser's clocks both on NTP), draw calls, triangles,
+  geometries and textures; the sampler is then `window.socScene`.
 
 The other panels' content arrives with their milestones ([roadmap](../../docs/roadmap.md)).
 
