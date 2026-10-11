@@ -43,7 +43,7 @@ deployment's simulator mode, so `simulate_mission` can always be set from it.
 | ID | VO2 item | Owner | What it gives SOC | SOC requirements waiting on it | Status |
 | --- | --- | --- | --- | --- | --- |
 | `DEP-20` | ADR 0059 and its gate test | VO2 | `private.is_member`, `has_role`, `current_member_orgs`, the `role` enum, and the columns SOC reads of `organizations`, `memberships`, `profiles` declared as a contract | `FR-AUT-*`, `NFR-SEC-01` | Proposed |
-| `DEP-21` | `PGRST_DB_SCHEMAS` gains `soc` | Sergio, on the mini-PC | PostgREST serves schema `soc` | Every web read and write | Box step |
+| `DEP-21` | `PGRST_DB_SCHEMAS` gains `soc` | Sergio, on the mini-PC | PostgREST serves schema `soc` | Every web read and write, from the organizations offered at sign-in (`soc.member_organizations`) | Box step; until it is done the web names it after sign-in |
 | `DEP-22` | GoTrue `ADDITIONAL_REDIRECT_URLS` gains SOC's origin | Sergio, on the mini-PC | Email links (password reset) that land on SOC | `FR-AUT-04` | Box step |
 | `DEP-23` | Realtime Broadcast with private channels | SOC's M1 smoke test, on VO2's stack | The live path, measured on the box, surviving a recreate of the Realtime container; ES256 joins (VO2's `API_JWT_JWKS`, set in its hotfix 0.0.35) | `FR-TEL-01`, `NFR-PERF-01` | Proven on the same Realtime and Postgres versions in the container lane; to measure on the box |
 | `DEP-24` | `TENANT_MAX_EVENTS_PER_SECOND` raised in VO2's Realtime environment | VO2, with Sergio | The tenant's limit (default 100, sends plus deliveries, shared with VO2) raised before SOC follows more than one aircraft | `NFR-RES-07` | Needed before M7 |

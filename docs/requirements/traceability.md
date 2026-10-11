@@ -13,10 +13,10 @@ documents: one row per requirement, the same priority, no row for anything else.
 
 | ID | Priority | Unit | Milestone | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| FR-AUT-01 | MUST | soc-web, database | M1 | — | Planned |
-| FR-AUT-02 | MUST | soc-web, database | M1 | `database/migrations/0005-member-organizations.sql`, `database/tests/test_member_organizations.py` | Partial: the database offers each user their live organizations with role and position, tested per case; the web's choice and switch arrive with the sign-in |
+| FR-AUT-01 | MUST | soc-web, database | M1 | `apps/soc-web/src/account/account.test.tsx`, `apps/soc-web/lint-rules.js`, `apps/soc-web/src/backend/supabase.test.ts` | Partial: sign-in with email and password through GoTrue, its refusals named; no control and no call that creates an account, held by a test and a lint rule; the end-to-end check on the LAN origin arrives with Playwright |
+| FR-AUT-02 | MUST | soc-web, database | M1 | `database/migrations/0005-member-organizations.sql`, `database/tests/test_member_organizations.py`, `apps/soc-web/src/organizations/organizations.test.tsx` | Partial: the user's live organizations offered with role and position, the choice remembered per user and device, switched from the top bar with every other organization's query dropped; the scene's centring and the streams arrive with them |
 | FR-AUT-03 | MUST | soc-web, database | M1 | `database/tests/test_membership.py` | Partial: role ranking and live membership tested; per-table policies arrive with the tables |
-| FR-AUT-04 | MUST | soc-web, database | M1 | — | Planned |
+| FR-AUT-04 | MUST | soc-web, database | M1 | `apps/soc-web/src/account/account.test.tsx` | Partial: tokens refreshed by Supabase's client; a session ended on the server returns to sign-in and forgets what was fetched; the refused write and command arrive with the writes |
 | FR-SCN-01 | MUST | soc-web | M1 | — | Planned |
 | FR-SCN-02 | MUST | soc-web | M2 | — | Planned |
 | FR-SCN-03 | MUST | soc-web | M2 | — | Planned |
@@ -98,7 +98,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-DEP-01 | MUST | infra | M1 | `tools/tests/test_compose.py`, `infra/check/tests/test_images.py` | Partial: one compose project runs `soc-migrate`, `soc-cloud` and `soc-operations` with health checks on both networks, valid for `docker compose config`; `soc-web` and the timed bring-up arrive with the stack check |
 | FR-DEP-02 | MUST | infra | M1 | `database/tests/test_ledger_and_roles.py`, `infra/migrate/tests/*` | Done: ledger, checksums, advisory lock, SCRAM passwords; 26 gate tests and the container lane |
 | FR-DEP-03 | MUST | contracts, soc-config | M1 | `libs/soc-config/tests/test_contract.py`, `libs/soc-config/tests/test_configuration.py`, `services/soc-cloud/tests/test_settings.py`, `services/soc-operations/tests/test_settings.py` | Partial: every key and variable declared once with unit, range and default, validated at start (ADR-0019); `soc-cloud` and `soc-operations` read exactly their keys; `soc-web` arrives next |
-| FR-DEP-04 | MUST | infra | M1 | — | Planned |
+| FR-DEP-04 | MUST | infra | M1 | `apps/soc-web/src/config/runtime.ts`, `apps/soc-web/src/config/runtime.test.ts` | Partial: the web reads its Supabase address and public key from `/config.json` at start and refuses a bad one; the image that writes it arrives next |
 | FR-DEP-05 | MUST | infra | M2 | — | Planned |
 | FR-DEP-06 | MUST | infra, repository | M1 | `tools/tests/test_workflows.py::Release` | Partial: each release publishes `soc-cloud`, `soc-operations` and `soc-migrate` to GHCR at its tag, never moving one; the deploy command and its flight guard arrive with the flights (M4) |
 
@@ -110,7 +110,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-PERF-02 | MUST | soc-web, database, soc-cloud | M4 | `services/soc-cloud/tests/test_against_platform.py::test_commands_reach_the_wire_through_pg_notify_within_50_ms_at_p95` | Partial: from commit to claim p95 under 50 ms over 100 commands on the container lane; the click and the console arrive in M4, the box measurement in the viability session |
 | NFR-PERF-03 | MUST | soc-cloud | M1 | — | Planned |
 | NFR-PERF-04 | MUST | soc-cloud, libs | M4 | — | Planned |
-| NFR-PERF-05 | MUST | soc-web | M1 | `apps/soc-web/scripts/budget.mjs` | Partial: the initial JavaScript (69.6 KB gzip) and the 3D chunk held to their budgets in CI; the load times on the LAN arrive with the scene |
+| NFR-PERF-05 | MUST | soc-web | M1 | `apps/soc-web/scripts/budget.mjs` | Partial: the initial JavaScript (170.8 KB gzip, with Supabase's client) and the 3D chunk held to their budgets in CI; the load times on the LAN arrive with the scene |
 | NFR-PERF-06 | MUST | soc-web | M1 | — | Planned |
 | NFR-PERF-07 | SHOULD | soc-cloud | M4 | — | Planned |
 | NFR-RES-01 | MUST | soc-web | M1 | — | Planned |
@@ -134,7 +134,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-SAF-05 | MUST | soc-operations | M4 | — | Planned |
 | NFR-SAF-06 | MUST | soc-cloud, soc-operations | M1 | — | Planned |
 | NFR-SEC-01 | MUST | database, soc-web, soc-cloud, infra | M1 | `database/tests/test_realtime_authorization.py`, `database/tests/test_membership.py`, `libs/soc-realtime/tests/test_against_realtime.py` | Partial: live-membership helpers and Realtime authorization tested per role, and enforced by the real Realtime: strangers, deleted organizations and anonymous clients refused, member sends dropped; each table adds its policies |
-| NFR-SEC-02 | MUST | database, soc-web, soc-cloud, infra | M1 | — | Planned |
+| NFR-SEC-02 | MUST | database, soc-web, soc-cloud, infra | M1 | `apps/soc-web/src/config/runtime.test.ts` | Partial: the web refuses to start with a service role key or any key but the public one; the search of the built bundle arrives with the image |
 | NFR-SEC-03 | MUST | database, soc-web, soc-cloud, infra | M1 | `libs/soc-config/tests/test_configuration.py::test_served_organizations_are_distinct_uuids` | Partial: an empty or malformed allowlist stops the start; refusing intents outside it arrives with the services |
 | NFR-SEC-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (gitleaks over the full history), `.pre-commit-config.yaml` (gitleaks on what is staged) | Done: secret scan in CI on every pull request and before every commit |
 | NFR-SEC-05 | MUST | soc-cloud | M1 | — | Planned |
@@ -151,7 +151,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-UX-04 | MUST | soc-web | M1 | — | Planned |
 | NFR-UX-05 | MUST | soc-web | M1 | — | Planned |
 | NFR-UX-06 | MUST | soc-web | M1 | — | Planned |
-| NFR-UX-07 | MUST | soc-web | M2 | — | Planned |
+| NFR-UX-07 | MUST | soc-web | M2 | `apps/soc-web/src/app/clock.test.ts` | Partial: the clock in the organization's time zone, UTC on hover; units arrive with the panels |
 | NFR-UX-08 | MUST | soc-web | M1 | — | Planned |
 | NFR-MNT-01 | MUST | repository | M1 | — | Planned |
 | NFR-MNT-02 | MUST | repository | M1 | — | Planned |
@@ -159,7 +159,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (no file over 512 KB), `.pre-commit-config.yaml` (large files, private keys) | Done for size and keys; build output kept out by `.gitignore` |
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
-| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*`, `apps/soc-web/src/**/*.test.*` | Done so far: tooling 159, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 63, soc-operations 15, soc-check 7, soc-web 38 tests, each Python suite under 0.3 s and the web's under 1.7 s, per unit in pre-commit and CI |
+| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*`, `apps/soc-web/src/**/*.test.*` | Done so far: tooling 159, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 63, soc-operations 15, soc-check 7, soc-web 92 tests, each Python suite under 0.3 s and the web's under 1.6 s (ADR-0020), per unit in pre-commit and CI |
 | NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py`, `services/soc-cloud/tests/test_against_broker.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, the real Realtime v2.102.3 beside it, and Mosquitto 2.0.22 configured as Sky Orchestrator's broker; `soc-db`, `soc-realtime` and `soc-cloud` run their end-to-end tests there |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |
