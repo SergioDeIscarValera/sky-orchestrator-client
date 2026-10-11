@@ -30,7 +30,8 @@ hand:
 | Python lint and format over the whole repository | `NFR-MNT-06` |
 | Strict types for `tools/` at Python 3.12, and for `database` | `NFR-MNT-06` |
 | One gate per Python unit, its strict types then its tests: `soc-migrate`, `soc-config`, `soc-log`, `soc-supervision`, `soc-db`, `soc-realtime`, `soc-cloud`, `soc-operations` and `soc-check` (without their `lane` tests) | `NFR-MNT-06`, `NFR-TEST-01` |
-| Container lane: `database`'s tests and the `lane`-marked tests of `soc-db`, `soc-realtime` and `soc-cloud`, against Postgres 17.6.1.136, Realtime v2.102.3 and Mosquitto 2.0.22, when `database/`, `infra/migrate/`, `libs/`, `contracts/`, `services/soc-cloud/` or the lockfile change | `NFR-TEST-02` |
+| Container lane: `database`'s tests and the `lane`-marked tests of `soc-db`, `soc-realtime`, `soc-cloud`, `soc-operations` and `soc-check` (SOC's images built and run), against Postgres 17.6.1.136, Realtime v2.102.3 and Mosquitto 2.0.22, when `database/`, `infra/`, `libs/`, `services/`, `contracts/` or the lockfile change | `NFR-TEST-02` |
+| `soc-web` gate, when the web changes: types, lint, format, unit tests, the build and its loading budget, on Node 24.21.0 and pnpm 12.10.1 | `NFR-UX-01`, `NFR-UX-02`, `NFR-PORT-04`, `NFR-PERF-05` |
 | Secret scan over the full history (gitleaks) | `NFR-SEC-04` |
 
 `pr-policy.yml`, one job named `Pull request policy`: changelog label, branch

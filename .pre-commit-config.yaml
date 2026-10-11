@@ -17,7 +17,10 @@ repos:
         exclude: (\.md$|^contracts/sky-orchestrator/)
       - id: end-of-file-fixer
         exclude: ^contracts/sky-orchestrator/
+      # pnpm writes its lockfile as several YAML documents and parses it itself
+      # (`pnpm install --frozen-lockfile` in CI).
       - id: check-yaml
+        exclude: ^apps/soc-web/pnpm-lock\.yaml$
       - id: check-json
       - id: check-toml
       - id: check-merge-conflict
@@ -152,6 +155,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(infra/check/|libs/soc-config/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+
+      - id: soc-web-gate
+        name: soc-web gate
+        entry: bash -c 'cd apps/soc-web && pnpm typecheck && pnpm lint && pnpm format:check && pnpm test'
+        language: system
+        pass_filenames: false
+        files: ^apps/soc-web/
 
       - id: soc-realtime-gate
         name: soc-realtime gate

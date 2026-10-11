@@ -145,6 +145,17 @@ class ContinuousIntegration(unittest.TestCase):
             with self.subTest(check=check):
                 self.assertIn(check, self.text)
 
+    def test_the_web_gate_runs_every_script_the_web_declares(self) -> None:
+        scripts = json.loads((REPOSITORY / "apps" / "soc-web" / "package.json").read_text())[
+            "scripts"
+        ]
+        gate = self.text[self.text.index("- name: soc-web gate") :].split("\n\n")[0] + "\n"
+        for script in ("typecheck", "lint", "format:check", "test", "build", "budget"):
+            with self.subTest(script=script):
+                self.assertIn(script, scripts)
+                self.assertIn(f"pnpm {script}\n", gate)
+        self.assertIn("pnpm install --frozen-lockfile", gate)
+
     def test_every_step_after_the_setup_reports_independently(self) -> None:
         steps = re.split(r"^      - ", self.text, flags=re.MULTILINE)[1:]
         unguarded = [step.splitlines()[0] for step in steps if "!cancelled()" not in step]

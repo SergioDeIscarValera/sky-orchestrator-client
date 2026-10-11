@@ -110,7 +110,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-PERF-02 | MUST | soc-web, database, soc-cloud | M4 | `services/soc-cloud/tests/test_against_platform.py::test_commands_reach_the_wire_through_pg_notify_within_50_ms_at_p95` | Partial: from commit to claim p95 under 50 ms over 100 commands on the container lane; the click and the console arrive in M4, the box measurement in the viability session |
 | NFR-PERF-03 | MUST | soc-cloud | M1 | — | Planned |
 | NFR-PERF-04 | MUST | soc-cloud, libs | M4 | — | Planned |
-| NFR-PERF-05 | MUST | soc-web | M1 | — | Planned |
+| NFR-PERF-05 | MUST | soc-web | M1 | `apps/soc-web/scripts/budget.mjs` | Partial: the initial JavaScript (69.6 KB gzip) and the 3D chunk held to their budgets in CI; the load times on the LAN arrive with the scene |
 | NFR-PERF-06 | MUST | soc-web | M1 | — | Planned |
 | NFR-PERF-07 | SHOULD | soc-cloud | M4 | — | Planned |
 | NFR-RES-01 | MUST | soc-web | M1 | — | Planned |
@@ -145,8 +145,8 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-COMP-02 | MUST | soc-operations | M3 | — | Planned |
 | NFR-COMP-03 | MUST | soc-cloud, soc-web, contracts | M4 | — | Planned |
 | NFR-COMP-04 | MUST | infra | M4 | — | Planned |
-| NFR-UX-01 | MUST | soc-web | M1 | — | Planned |
-| NFR-UX-02 | MUST | soc-web | M1 | — | Planned |
+| NFR-UX-01 | MUST | soc-web | M1 | `apps/soc-web/src/test/lint.test.ts`, `apps/soc-web/eslint.config.js` | Done: a lint rule refuses any colour literal outside `src/theme/theme.css`, held by its own test |
+| NFR-UX-02 | MUST | soc-web | M1 | `apps/soc-web/src/theme/contrast.test.ts` | Done: every text token on every surface it is used on, and every emphasis on its subtle, at 4.5:1 or more in both themes |
 | NFR-UX-03 | MUST | soc-web | M1 | — | Planned |
 | NFR-UX-04 | MUST | soc-web | M1 | — | Planned |
 | NFR-UX-05 | MUST | soc-web | M1 | — | Planned |
@@ -159,7 +159,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (no file over 512 KB), `.pre-commit-config.yaml` (large files, private keys) | Done for size and keys; build output kept out by `.gitignore` |
 | NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | — | Planned |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
-| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*` | Done so far: tooling 155, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 63, soc-operations 15, soc-check 7 tests, each suite under 0.3 s, per unit in pre-commit and CI |
+| NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*`, `apps/soc-web/src/**/*.test.*` | Done so far: tooling 159, soc-migrate 26, soc-config 191, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 63, soc-operations 15, soc-check 7, soc-web 38 tests, each Python suite under 0.3 s and the web's under 1.7 s, per unit in pre-commit and CI |
 | NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py`, `services/soc-cloud/tests/test_against_broker.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, the real Realtime v2.102.3 beside it, and Mosquitto 2.0.22 configured as Sky Orchestrator's broker; `soc-db`, `soc-realtime` and `soc-cloud` run their end-to-end tests there |
 | NFR-TEST-03 | MUST | infra | M4 | — | Planned |
 | NFR-TEST-04 | MUST | repository | M0 | — | Planned |
@@ -173,5 +173,5 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-PORT-01 | MUST | infra, soc-web | M1 | `infra/compose/compose.yaml`, `infra/check/tests/test_images.py` | Partial: the backend as a compose project of read-only images; on the mini-PC with the viability session |
 | NFR-PORT-02 | MUST | repository | M0 | ADR-0016, ADR-0017 | Partial: every version chosen and argued; lockfiles and digests arrive with each unit in M1 |
 | NFR-PORT-03 | MUST | infra | M5 | — | Planned |
-| NFR-PORT-04 | MUST | infra, soc-web | M1 | — | Planned |
+| NFR-PORT-04 | MUST | infra, soc-web | M1 | `apps/soc-web/src/test/lint.test.ts` | Partial: a lint rule refuses the APIs plain HTTP lacks; the end-to-end check from a LAN address arrives with the image |
 | NFR-PORT-05 | MUST | infra, soc-web | M1 | — | Planned |
