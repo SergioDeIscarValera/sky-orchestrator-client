@@ -1,6 +1,6 @@
 # ADR-0016 — Web stack: React, React Three Fiber, a persistent scene rendered on demand
 
-- **Status**: Accepted
+- **Status**: Accepted; the unit-test environment superseded by [ADR-0020](0020-web-tests-on-happy-dom-and-zod-mini.md)
 - **Date**: 2026-10-07
 
 ## Context
