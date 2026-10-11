@@ -31,6 +31,15 @@ updates:
     commit-message:
       prefix: "build(repo)"
     open-pull-requests-limit: 5
+    # Python, Node and nginx stay on the lines ADR-0016 and ADR-0017 chose until
+    # a record moves them: Python 3.14, Node's LTS, nginx's stable (even) minor.
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "nginxinc/nginx-unprivileged"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   # The web: one lockfile, pinned versions (ADR-0016).
   - package-ecosystem: npm
