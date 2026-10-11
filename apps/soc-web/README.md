@@ -90,6 +90,13 @@ The console: one persistent 3D scene of the farm with floating panels
   latest, never past it; stale it turns muted, lost it is only a muted disc
   where it was last known. All aircraft are four draws. The scene draws frames
   only while one glides or crosses a threshold.
+- **Selecting an aircraft in the scene** (`FR-SCN-05`, `FR-SCN-06`): a click
+  selects its fleet, or the aircraft when it is in none, as its row in the fleet
+  panel does; a soft ring marks it on the ground. A new selection, from the
+  scene, the panel or a shared link, flies the camera once to frame it in the
+  middle of the view the inspector leaves, at the angle the user chose. The
+  selected, the hovered and the alerting (stale or lost) carry a pill label
+  above them with their name, height and battery; at most 20 at once.
 - **A development replay** with `?replay` (development builds only): a synthetic
   aircraft circles the organization at 15 m/s, sampled at 5 Hz, to look at and
   measure the scene without a stack. `pnpm budget` fails a build that ships it.
