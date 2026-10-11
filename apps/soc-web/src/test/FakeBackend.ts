@@ -13,6 +13,7 @@ import {
   type StateEvent,
 } from '../backend/backend'
 import { untouched } from '../backend/supabaseFleets'
+import type { TelemetrySample } from '../telemetry/sample'
 import { PASSWORD_FOR_TESTS } from './keys'
 
 export const PILOT: Account = { userId: 'user-pilot', email: 'pilot@farm.test' }
@@ -94,6 +95,7 @@ export class FakeBackend implements Backend {
   private account: Account | null
   private readonly listeners = new Set<(account: Account | null) => void>()
   private readonly stateListeners = new Map<string, Set<(event: StateEvent) => void>>()
+  private readonly telemetryListeners = new Map<string, Set<(sample: TelemetrySample) => void>>()
   private fleetsMade = 0
 
   constructor(signedIn: Account | null = null) {
@@ -186,6 +188,22 @@ export class FakeBackend implements Backend {
     listeners.add(listener)
     this.stateListeners.set(organizationId, listeners)
     return () => listeners.delete(listener)
+  }
+
+  onTelemetry(organizationId: string, listener: (sample: TelemetrySample) => void): () => void {
+    const listeners = this.telemetryListeners.get(organizationId) ?? new Set()
+    listeners.add(listener)
+    this.telemetryListeners.set(organizationId, listeners)
+    return () => listeners.delete(listener)
+  }
+
+  /** What soc-cloud broadcasts on the organization's telemetry topic. */
+  sample(organizationId: string, sample: TelemetrySample): void {
+    for (const listener of this.telemetryListeners.get(organizationId) ?? []) listener(sample)
+  }
+
+  watchingTelemetry(organizationId: string): number {
+    return this.telemetryListeners.get(organizationId)?.size ?? 0
   }
 
   /** What the database broadcasts on the organization's state topic. */

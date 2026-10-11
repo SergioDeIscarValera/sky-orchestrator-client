@@ -6,10 +6,12 @@ import { useOrganization } from '../organizations/context'
 import { useAircraftModels, useChangeFleet, useDevices, useFleets, useRetireFleet } from './data'
 import { Details, Gone, ReadOnlyReason, Waiting } from './Details'
 import { FleetForm, type AircraftChoice } from './FleetForm'
-import { aircraftKey, changesFleets, changesFrom, readValues, valuesOf } from './form'
+import { aircraftKey } from '../backend/backend'
+import { changesFleets, changesFrom, readValues, valuesOf } from './form'
 import { formatDuration, formatMoment, stackLabel } from './format'
 import { ModelSpecs } from './ModelSpecs'
 import { PresencePill } from './PresencePill'
+import { LiveValues } from '../telemetry/LiveValues'
 
 /** A fleet's identity, what its stack last said of it, its model, and its changes (FR-FLE-04, FR-FLE-05). */
 export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
@@ -165,6 +167,7 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
           ['Registered', formatMoment(fleet.createdAt, zone)],
         ]}
       />
+      <LiveValues gatewaySn={fleet.gatewaySn} aircraftSn={fleet.aircraftSn} />
       {device !== undefined && (
         <Details
           title="On the wire"

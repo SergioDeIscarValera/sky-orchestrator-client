@@ -1,4 +1,12 @@
-import type { Device, Fleet, FleetChanges, FleetDraft, FleetField, Role } from '../backend/backend'
+import {
+  aircraftKey,
+  type Device,
+  type Fleet,
+  type FleetChanges,
+  type FleetDraft,
+  type FleetField,
+  type Role,
+} from '../backend/backend'
 
 /** The fields the fleet form shows; the wire identity is one choice, the flight time two boxes. */
 export type FormField =
@@ -25,10 +33,6 @@ export type ReadForm =
 /** Editors and owners change fleets; a viewer reads them (FR-FLE-03, FR-FLE-05). */
 export function changesFleets(role: Role): boolean {
   return role !== 'viewer'
-}
-
-export function aircraftKey(gatewaySn: string, aircraftSn: string): string {
-  return `${gatewaySn}/${aircraftSn}`
 }
 
 export function blankValues(device: Device): FleetFormValues {

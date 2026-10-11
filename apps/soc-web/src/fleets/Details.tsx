@@ -5,17 +5,23 @@ import { QUIET_BUTTON } from '../app/styles'
 
 export function Details({
   title,
+  aside,
   rows,
 }: {
   readonly title: string
+  /** Said of the whole section, beside its title. */
+  readonly aside?: ReactNode
   readonly rows: readonly (readonly [string, ReactNode])[]
 }) {
   const heading = useId()
   return (
     <section aria-labelledby={heading} className="mt-5">
-      <h4 id={heading} className="text-muted text-xs font-semibold tracking-wider uppercase">
-        {title}
-      </h4>
+      <div className="flex items-center justify-between gap-3">
+        <h4 id={heading} className="text-muted text-xs font-semibold tracking-wider uppercase">
+          {title}
+        </h4>
+        {aside}
+      </div>
       <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
         {rows.map(([label, value]) => (
           <div key={label} className="contents">

@@ -6,9 +6,11 @@ import { useOrganization } from '../organizations/context'
 import { useDevices, useFleets, useRegisterFleet } from './data'
 import { Details, Gone, ReadOnlyReason, Waiting } from './Details'
 import { FleetForm } from './FleetForm'
-import { aircraftKey, blankValues, changesFleets } from './form'
+import { aircraftKey } from '../backend/backend'
+import { blankValues, changesFleets } from './form'
 import { formatMoment, stackLabel } from './format'
 import { PresencePill } from './PresencePill'
+import { LiveValues } from '../telemetry/LiveValues'
 
 /** An aircraft one of the organization's stacks announced, and its registration (FR-FLE-02, FR-FLE-03). */
 export function DeviceDetail({
@@ -97,6 +99,7 @@ export function DeviceDetail({
           ['Last seen', formatMoment(device.lastSeenAt, zone)],
         ]}
       />
+      <LiveValues gatewaySn={device.gatewaySn} aircraftSn={device.aircraftSn} />
       {fleet === undefined ? (
         <div className="mt-5">
           <p className="text-sm">Not in a fleet yet.</p>
