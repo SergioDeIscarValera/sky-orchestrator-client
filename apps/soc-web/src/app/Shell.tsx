@@ -18,7 +18,8 @@ export function Shell() {
         </div>
         <div className="flex min-h-0 flex-col items-start justify-between">
           <PanelHost />
-          <div className="self-end">
+          {/* Bottom right whether or not a panel is open (the design system). */}
+          <div className="mt-auto self-end">
             <MapTools />
           </div>
         </div>

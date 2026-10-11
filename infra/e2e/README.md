@@ -54,6 +54,8 @@ user created through its admin API, with a profile, and owns Finca Norte.
    - the console's delivery figure from `?stats`.
 6. The dock falls silent, and the inspector says Stale **3 s after the last
    sample, give or take 100 ms** (`FR-TEL-02`).
+7. The fleet panel closes, and the map tools stay where they were, bottom
+   right, as the design system puts them: they once jumped to the top.
 
 Both latencies come from this machine's one clock: the dock stamps each OSD with
 it, and the driver reads it as Chrome hands it each frame.
