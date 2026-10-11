@@ -96,6 +96,9 @@ services:
       SOC_CONFIG_FILE: /etc/soc/soc-web.json
     volumes:
       - ./soc-web.json:/etc/soc/soc-web.json:ro
+      # The organizations' site models, baked once (ADR-0018); without one, the console
+      # shows a flat ground, and without the folder the console still starts.
+      - ./site:/srv/site:ro
     tmpfs: ["/tmp:size=4m"]
     ports: ["${SOC_WEB_PORT:?set SOC_WEB_PORT}:8080"]
     deploy:

@@ -74,6 +74,15 @@ class ComposeProject(unittest.TestCase):
         self.assertIn('tmpfs: ["/tmp:size=4m"]', self.services["soc-web"])
         self.assertNotIn("networks:", self.services["soc-web"])
 
+    def test_the_site_models_are_mounted_read_only_on_the_console_alone(self) -> None:
+        volumes = re.findall(r"^      - (.+)$", self.services["soc-web"], re.MULTILINE)
+        mounts = [volume for volume in volumes if "/srv/site" in volume]
+        self.assertEqual(mounts, ["./site:/srv/site:ro"])
+        for name, block in self.services.items():
+            if name != "soc-web":
+                with self.subTest(service=name):
+                    self.assertNotIn("/srv/site", block)
+
     def test_the_networks_are_virtual_origens_and_sky_orchestrators_own(self) -> None:
         networks = self.text[self.text.index("\nnetworks:\n") :]
         self.assertEqual(networks.count("external: true"), 2)

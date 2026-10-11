@@ -8,6 +8,8 @@
 infra/compose/*.env
 !infra/compose/*.env.example
 infra/compose/*.json
+# The site models baked for the mini-PC's organizations: a site model holds a location.
+infra/compose/site/
 *.pem
 *.key
 *.p12
@@ -60,6 +62,8 @@ stats.html
 data/
 captures/
 flight-logs/
+# The site baking tool's working folders at the root: the fetched sources and the model.
+/site/
 *.kmz
 !**/fixtures/**/*.kmz
 *.mp4
