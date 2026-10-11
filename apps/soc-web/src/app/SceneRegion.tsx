@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 
 import { useOrganization } from '../organizations/context'
 import { FLAT_SITE } from '../scene/site'
@@ -13,13 +13,21 @@ export function SceneRegion() {
   const { organization } = useOrganization()
   const [drawable] = useState(supportsWebGl2)
   const [stats] = useState(() => wantsStats())
+  const { position } = organization
+  const origin = useMemo(
+    () =>
+      position === null
+        ? null
+        : { latitudeDeg: position.latitude, longitudeDeg: position.longitude },
+    [position],
+  )
 
   return (
     <main aria-label="Scene" className="absolute inset-0">
       {drawable ? (
         <SceneBoundary>
           <Suspense fallback={null}>
-            <Scene site={FLAT_SITE} organizationId={organization.id} />
+            <Scene site={FLAT_SITE} organizationId={organization.id} origin={origin} />
           </Suspense>
         </SceneBoundary>
       ) : (

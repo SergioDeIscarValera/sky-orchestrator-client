@@ -2,7 +2,7 @@ import { RouterProvider } from '@tanstack/react-router'
 import { useState } from 'react'
 
 import { useLiveState } from '../fleets/data'
-import { TelemetryContext, useLiveTelemetry } from '../telemetry/context'
+import { TelemetryContext, useLiveTelemetry, useReplay } from '../telemetry/context'
 import { createTelemetryStore } from '../telemetry/store'
 import { createConsoleRouter } from './router'
 import { Shell } from './Shell'
@@ -12,6 +12,7 @@ export function Console() {
   useLiveState()
   const [telemetry] = useState(createTelemetryStore)
   useLiveTelemetry(telemetry)
+  useReplay(telemetry)
   const [router] = useState(() => createConsoleRouter(Shell))
   return (
     <TelemetryContext value={telemetry}>

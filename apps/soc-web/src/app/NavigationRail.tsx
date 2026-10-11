@@ -1,14 +1,12 @@
 import { DESTINATIONS } from './destinations'
 import { useChangeView, useView } from './router'
+import { CARD } from './styles'
 
 export function NavigationRail() {
   const { panel } = useView()
   const change = useChangeView()
   return (
-    <nav
-      aria-label="Sections"
-      className="rounded-card bg-surface shadow-card pointer-events-auto flex flex-col gap-1 p-2"
-    >
+    <nav aria-label="Sections" className={`${CARD} pointer-events-auto flex flex-col gap-1 p-2`}>
       {DESTINATIONS.map(({ panel: destination, label, icon: Icon }) => (
         <button
           key={destination}

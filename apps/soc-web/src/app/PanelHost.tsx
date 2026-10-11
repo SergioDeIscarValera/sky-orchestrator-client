@@ -4,7 +4,7 @@ import { useEffect, useId } from 'react'
 import { FleetPanel } from '../fleets/FleetPanel'
 import { DESTINATIONS } from './destinations'
 import { useChangeView, useView } from './router'
-import { QUIET_BUTTON } from './styles'
+import { CARD, QUIET_BUTTON } from './styles'
 
 /** The open panel, floating beside the rail over the scene; Escape closes it. */
 export function PanelHost() {
@@ -28,7 +28,7 @@ export function PanelHost() {
   return (
     <section
       aria-labelledby={heading}
-      className="rounded-card bg-surface shadow-card pointer-events-auto flex max-h-full w-96 flex-col p-5"
+      className={`${CARD} pointer-events-auto flex max-h-full w-96 flex-col p-5`}
     >
       <div className="flex items-center justify-between">
         <h2 id={heading} className="text-sm font-semibold tracking-wider uppercase">

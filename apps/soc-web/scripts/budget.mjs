@@ -1,5 +1,6 @@
 // The loading budget (NFR-PERF-05), on the built application: the JavaScript the
-// entry loads before anything else, and the 3D chunk, both gzipped.
+// entry loads before anything else, and the 3D chunk, both gzipped. It also holds
+// development-only code out of the build: the replay of src/telemetry/replay.ts.
 import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 
@@ -24,6 +25,15 @@ const initialKb = [...initial].reduce((total, key) => total + gzipKb(manifest[ke
 const sceneKb = Object.values(manifest)
   .filter((chunk) => SCENE_CHUNK.test(chunk.name ?? '') && chunk.file.endsWith('.js'))
   .reduce((total, chunk) => total + gzipKb(chunk.file), 0)
+
+const DEVELOPMENT_ONLY = ['src/telemetry/replay.ts']
+const shipped = DEVELOPMENT_ONLY.filter((source) =>
+  Object.values(manifest).some((chunk) => chunk.src === source),
+)
+if (shipped.length > 0) {
+  console.error(`Development-only code in the build: ${shipped.join(', ')}.`)
+  process.exit(1)
+}
 
 console.log(`initial JavaScript ${initialKb.toFixed(1)} KB gzip (budget ${INITIAL_KB})`)
 console.log(`3D chunk ${sceneKb.toFixed(1)} KB gzip (budget ${SCENE_KB})`)

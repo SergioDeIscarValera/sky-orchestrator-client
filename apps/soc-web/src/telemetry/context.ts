@@ -1,4 +1,4 @@
-import { createContext, use, useEffect } from 'react'
+import { createContext, use, useEffect, useState } from 'react'
 import { useStore } from 'zustand'
 
 import { aircraftKey } from '../backend/backend'
@@ -8,7 +8,7 @@ import type { TelemetryStore, Track } from './store'
 
 export const TelemetryContext = createContext<TelemetryStore | null>(null)
 
-function useTelemetryStore(): TelemetryStore {
+export function useTelemetryStore(): TelemetryStore {
   const store = use(TelemetryContext)
   if (store === null) throw new Error('useTelemetryStore outside a TelemetryContext')
   return store
@@ -35,4 +35,34 @@ export function useLiveTelemetry(store: TelemetryStore): void {
       store.getState().clear()
     }
   }, [backend, organization.id, store])
+}
+
+/**
+ * In development only, `?replay` flies a synthetic aircraft around the organization
+ * (`replay.ts`); a production build drops this and the replay with it.
+ */
+export function useReplay(store: TelemetryStore): void {
+  const { organization } = useOrganization()
+  const { position } = organization
+  // Read once, as the console opens: navigating rewrites the search.
+  const [wanted] = useState(() => new URLSearchParams(window.location.search).has('replay'))
+
+  useEffect(() => {
+    // A literal condition, so the production build drops the replay and its chunk.
+    if (!import.meta.env.DEV) return
+    if (!wanted || position === null) return
+    let stop: (() => void) | null = null
+    let stopped = false
+    void import('./replay').then((replay) => {
+      if (stopped) return
+      stop = replay.startReplay(store, {
+        latitudeDeg: position.latitude,
+        longitudeDeg: position.longitude,
+      })
+    })
+    return () => {
+      stopped = true
+      stop?.()
+    }
+  }, [wanted, store, position])
 }

@@ -87,3 +87,6 @@ compose.override.yaml
 Thumbs.db
 *.swp
 *~
+
+# Worktrees Claude Code makes for its subagents.
+.claude/worktrees/

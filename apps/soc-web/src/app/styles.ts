@@ -1,3 +1,9 @@
+/**
+ * A card over the scene. In the dark theme its shadow is lost on the dark ground,
+ * which is the card's own colour, so a hairline in the border token outlines it.
+ */
+export const CARD = 'rounded-card bg-surface shadow-card dark:border-border dark:border'
+
 export const PRIMARY_BUTTON =
   'rounded-pill bg-primary text-on-primary font-heading inline-flex h-11 items-center justify-center gap-2 px-5 text-sm font-semibold transition-[filter] duration-200 hover:brightness-95 disabled:cursor-wait disabled:opacity-70'
 
