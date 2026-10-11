@@ -10,6 +10,9 @@ Each milestone ends in a release, and each line of its plan is one pull request
 made of small commits, one domain each ([ADR-0003](architecture/decisions/0003-git-flow-and-conventional-commits.md)).
 Each milestone has **exit criteria**: falsifiable statements, not a feeling of
 progress. A milestone is closed when every criterion is demonstrated.
+Every milestone gets at least one release (Sergio's rule, 2026-10-11): one
+whose criteria are not all demonstrated is released all the same, its open
+criteria named in the changelog's Known limitations, and closes once they are.
 
 The MVP is M5: **a first real flight commanded from SOC**
 ([ADR-0013](architecture/decisions/0013-narrow-vertical-slice-for-the-mvp.md)).
@@ -17,8 +20,8 @@ The MVP is M5: **a first real flight commanded from SOC**
 | Milestone | Release | Outcome | State on 2026-10-11 |
 | --- | --- | --- | --- |
 | M0 Foundations | v0.1.0 | Repository, conventions, pipelines, requirements, decisions | Closed, released |
-| M1 Platform and viability | v0.2.0 | Every unit runs, measured where the design could break | 4 of 7 criteria demonstrated; 3 wait on the mini-PC's box steps and read access to SO's packages |
-| M2 Live fleet | v0.3.0 | A registered aircraft's live telemetry in 3D, on the farm's terrain | 5 of 5 criteria demonstrated, in the console end to end |
+| M1 Platform and viability | v0.2.0 | Every unit runs, measured where the design could break | Released with 4 of 7 criteria demonstrated; 3 wait on the mini-PC's box steps and read access to SO's packages |
+| M2 Live fleet | v0.3.0 | A registered aircraft's live telemetry in 3D, on the farm's terrain | Closed, released: 5 of 5 criteria, in the console end to end |
 | M3 Mission design | v0.4.0 | Geofences and waylines drawn, baked, validated, turned into files SO accepts | Next; the local frame already in (`soc-geo`) |
 | M4 Operations | v0.5.0 | A whole operation flown from the web against SO's fake bridge | Planned |
 | M5 First real flight | v0.6.0 | **MVP**: the same, with the real aircraft | Planned |
@@ -53,7 +56,10 @@ The MVP is M5: **a first real flight commanded from SOC**
 
 ---
 
-## M1 — Platform and viability · v0.2.0
+## M1 — Platform and viability · *released 2026-10-11, v0.2.0, three criteria open*
+
+Released by decision, one release per milestone: the open criteria need the
+mini-PC and read access to Sky Orchestrator's packages, and close there.
 
 | Step | Pull request |
 | --- | --- |
@@ -85,7 +91,7 @@ The MVP is M5: **a first real flight commanded from SOC**
 
 ---
 
-## M2 — Live fleet · v0.3.0
+## M2 — Live fleet · *closed 2026-10-11, v0.3.0*
 
 | Step | Pull request |
 | --- | --- |
