@@ -24,6 +24,7 @@ loadRuntimeConfiguration().then(
         <App
           backend={supabaseBackend(configuration)}
           queryClient={new QueryClient({ defaultOptions: { queries: { retry: 1 } } })}
+          settings={configuration.settings}
         />
       </StrictMode>,
     )

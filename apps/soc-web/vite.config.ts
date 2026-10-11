@@ -1,9 +1,24 @@
 /// <reference types="vitest/config" />
+import { readFileSync } from 'node:fs'
+
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 
-/** In development, /config.json comes from the environment, as the image writes it at start (FR-DEP-04). */
+/** soc-web's configuration file, or null when it is not given or not JSON: the console then says so. */
+function settingsFile(path: string | undefined): unknown {
+  if (path === undefined) return null
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * In development, /config.json comes from the environment and soc-web's file, as
+ * the image writes it at start (FR-DEP-04, ADR-0023).
+ */
 function runtimeConfiguration(): Plugin {
   return {
     name: 'soc-runtime-configuration',
@@ -16,6 +31,7 @@ function runtimeConfiguration(): Plugin {
           JSON.stringify({
             supabase_url: process.env.SOC_WEB_SUPABASE_URL ?? null,
             supabase_key: process.env.SOC_WEB_SUPABASE_KEY ?? null,
+            settings: settingsFile(process.env.SOC_CONFIG_FILE),
           }),
         )
       })

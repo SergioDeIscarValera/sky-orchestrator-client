@@ -5,6 +5,7 @@ import { AccountContext, useAccountState } from '../account/account'
 import { SignIn } from '../account/SignIn'
 import type { Backend } from '../backend/backend'
 import { BackendContext, useBackend } from '../backend/context'
+import { SettingsContext, type Settings } from '../config/settings'
 import { OrganizationGate } from '../organizations/OrganizationGate'
 import { Waiting } from './Centered'
 import { Console } from './Console'
@@ -12,15 +13,18 @@ import { Console } from './Console'
 interface Props {
   readonly backend: Backend
   readonly queryClient: QueryClient
+  readonly settings: Settings
 }
 
-export function App({ backend, queryClient }: Props) {
+export function App({ backend, queryClient, settings }: Props) {
   return (
-    <BackendContext value={backend}>
-      <QueryClientProvider client={queryClient}>
-        <Session />
-      </QueryClientProvider>
-    </BackendContext>
+    <SettingsContext value={settings}>
+      <BackendContext value={backend}>
+        <QueryClientProvider client={queryClient}>
+          <Session />
+        </QueryClientProvider>
+      </BackendContext>
+    </SettingsContext>
   )
 }
 

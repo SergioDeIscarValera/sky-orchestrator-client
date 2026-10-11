@@ -7,7 +7,18 @@ import {
 } from './runtime'
 import { jwtFor, supabaseKey } from '../test/keys'
 
-const VALID = { supabase_url: 'http://192.168.1.40:8000', supabase_key: jwtFor('anon') }
+const FILE = {
+  telemetry_stale_after_ms: 3000,
+  telemetry_lost_after_ms: 10000,
+  geofence_warning_band_m: 5,
+  geofence_max_vertices: 32,
+  max_arc_spacing_m: 10,
+}
+const VALID = {
+  supabase_url: 'http://192.168.1.40:8000',
+  supabase_key: jwtFor('anon'),
+  settings: FILE,
+}
 
 function problemsOf(raw: unknown): readonly string[] {
   try {
@@ -24,10 +35,17 @@ function answering(body: string, status = 200): typeof fetch {
 }
 
 describe('the runtime configuration', () => {
-  it('accepts a LAN address and the public key', () => {
+  it("accepts a LAN address, the public key and the console's file", () => {
     expect(parseRuntimeConfiguration(VALID)).toEqual({
       supabaseUrl: 'http://192.168.1.40:8000',
       supabaseKey: VALID.supabase_key,
+      settings: {
+        telemetryStaleAfterMs: 3000,
+        telemetryLostAfterMs: 10000,
+        geofenceWarningBandM: 5,
+        geofenceMaxVertices: 32,
+        maxArcSpacingM: 10,
+      },
     })
   })
 
@@ -35,6 +53,7 @@ describe('the runtime configuration', () => {
     const configuration = parseRuntimeConfiguration({
       supabase_url: 'https://farm.example/',
       supabase_key: supabaseKey('publishable'),
+      settings: FILE,
     })
     expect(configuration.supabaseUrl).toBe('https://farm.example')
   })
@@ -63,7 +82,32 @@ describe('the runtime configuration', () => {
     expect(problemsOf({ supabase_url: 'nope', extra: 1 })).toEqual([
       expect.stringMatching(/^supabase_url: /),
       expect.stringMatching(/^supabase_key: /),
+      expect.stringMatching(/^settings: /),
       expect.stringMatching(/extra/),
+    ])
+  })
+
+  it('refuses a console file that breaks the contract, naming each key (ADR-0019)', () => {
+    const settings = {
+      telemetry_stale_after_ms: 2999.5,
+      telemetry_lost_after_ms: 400000,
+      geofence_warning_band_m: '5',
+      max_arc_spacing_m: 10,
+      telemetry_batch_s: 5,
+    }
+    expect(problemsOf({ ...VALID, settings })).toEqual([
+      expect.stringMatching(/^settings\.telemetry_stale_after_ms: /),
+      expect.stringMatching(/^settings\.telemetry_lost_after_ms: /),
+      expect.stringMatching(/^settings\.geofence_warning_band_m: /),
+      expect.stringMatching(/^settings\.geofence_max_vertices: /),
+      expect.stringMatching(/telemetry_batch_s/),
+    ])
+  })
+
+  it('refuses a stale threshold that is not under the lost one', () => {
+    const settings = { ...FILE, telemetry_stale_after_ms: 10000 }
+    expect(problemsOf({ ...VALID, settings })).toEqual([
+      'settings.telemetry_lost_after_ms: must hold telemetry_stale_after_ms < telemetry_lost_after_ms',
     ])
   })
 
