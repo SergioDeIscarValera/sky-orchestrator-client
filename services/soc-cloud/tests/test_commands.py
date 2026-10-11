@@ -14,6 +14,7 @@ import pytest
 
 import soc_config
 from soc_cloud.commands import Commands, Intent
+from soc_cloud.latency import Latencies
 from soc_cloud.link.stack import StackLink
 from soc_cloud.settings import Api, Broker, Stack, StackCredentials
 from soc_cloud.testing import FakeClient
@@ -138,8 +139,14 @@ class Cloud:
             client_factory=self._client,
             backoff=Backoff(initial_s=0.001),
         )
+        self.latencies = Latencies()
         self.commands = Commands(
-            self.store, [self.link], WIRE, ttl_s=ttl_s, reply_timeout_s=REPLY_TIMEOUT_S
+            self.store,
+            [self.link],
+            WIRE,
+            ttl_s=ttl_s,
+            reply_timeout_s=REPLY_TIMEOUT_S,
+            latencies=self.latencies,
         )
 
     def _client(self, *arguments: Any, **options: Any) -> aiomqtt.Client:
@@ -228,6 +235,19 @@ async def test_a_reply_settles_the_command_and_stops_its_clock() -> None:
         await asyncio.sleep(REPLY_TIMEOUT_S * 2)
     assert cloud.store.status(accepted) == "accepted"
     assert cloud.store.results == {accepted: 0, refused: 314010}
+    timed = cloud.latencies.summary()
+    assert timed["command_publish_ms"]["count"] == 2
+    assert timed["command_reply_ms"]["count"] == 2
+
+
+async def test_a_command_that_times_out_has_no_reply_latency() -> None:
+    async with connected() as cloud:
+        intent = cloud.store.request()
+        await cloud.commands.announced(str(intent))
+        await until(lambda: cloud.store.status(intent) == "timed_out")
+        cloud.reply(intent, 0)
+        await asyncio.sleep(0.01)
+    assert "command_reply_ms" not in cloud.latencies.summary()
 
 
 async def test_a_command_with_no_reply_times_out() -> None:
