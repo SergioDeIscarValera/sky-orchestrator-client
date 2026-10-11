@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path, PurePosixPath
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -33,7 +34,11 @@ VENDORED = [
 
 def git(directory: Path, *arguments: str) -> str:
     return subprocess.run(
-        ["git", "-C", str(directory), *arguments], capture_output=True, text=True, check=True
+        ["git", "-C", str(directory), *arguments],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=vso.outside_this_repository(),
     ).stdout.strip()
 
 
@@ -187,6 +192,27 @@ class Repository(unittest.TestCase):
         output = io.StringIO()
         with redirect_stdout(output), redirect_stderr(output):
             self.assertEqual(vso.main(["--check"]), 0, output.getvalue())
+
+
+class InsideAGitHook(unittest.TestCase):
+    """A hook in a worktree exports GIT_DIR and GIT_INDEX_FILE, absolute."""
+
+    def test_git_on_another_repository_leaves_this_one_alone(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            this = Path(directory) / "this"
+            this.mkdir()
+            git(this, "init", "-q")
+            config = (this / ".git" / "config").read_text(encoding="utf-8")
+            hook = {"GIT_DIR": str(this / ".git"), "GIT_INDEX_FILE": str(this / ".git" / "index")}
+            with mock.patch.dict("os.environ", hook):
+                workspace = Workspace()
+                files = vso.vendor(workspace.source, workspace.commit, workspace.destination)
+                provenance = json.loads((workspace.destination / vso.PROVENANCE).read_text())
+                workspace.directory.cleanup()
+            self.assertTrue(files)
+            self.assertEqual(provenance["commit"], workspace.commit)
+            self.assertEqual((this / ".git" / "config").read_text(encoding="utf-8"), config)
+            self.assertEqual(git(this, "rev-list", "--all"), "")
 
 
 if __name__ == "__main__":

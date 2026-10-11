@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -48,9 +49,21 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def outside_this_repository() -> dict[str, str]:
+    """The environment for git on another repository.
+
+    A git hook exports GIT_DIR, GIT_INDEX_FILE and their kin, absolute in a
+    worktree; inherited, they turn `git -C <elsewhere>` back onto this repository.
+    """
+    return {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+
+
 def git(source: Path, *arguments: str) -> bytes:
     return subprocess.run(
-        ["git", "-C", str(source), *arguments], capture_output=True, check=True
+        ["git", "-C", str(source), *arguments],
+        capture_output=True,
+        check=True,
+        env=outside_this_repository(),
     ).stdout
 
 
