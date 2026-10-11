@@ -1,14 +1,16 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 
 import { useSelect } from '../app/router'
-import { ALERT } from '../app/styles'
+import { ALERT, PRIMARY_BUTTON, UNAVAILABLE } from '../app/styles'
 import { useOrganization } from '../organizations/context'
-import { useDevices, useFleets } from './data'
-import { Details, Gone, Waiting } from './Details'
+import { useDevices, useFleets, useRegisterFleet } from './data'
+import { Details, Gone, ReadOnlyReason, Waiting } from './Details'
+import { FleetForm } from './FleetForm'
+import { aircraftKey, blankValues, changesFleets } from './form'
 import { formatMoment, stackLabel } from './format'
 import { PresencePill } from './PresencePill'
 
-/** An aircraft one of the organization's stacks announced (FR-FLE-02). */
+/** An aircraft one of the organization's stacks announced, and its registration (FR-FLE-02, FR-FLE-03). */
 export function DeviceDetail({
   gatewaySn,
   aircraftSn,
@@ -19,8 +21,11 @@ export function DeviceDetail({
   const { organization } = useOrganization()
   const devices = useDevices()
   const fleets = useFleets()
+  const register = useRegisterFleet()
   const select = useSelect()
+  const [registering, setRegistering] = useState(false)
   const heading = useId()
+  const reason = useId()
 
   if (devices.isPending) return <Waiting>Loading the aircraft…</Waiting>
   if (devices.isError) {
@@ -44,7 +49,31 @@ export function DeviceDetail({
   const fleet = fleets.data?.find(
     (registered) => registered.gatewaySn === gatewaySn && registered.aircraftSn === aircraftSn,
   )
+  const writes = changesFleets(organization.role)
   const zone = organization.timeZone
+
+  if (registering && fleet === undefined) {
+    return (
+      <FleetForm
+        title={`Register ${device.aircraftSn}`}
+        initial={blankValues(device)}
+        aircraft={[
+          {
+            key: aircraftKey(device.gatewaySn, device.aircraftSn),
+            label: `${device.aircraftSn} via ${device.stack.name}`,
+          },
+        ]}
+        submitLabel="Register"
+        onSubmit={async (draft) => {
+          const registered = await register.mutateAsync(draft)
+          select({ kind: 'fleet', fleetId: registered.id })
+        }}
+        onCancel={() => {
+          setRegistering(false)
+        }}
+      />
+    )
+  }
 
   return (
     <article aria-labelledby={heading}>
@@ -68,25 +97,37 @@ export function DeviceDetail({
           ['Last seen', formatMoment(device.lastSeenAt, zone)],
         ]}
       />
-      <p className="mt-5 text-sm">
-        {fleet === undefined ? (
-          'Not in a fleet yet.'
-        ) : (
-          <>
-            In fleet{' '}
-            <button
-              type="button"
-              className="text-primary-emphasis font-semibold underline-offset-2 hover:underline"
-              onClick={() => {
-                select({ kind: 'fleet', fleetId: fleet.id })
-              }}
-            >
-              {fleet.name}
-            </button>
-            .
-          </>
-        )}
-      </p>
+      {fleet === undefined ? (
+        <div className="mt-5">
+          <p className="text-sm">Not in a fleet yet.</p>
+          <button
+            type="button"
+            className={`${PRIMARY_BUTTON} ${UNAVAILABLE} mt-3`}
+            aria-disabled={!writes}
+            aria-describedby={writes ? undefined : reason}
+            onClick={() => {
+              if (writes) setRegistering(true)
+            }}
+          >
+            Register as a fleet
+          </button>
+          {!writes && <ReadOnlyReason id={reason} organization={organization.name} />}
+        </div>
+      ) : (
+        <p className="mt-5 text-sm">
+          In fleet{' '}
+          <button
+            type="button"
+            className="text-primary-emphasis font-semibold underline-offset-2 hover:underline"
+            onClick={() => {
+              select({ kind: 'fleet', fleetId: fleet.id })
+            }}
+          >
+            {fleet.name}
+          </button>
+          .
+        </p>
+      )}
     </article>
   )
 }
