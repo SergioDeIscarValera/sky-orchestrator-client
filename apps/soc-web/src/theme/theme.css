@@ -1,0 +1,106 @@
+/*
+ * The design tokens: the only place a colour, radius, shadow or typeface is
+ * written (NFR-UX-01). Minty's hues are fills and accents; text on them is the
+ * matching emphasis colour (NFR-UX-02). The subtle and emphasis pairs are
+ * Bootstrap 5.3's derivation from Minty: light, tint 80 % and shade 60 %; dark,
+ * shade 80 % and tint 40 %. See docs/design/README.md.
+ */
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme {
+  --color-*: initial;
+
+  --color-page: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-border: #e9ecef;
+  --color-text: #5a5a5a;
+  --color-heading: #343a40;
+  --color-muted: #687179;
+  --color-casing: #343a40;
+
+  --color-primary: #78c2ad;
+  --color-secondary: #f3969a;
+  --color-success: #56cc9d;
+  --color-info: #6cc3d5;
+  --color-warning: #ffce67;
+  --color-danger: #ff7851;
+
+  --color-primary-subtle: #e4f3ef;
+  --color-primary-emphasis: #304e45;
+  --color-secondary-subtle: #fdeaeb;
+  --color-secondary-emphasis: #613c3e;
+  --color-success-subtle: #ddf5eb;
+  --color-success-emphasis: #22523f;
+  --color-info-subtle: #e2f3f7;
+  --color-info-emphasis: #2b4e55;
+  --color-warning-subtle: #fff5e1;
+  --color-warning-emphasis: #665229;
+  --color-danger-subtle: #ffe4dc;
+  --color-danger-emphasis: #663020;
+
+  --radius-card: 1rem;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgb(52 58 64 / 0.06), 0 8px 24px rgb(52 58 64 / 0.08);
+
+  --font-heading: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --ease-calm: cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-theme='dark'] {
+  --color-page: #212529;
+  --color-surface: #2b3035;
+  --color-border: #3d434a;
+  --color-text: #eceeef;
+  --color-heading: #f8f9fa;
+  --color-muted: #adb5bd;
+  --color-casing: #f8f9fa;
+
+  --color-primary-subtle: #182723;
+  --color-primary-emphasis: #aedace;
+  --color-secondary-subtle: #311e1f;
+  --color-secondary-emphasis: #f8c0c2;
+  --color-success-subtle: #11291f;
+  --color-success-emphasis: #9ae0c4;
+  --color-info-subtle: #16272b;
+  --color-info-emphasis: #a7dbe6;
+  --color-warning-subtle: #332915;
+  --color-warning-emphasis: #ffe2a4;
+  --color-danger-subtle: #331810;
+  --color-danger-emphasis: #ffae97;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+@layer base {
+  html {
+    background-color: var(--color-page);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-feature-settings: 'tnum';
+  }
+
+  h1,
+  h2,
+  h3 {
+    color: var(--color-heading);
+    font-family: var(--font-heading);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
