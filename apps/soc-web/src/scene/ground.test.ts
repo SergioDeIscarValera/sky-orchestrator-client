@@ -21,6 +21,7 @@ const LIGHT: ScenePalette = {
   gridMinor: 'gainsboro',
   gridMajor: 'gray',
   accent: 'teal',
+  casing: 'darkslategray',
 }
 const DARK: ScenePalette = { ...LIGHT, page: 'black', ground: 'dimgray', gridMinor: 'slategray' }
 
