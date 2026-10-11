@@ -68,6 +68,8 @@ jobs:
         uses: astral-sh/setup-uv@v10.2.0
         with:
           version: "0.12.23"
+          # Caches are per ref, so a new pull request never hits, and the save costs about 3 s.
+          enable-cache: false
 
       - id: workspace
         name: Python workspace, locked
@@ -171,8 +173,14 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          if [ -z "$BASE_REF" ] || git diff --name-only "origin/$BASE_REF...HEAD" \
-              | grep -qE '^(database/|infra/|libs/|services/|contracts/|apps/soc-web/(Dockerfile|nginx/|package\.json|pnpm-lock\.yaml)|\.dockerignore$|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)'; then
+          # The changed paths go into a variable, not a pipe: grep -q quits at its first
+          # match, and a pipe would then fail git with SIGPIPE, which reads as no match.
+          # A manual run has no base to diff against, so the lane runs.
+          changed=""
+          if [ -n "$BASE_REF" ]; then
+            changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          fi
+          if [ -z "$BASE_REF" ] || grep -qE '^(database/|infra/|libs/|services/|contracts/(broadcast|catalogue|config|sky-orchestrator)/|apps/soc-web/(Dockerfile|nginx/|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)|\.dockerignore$|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)' <<< "$changed"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -198,8 +206,12 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          if [ -z "$BASE_REF" ] || git diff --name-only "origin/$BASE_REF...HEAD" \
-              | grep -qE '^(apps/soc-web/|contracts/(config|broadcast|geometry)/|\.github/workflows/ci\.yml$)'; then
+          # As the container lane's detector: the paths go into a variable, not a pipe.
+          changed=""
+          if [ -n "$BASE_REF" ]; then
+            changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          fi
+          if [ -z "$BASE_REF" ] || grep -qE '^(apps/soc-web/|contracts/(config|broadcast|geometry)/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -217,15 +229,28 @@ jobs:
         env:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
         run: |
+          set -euo pipefail
+          # The install stops the step: nothing can run without it. Every check after it
+          # runs even when an earlier one failed, and the step fails at the end, naming
+          # each check that did.
+          failed=()
+          run_check() {
+            "$@" || failed+=("$*")
+          }
           corepack enable
           pnpm install --frozen-lockfile
-          pnpm typecheck
-          pnpm lint
-          pnpm format:check
-          pnpm test
-          pnpm build
-          pnpm budget
-          pnpm secrets
+          run_check pnpm typecheck
+          run_check pnpm lint
+          run_check pnpm format:check
+          run_check pnpm test
+          run_check pnpm build
+          run_check pnpm budget
+          run_check pnpm secrets
+          if [ "${#failed[@]}" -gt 0 ]; then
+            printf 'soc-web gate: these checks failed:\n' >&2
+            printf '  %s\n' "${failed[@]}" >&2
+            exit 1
+          fi
 
       # The binary, not the action: the action needs a licence on organization
       # accounts, and a scan that stops the day the repository moves is no gate.
