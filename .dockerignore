@@ -9,6 +9,9 @@
 !infra/migrate/
 !libs/
 !services/
+!apps/soc-web/
+apps/soc-web/node_modules/
+apps/soc-web/dist/
 **/tests/
 **/__pycache__/
 **/.venv/
