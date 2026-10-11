@@ -10,6 +10,6 @@ mechanism, never a business decision.
 | [`soc-db`](soc-db/README.md) | The one direct Postgres connection, supervised: `LISTEN` then sweep, statements in turn, `COPY` | M1, here |
 | [`soc-supervision`](soc-supervision/README.md) | One link kept up: connect, serve until lost, backoff capped at 10 s, health | M1, here |
 | [`soc-realtime`](soc-realtime/README.md) | The Realtime Broadcast client: join, heartbeat, send, supervised reconnection, the HTTP fallback | M1, here |
-| `soc-geo` | Validators: containment with clearance, the local frame, Sky Orchestrator's haversine, held to `contracts/geometry/` | M3 |
+| [`soc-geo`](soc-geo/README.md) | The local frame now, held to `contracts/geometry/` with the console's TypeScript; from M3 the validators: containment with clearance, Sky Orchestrator's haversine | M2, here (the frame); M3 |
 
 Each library has its own gate tests and README.

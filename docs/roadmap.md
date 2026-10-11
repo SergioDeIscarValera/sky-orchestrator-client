@@ -110,7 +110,7 @@ The MVP is M5: **a first real flight commanded from SOC**
 
 | Step | Pull request |
 | --- | --- |
-| Geometry golden vectors and the design schema; Python predicates passing them | `feature/libs/geometry` |
+| Geometry golden vectors and the design schema; Python predicates passing them | `feature/libs/projection` (the local frame and its vectors, brought forward for the scene's aircraft in M2); `feature/libs/geometry` |
 | The TypeScript geometry engine: projection, predicates, circle, grid, hull and margin, bake | `feature/web/geometry-engine` |
 | Geofences and waylines in the database | `feature/database/geofences-and-waylines` |
 | Geofence editor and generation from waylines | `feature/web/geofence-editor` |
