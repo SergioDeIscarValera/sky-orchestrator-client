@@ -10,7 +10,17 @@ const OURS = Object.keys(consoleRules)
 
 function messages(code: string): string[] {
   return linter
-    .verify(code, [{ files: ['**/*.js'], rules: consoleRules }], 'src/main.js')
+    .verify(
+      code,
+      [
+        {
+          files: ['**/*.jsx'],
+          languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
+          rules: consoleRules,
+        },
+      ],
+      'src/main.jsx',
+    )
     .filter((message) => message.ruleId !== null && OURS.includes(message.ruleId))
     .map((message) => message.message)
 }
@@ -52,6 +62,15 @@ describe('the lint rules', () => {
     expect(messages(code)).toContain(
       "SOC offers no sign-up: accounts are Virtual Origen's (FR-AUT-01).",
     )
+  })
+
+  it('refuse a modal Radix menu, whose inline style the CSP refuses', () => {
+    expect(messages('export const Menu = () => <DropdownMenu.Root>x</DropdownMenu.Root>')).toEqual([
+      expect.stringContaining('give it modal={false}'),
+    ])
+    expect(
+      messages('export const Menu = () => <DropdownMenu.Root modal={false}>x</DropdownMenu.Root>'),
+    ).toEqual([])
   })
 
   it('accept the tokens and the element ids', () => {

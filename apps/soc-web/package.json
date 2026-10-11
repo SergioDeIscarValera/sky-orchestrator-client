@@ -15,7 +15,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "build": "vite build",
-    "budget": "node scripts/budget.mjs"
+    "budget": "node scripts/budget.mjs",
+    "secrets": "node scripts/secrets.mjs"
   },
   "dependencies": {
     "@fontsource/montserrat": "5.3.0",

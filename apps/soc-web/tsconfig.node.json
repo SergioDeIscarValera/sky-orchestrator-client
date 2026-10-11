@@ -16,5 +16,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "lint-rules.d.ts"]
+  "include": ["vite.config.ts", "lint-rules.d.ts", "scripts/secrets.d.mts"]
 }

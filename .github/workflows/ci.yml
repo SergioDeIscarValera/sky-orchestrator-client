@@ -156,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$BASE_REF" ] || git diff --name-only "origin/$BASE_REF...HEAD" \
-              | grep -qE '^(database/|infra/|libs/|services/|contracts/|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)'; then
+              | grep -qE '^(database/|infra/|libs/|services/|contracts/|apps/soc-web/(Dockerfile|nginx/|package\.json|pnpm-lock\.yaml)|\.dockerignore$|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -173,7 +173,8 @@ jobs:
           uv run --frozen pytest infra/check/tests -m lane
 
       # The web's gate (ADR-0016): types, lint, format, unit tests, the build and
-      # its loading budget. Node is installed only when the web changes.
+      # its loading budget, and the search for secrets. Node is installed only when
+      # the web changes.
       - id: web-changes
         name: Detect web changes
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
@@ -208,6 +209,7 @@ jobs:
           pnpm test
           pnpm build
           pnpm budget
+          pnpm secrets
 
       # The binary, not the action: the action needs a licence on organization
       # accounts, and a scan that stops the day the repository moves is no gate.

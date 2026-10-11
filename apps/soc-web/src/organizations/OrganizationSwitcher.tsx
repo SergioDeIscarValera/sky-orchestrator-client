@@ -8,7 +8,7 @@ import { roleName } from './format'
 export function OrganizationSwitcher() {
   const { organization, organizations, choose } = useOrganization()
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger
         aria-label={`Organization: ${organization.name}`}
         className="rounded-pill bg-primary-subtle text-primary-emphasis inline-flex h-8 items-center gap-2 px-3 text-sm font-medium"

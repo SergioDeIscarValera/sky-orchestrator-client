@@ -64,10 +64,37 @@ the page that names what is missing. Schema `soc` must be in Supabase's
 | Script                          | What it checks                                                                                                                                                                                                                                                                                                                                                            |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm typecheck`                | Strict TypeScript, app and tests apart (tests may use Node's API, the app may not)                                                                                                                                                                                                                                                                                        |
-| `pnpm lint`                     | Type-aware rules, the hooks rules, and SOC's three in `lint-rules.js`: no colour literal outside the tokens (`NFR-UX-01`), no API plain HTTP lacks (`NFR-PORT-04`), no way to create an account (`FR-AUT-01`)                                                                                                                                                             |
+| `pnpm lint`                     | Type-aware rules, the hooks rules, and SOC's four in `lint-rules.js`: no colour literal outside the tokens (`NFR-UX-01`), no API plain HTTP lacks (`NFR-PORT-04`), no way to create an account (`FR-AUT-01`), no modal menu (`NFR-SEC-07`)                                                                                                                                |
 | `pnpm format:check`             | Prettier, with Tailwind's class order                                                                                                                                                                                                                                                                                                                                     |
 | `pnpm test`                     | Vitest on happy-dom ([ADR-0020](../../docs/architecture/decisions/0020-web-tests-on-happy-dom-and-zod-mini.md)), under 2 s: sign-in, organization first, sign-out, the configuration's checks, the Supabase implementation against a fake GoTrue and PostgREST, the contrast of every text token on every surface in both themes (`NFR-UX-02`), the lint rules themselves |
 | `pnpm build` then `pnpm budget` | The initial JavaScript ≤ 250 KB gzip and the 3D chunk ≤ 450 KB (`NFR-PERF-05`), read from Vite's manifest                                                                                                                                                                                                                                                                 |
+
+## The image
+
+`apps/soc-web/Dockerfile`, built from the repository root, builds the console
+on Node 24.21.0 (the build fails over the loading budget or with a secret in
+the built files) and serves it with an unprivileged nginx, as user
+10001:10001, on port 8080 inside the container (8088 on the mini-PC):
+
+```bash
+docker build -f apps/soc-web/Dockerfile -t soc-web:local .
+docker run --rm --read-only --tmpfs /tmp:size=4m -p 8088:8080 \
+  -e SOC_WEB_SUPABASE_URL=http://192.168.1.40:8000 \
+  -e SOC_WEB_SUPABASE_KEY=<the anon or publishable key> soc-web:local
+```
+
+At start, `nginx/soc-web.sh` checks both variables as the web does, writes
+`/config.json` and the security headers into `/tmp/soc-web`, logs one
+`service_started` line and hands over to nginx (`FR-DEP-04`). The headers
+(`NFR-SEC-07`): a Content Security Policy that loads scripts and styles from the
+console only and connects only to the configured Supabase (HTTP and WebSocket),
+`frame-ancestors 'none'`, no referrer, `nosniff`, and no server version. The
+built files are cached for a year, `index.html` and `/config.json` never. Any
+other path answers with the console, for the routes the panels add.
+
+A Radix menu is non-modal here: a modal one injects an inline `<style>` the
+policy refuses, so a lint rule asks for `modal={false}`. Dialogs, when they
+come, need the same care.
 
 ## Tokens
 
@@ -82,19 +109,21 @@ on the page colour.
 
 ## Failure modes
 
-| Failure                                                       | What happens                                                                                     |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Local storage unavailable (a private window, blocked storage) | The theme follows the system; the session and the organization are not remembered across reloads |
-| A colour written outside the token file                       | `pnpm lint` fails, in the hooks and in CI                                                        |
-| A token change that drops text below 4.5:1                    | `pnpm test` fails, naming the pair and the theme                                                 |
-| An API that needs a secure context                            | `pnpm lint` fails: the console is served over plain HTTP on the LAN                              |
-| `/config.json` missing, not JSON, or refused                  | The console does not start; one page names every problem, nothing talks to Supabase              |
-| The service role key given as the key                         | Refused at start, before any request: it must never reach a browser                              |
-| Supabase does not answer at sign-in                           | The sign-in names the address it tried                                                           |
-| Wrong email or password, too many attempts, unconfirmed email | The sign-in says which, also when CORS hides GoTrue's error code from the browser                |
-| Schema `soc` not served by PostgREST (`DEP-21`)               | The organizations page names the missing setting, with a button to try again                     |
-| `soc.member_organizations` missing                            | The organizations page says SOC's migrations are not applied                                     |
-| The account has no live organization                          | A page says so and offers sign-out; nothing opens                                                |
-| The remembered organization is no longer the user's           | The picker opens again                                                                           |
-| The session ends on the server (revoked, refresh expired)     | The console returns to sign-in and forgets everything it fetched                                 |
-| An organization's time zone unknown to the browser            | The clock shows the device's zone and says so on hover                                           |
+| Failure                                                       | What happens                                                                                                          |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Local storage unavailable (a private window, blocked storage) | The theme follows the system; the session and the organization are not remembered across reloads                      |
+| A colour written outside the token file                       | `pnpm lint` fails, in the hooks and in CI                                                                             |
+| A token change that drops text below 4.5:1                    | `pnpm test` fails, naming the pair and the theme                                                                      |
+| An API that needs a secure context                            | `pnpm lint` fails: the console is served over plain HTTP on the LAN                                                   |
+| `/config.json` missing, not JSON, or refused                  | The console does not start; one page names every problem, nothing talks to Supabase                                   |
+| The service role key given as the key                         | Refused at start, before any request: it must never reach a browser                                                   |
+| Supabase does not answer at sign-in                           | The sign-in names the address it tried                                                                                |
+| Wrong email or password, too many attempts, unconfirmed email | The sign-in says which, also when CORS hides GoTrue's error code from the browser                                     |
+| Schema `soc` not served by PostgREST (`DEP-21`)               | The organizations page names the missing setting, with a button to try again                                          |
+| `soc.member_organizations` missing                            | The organizations page says SOC's migrations are not applied                                                          |
+| The account has no live organization                          | A page says so and offers sign-out; nothing opens                                                                     |
+| The remembered organization is no longer the user's           | The picker opens again                                                                                                |
+| The session ends on the server (revoked, refresh expired)     | The console returns to sign-in and forgets everything it fetched                                                      |
+| An organization's time zone unknown to the browser            | The clock shows the device's zone and says so on hover                                                                |
+| The container's address or key missing or refused             | It exits with status 2 and one `configuration_refused` line naming each problem, never the key; compose shows it down |
+| A modal menu or another inline style                          | The policy blocks it in the browser; `pnpm lint` refuses modal menus before that                                      |

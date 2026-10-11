@@ -10,7 +10,8 @@ from soc_database.harness import EphemeralPostgres, migrate, service_passwords
 
 @pytest.fixture(scope="session")
 def images() -> Iterator[dict[str, Image]]:
-    built = {service: Image(service) for service in ("soc-cloud", "soc-operations", "soc-migrate")}
+    services = ("soc-cloud", "soc-operations", "soc-migrate", "soc-web")
+    built = {service: Image(service) for service in services}
     try:
         for image in built.values():
             image.build()

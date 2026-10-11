@@ -1,7 +1,8 @@
 """SOC's images, built from the repository and run as the mini-PC runs them.
 
 `Image` builds one service's image from its Dockerfile and runs containers of
-it read-only, as user 10001, on the host network for the tests, and reads back
+it read-only, as user 10001, on the host network unless a test needs a
+published port, and reads back
 what the stack check needs: the exit status, the log lines, the health, the
 memory at rest.
 """
@@ -23,6 +24,7 @@ DOCKERFILES = {
     "soc-cloud": "services/soc-cloud/Dockerfile",
     "soc-operations": "services/soc-operations/Dockerfile",
     "soc-migrate": "infra/migrate/Dockerfile",
+    "soc-web": "apps/soc-web/Dockerfile",
 }
 HEALTHY_WITHIN_S = 60
 
@@ -57,17 +59,19 @@ class Image:
             "image", "inspect", "--format", "{{.Config.User}}", self.reference
         ).stdout.strip()
 
-    def run(self, environment: dict[str, str], *options: str) -> Run:
+    def run(self, environment: dict[str, str], *options: str, network: str = "host") -> Run:
         done = docker(
-            "run", "--rm", "--read-only", "--network", "host",
+            "run", "--rm", "--read-only", "--network", network,
             *_environment(environment), *options, self.reference,
             check=False,
         )  # fmt: skip
         return Run(done.returncode, _json_lines(done.stdout))
 
-    def start(self, name: str, environment: dict[str, str], *options: str) -> Container:
+    def start(
+        self, name: str, environment: dict[str, str], *options: str, network: str = "host"
+    ) -> Container:
         docker(
-            "run", "-d", "--name", name, "--read-only", "--network", "host",
+            "run", "-d", "--name", name, "--read-only", "--network", network,
             *_environment(environment), *options, self.reference,
         )  # fmt: skip
         return Container(name)

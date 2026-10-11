@@ -150,7 +150,7 @@ class ContinuousIntegration(unittest.TestCase):
             "scripts"
         ]
         gate = self.text[self.text.index("- name: soc-web gate") :].split("\n\n")[0] + "\n"
-        for script in ("typecheck", "lint", "format:check", "test", "build", "budget"):
+        for script in ("typecheck", "lint", "format:check", "test", "build", "budget", "secrets"):
             with self.subTest(script=script):
                 self.assertIn(script, scripts)
                 self.assertIn(f"pnpm {script}\n", gate)
@@ -246,6 +246,18 @@ class PythonUnits(unittest.TestCase):
             for dependency in (unit, *self.dependencies[unit]):
                 with self.subTest(unit=unit, dependency=dependency):
                     self.assertRegex(a_change_in(dependency), detection)
+
+    def test_the_lane_runs_when_the_web_image_changes_not_its_source(self) -> None:
+        detection = lane_filter(self.ci)
+        for path in (
+            "apps/soc-web/Dockerfile",
+            "apps/soc-web/nginx/soc-web.sh",
+            "apps/soc-web/pnpm-lock.yaml",
+            ".dockerignore",
+        ):
+            with self.subTest(path=path):
+                self.assertRegex(path, detection)
+        self.assertNotRegex("apps/soc-web/src/app/Shell.tsx", detection)
 
     def test_the_lane_does_not_run_for_documentation(self) -> None:
         detection = lane_filter(self.ci)
