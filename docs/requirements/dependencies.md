@@ -11,9 +11,9 @@ Sources: the integration exchange with both projects' maintainers on
 
 SOC vendors Sky Orchestrator's wire contracts at a pinned commit,
 [`contracts/sky-orchestrator/`](../../contracts/sky-orchestrator/README.md),
-pinned to Sky Orchestrator's v0.4.1 tag, the release that publishes `DEP-01` to
-`DEP-06`, `DEP-12` and `DEP-13`. Its images run SOC's stack check
-(`SO_VERSION=v0.4.1`).
+pinned to Sky Orchestrator's v0.4.2 tag, the release that publishes `DEP-01` to
+`DEP-06`, `DEP-12`, `DEP-13` and `DEP-27`, and the real-flight keys of SO's
+ADR-0040. Its images run SOC's stack check (`SO_VERSION=v0.4.2`).
 
 | ID | SO item | SO milestone | What it gives SOC | SOC requirements waiting on it | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -49,8 +49,9 @@ on DJI's wire. What SOC's operation flow takes from it (M4):
   stays `RETURNING` until the aircraft is on the ground: near home it lands where
   it is, away from home the landing waits for the pilot's stick (SO's ADR-0018).
   SOC gives that state no timeout of its own.
-- **`link.changed_at_ms`** in `/v1/status` means when the link came up (SO PR
-  #121), no longer every change of its health.
+- **`link.changed_at_ms`** in `/v1/status` means when the link became what it
+  is, up or down (SO PR #121, described in v0.4.2), no longer every change of
+  its health.
 - **`flighttask_progress.ext.media_count`** will carry the number of files the
   camera wrote during the task from SO's bridge contract 1.7.0 (`DEP-13` records
   0 today; DJI's wire shape is unchanged). SOC reads nothing from it yet.
