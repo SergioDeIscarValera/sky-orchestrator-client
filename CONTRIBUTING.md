@@ -152,6 +152,8 @@ uv sync --frozen --all-packages              # the Python workspace, CPython 3.1
 uv run --frozen mypy libs/soc-config         # a unit's gate: its types,
 uv run --frozen pytest libs/soc-config/tests # then its tests
 uv run --frozen pytest database/tests        # the container lane, needs Docker
+
+cd apps/soc-web && corepack enable && pnpm install   # the web, Node 24.21.0
 ```
 
 The hooks refuse commits on `main` and `develop`, and messages that break the
