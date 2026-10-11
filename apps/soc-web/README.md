@@ -40,7 +40,10 @@ The console: one persistent 3D scene of the farm with floating panels
   stronger, every 25 m, faded out on level ground. The whole grid is drawn near
   and every fourth vertex beyond 2.5 km, where the full grid only cost the frame.
   The scene's origin is the model's, so the aircraft and the ground share one
-  frame. IGN's attribution sits at the foot of the scene. A model that fails to
+  frame. Over it the camera's target never goes under the ground, and the
+  camera looks more steeply down rather than go into a hill behind it, staying
+  as high over the ground beneath it as the flat ground allows at its lowest
+  (`FR-SCN-03`). IGN's attribution sits at the foot of the scene. A model that fails to
   load is named in the note, and the ground stays flat. In development Vite
   serves the models in `SOC_SITE_DIR`.
 - **The view in the URL** (`NFR-UX-03`): the rail opens and closes a panel
