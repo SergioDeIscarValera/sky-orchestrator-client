@@ -99,7 +99,7 @@ Retention: while configured.
 | --- | --- | --- |
 | `gateway_sn` | text | Primary key, the emulated dock's serial |
 | `name` | text | From configuration |
-| `organization_id` | uuid | The organization the stack serves |
+| `organization_id` | uuid | The organization the stack serves: the stack's `organization` in the configuration (contract 2.0.0) |
 | `link_state` | enum | `connected`, `connecting`, `displaced`, `unreachable` |
 | `status` | jsonb | Sky Orchestrator's stack status (SO's FR-DEV-07), as last read, with its read time |
 | `envelope` | jsonb | The active device envelope (SO's FR-WAY-11), with its fingerprint |
