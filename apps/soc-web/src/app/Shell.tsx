@@ -1,16 +1,42 @@
+import { useEffect } from 'react'
+
 import { MapTools } from '../scene/MapTools'
 import { Inspector } from './Inspector'
 import { NavigationRail } from './NavigationRail'
 import { PanelHost } from './PanelHost'
+import { select, selectionOf, useChangeView, useSelection } from './router'
 import { SceneRegion } from './SceneRegion'
 import { TopBar } from './TopBar'
 
+/** Escape steps back once: it clears the selection, then it closes the panel (NFR-UX-04). */
+function useEscapeStepsBack() {
+  const change = useChangeView()
+  useEffect(() => {
+    const back = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      change((view) =>
+        selectionOf(view) !== null ? select(view, null) : { ...view, panel: undefined },
+      )
+    }
+    window.addEventListener('keydown', back)
+    return () => {
+      window.removeEventListener('keydown', back)
+    }
+  }, [change])
+}
+
 export function Shell() {
+  const selected = useSelection() !== null
+  useEscapeStepsBack()
   return (
     <div className="bg-page relative h-dvh w-dvw overflow-hidden">
       <SceneRegion />
-      <div className="pointer-events-none absolute inset-0 grid grid-cols-[auto_1fr_360px] grid-rows-[auto_1fr] gap-4 p-4">
-        <div className="col-span-3">
+      <div
+        className={`pointer-events-none absolute inset-0 grid grid-rows-[auto_1fr] gap-4 p-4 ${
+          selected ? 'grid-cols-[auto_1fr_360px]' : 'grid-cols-[auto_1fr]'
+        }`}
+      >
+        <div className="col-span-full">
           <TopBar />
         </div>
         <div className="self-start">

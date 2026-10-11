@@ -122,10 +122,12 @@ export function Aircraft({
   }, [store, settings, invalidate])
 
   // A new selection flies the camera to it once, where it is when first drawn: a shared
-  // link may select it before its telemetry arrives. Following it is pinning's.
+  // link may select it before its telemetry arrives. Following it is pinning's, and
+  // clearing the selection lets go of whatever was followed.
   const toFrame = useRef<string | null>(null)
   useEffect(() => {
     toFrame.current = selected
+    if (selected === null) useCameraCommands.getState().pin(null)
     invalidate()
   }, [selected, invalidate])
 

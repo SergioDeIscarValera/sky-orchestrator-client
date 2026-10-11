@@ -107,7 +107,10 @@ describe('the inspector follows the selection (FR-FLE-04, NFR-UX-03)', () => {
     expect(details.getAllByText('Not published').length).toBeGreaterThan(0)
 
     await user.click(row)
-    expect(await within(inspector()).findByText('Nothing selected.')).toBeInTheDocument()
+    // Nothing selected, no inspector: the scene keeps the whole width.
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+    })
     expect(search().get('fleet')).toBeNull()
     expect(search().get('panel')).toBe('fleet')
   })
@@ -133,7 +136,7 @@ describe('the inspector follows the selection (FR-FLE-04, NFR-UX-03)', () => {
     await waitFor(() => {
       expect(window.location.search).toBe('')
     })
-    expect(within(inspector()).getByText('Nothing selected.')).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
   })
 
   it('says so when a selected fleet is retired elsewhere', async () => {
