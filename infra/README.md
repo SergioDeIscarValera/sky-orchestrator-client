@@ -9,7 +9,7 @@ Orchestrator ([ADR-0015](../docs/architecture/decisions/0015-lan-first-deploymen
 | `migrate/` | SOC's migration runner and its ledger | M1 |
 | [`check/`](check/README.md) | The images built and run as the mini-PC runs them; the stack check, everything up from nothing, healthy within 60 s, tested, removed | M1, the images here |
 | `deploy/` | The deploy command, which refuses while a flight is unfinished | M1 |
-| `site/` | The site model baking tool | M2 |
+| [`site/`](site/README.md) | The site model baking tool, `soc-site` | M2, here |
 
 What SOC never does on the mini-PC: add services to Virtual Origen's or Sky
 Orchestrator's compose projects, publish a port Virtual Origen or Sky

@@ -136,6 +136,12 @@ jobs:
           uv run --frozen mypy libs/soc-geo
           uv run --frozen pytest libs/soc-geo/tests
 
+      - name: soc-site gate
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: |
+          uv run --frozen mypy infra/site
+          uv run --frozen pytest infra/site/tests
+
       - name: soc-cloud gate
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
         run: |

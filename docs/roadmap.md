@@ -94,7 +94,7 @@ The MVP is M5: **a first real flight commanded from SOC**
 | Live telemetry: Broadcast fan-out, presence, stack status, latency instruments | `feature/libs/stack-organization`, merged (#50); `feature/cloud/presence`, merged (#51); `feature/cloud/live-telemetry`, merged (#52); `feature/cloud/latency`, merged (#53) |
 | Fleet panels: catalogue, devices seen, registration, detail, retirement | `feature/web/panels`, merged (#54, the view in the URL); `feature/web/fleet-data`, merged (#55); `feature/web/fleet-panel`, merged (#56); `feature/web/fleet-forms`, merged (#60) |
 | Aircraft in the scene: model, stalk, labels, selection, pin and follow, fly-to | `feature/web/settings`, merged (#61, the console's thresholds); `feature/web/live-telemetry` (#62, the browser's telemetry and the inspector's live values); `feature/web/aircraft-in-the-scene` |
-| Site model: the baking tool, stylised terrain, contours, markers | `feature/infra/site-model` |
+| Site model: the baking tool, stylised terrain, contours, markers | `feature/infra/site-bake` (the baking tool); `feature/web/site-terrain` |
 
 **Exit criteria**
 
