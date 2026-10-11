@@ -19,12 +19,13 @@ updates:
       prefix: "build(repo)"
     open-pull-requests-limit: 5
 
-  # The base images of the Python services, pinned by digest (NFR-SEC-08).
+  # The base images of every image, pinned by digest (NFR-SEC-08).
   - package-ecosystem: docker
     directories:
       - /services/soc-cloud
       - /services/soc-operations
       - /infra/migrate
+      - /apps/soc-web
     schedule:
       interval: monthly
     commit-message:
