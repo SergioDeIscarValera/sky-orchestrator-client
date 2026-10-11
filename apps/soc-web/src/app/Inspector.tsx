@@ -1,6 +1,7 @@
 import { DeviceDetail } from '../fleets/DeviceDetail'
 import { FleetDetail } from '../fleets/FleetDetail'
 import { useSelection } from './router'
+import { CARD } from './styles'
 
 /** Whatever is selected, faded in afresh when the selection changes. */
 export function Inspector() {
@@ -14,7 +15,7 @@ export function Inspector() {
   return (
     <aside
       aria-label="Inspector"
-      className="rounded-card bg-surface shadow-card pointer-events-auto max-h-full min-h-0 self-start overflow-y-auto p-5"
+      className={`${CARD} pointer-events-auto max-h-full min-h-0 self-start overflow-y-auto p-5`}
     >
       <h2 className="text-sm font-semibold tracking-wider uppercase">Inspector</h2>
       <div key={key} className="animate-appear mt-3">

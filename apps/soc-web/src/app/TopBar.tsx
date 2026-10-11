@@ -6,11 +6,12 @@ import { OrganizationSwitcher } from '../organizations/OrganizationSwitcher'
 import { Brand } from './Brand'
 import { LiveClock } from './LiveClock'
 import { ThemeToggle } from './ThemeToggle'
+import { CARD } from './styles'
 
 export function TopBar() {
   const { organization } = useOrganization()
   return (
-    <header className="rounded-card bg-surface shadow-card pointer-events-auto flex h-14 items-center gap-4 px-4">
+    <header className={`${CARD} pointer-events-auto flex h-14 items-center gap-4 px-4`}>
       <h1>
         <Brand />
       </h1>

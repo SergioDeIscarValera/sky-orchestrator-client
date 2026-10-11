@@ -7,6 +7,7 @@ const TOKENS = {
   gridMinor: '--color-border',
   gridMajor: '--color-muted',
   accent: '--color-primary',
+  casing: '--color-casing',
 } as const
 
 export type ScenePalette = Readonly<Record<keyof typeof TOKENS, string>>
@@ -20,6 +21,7 @@ export function readPalette(root: HTMLElement = document.documentElement): Scene
     gridMinor: read(TOKENS.gridMinor),
     gridMajor: read(TOKENS.gridMajor),
     accent: read(TOKENS.accent),
+    casing: read(TOKENS.casing),
   }
 }
 
