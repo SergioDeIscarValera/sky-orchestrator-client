@@ -56,9 +56,14 @@ describe('leaving (FR-AUT-04)', () => {
     const backend = new FakeBackend(NEIGHBOUR)
     renderApp(backend)
     await switcher(NORTH.name)
-    expect(backend.watching(NORTH.id)).toBe(1)
+    await waitFor(() => {
+      expect(backend.watching(NORTH.id)).toBe(1)
+    })
     backend.endSession()
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
-    expect(backend.watching(NORTH.id)).toBe(0)
+    // React runs an unmounted effect's cleanup after the page shows the change.
+    await waitFor(() => {
+      expect(backend.watching(NORTH.id)).toBe(0)
+    })
   })
 })
