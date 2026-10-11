@@ -8,6 +8,7 @@ import {
 import { z } from '../schema'
 
 import type { RuntimeConfiguration } from '../config/runtime'
+import { fleetOperations, type ChannelFactory } from './supabaseFleets'
 import {
   BackendError,
   type Account,
@@ -47,6 +48,7 @@ const TOO_MANY_REQUESTS = 429
 export interface SupabaseOptions {
   readonly fetch?: typeof fetch
   readonly autoRefreshToken?: boolean
+  readonly channel?: ChannelFactory
 }
 
 export function supabaseBackend(
@@ -63,8 +65,12 @@ export function supabaseBackend(
     global: options.fetch === undefined ? {} : { fetch: options.fetch },
   })
 
+  const channel: ChannelFactory =
+    options.channel ?? ((topic) => client.channel(topic, { config: { private: true } }))
+
   return {
     address: configuration.supabaseUrl,
+    ...fleetOperations(client, channel),
 
     onAccountChange(listener) {
       const { data } = client.auth.onAuthStateChange((_event, session) => {

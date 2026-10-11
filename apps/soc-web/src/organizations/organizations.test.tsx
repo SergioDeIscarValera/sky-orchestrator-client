@@ -62,8 +62,10 @@ describe('organization first (FR-AUT-02)', () => {
 
   it('switches organization from the top bar and drops what the other one had', async () => {
     window.localStorage.setItem(`soc.organization.${PILOT.userId}`, NORTH.id)
-    const { user, queryClient } = renderApp(new FakeBackend(PILOT))
+    const backend = new FakeBackend(PILOT)
+    const { user, queryClient } = renderApp(backend)
     await user.click(await switcher(NORTH.name))
+    expect([backend.watching(NORTH.id), backend.watching(ORCHARD.id)]).toEqual([1, 0])
     queryClient.setQueryData(organizationKey(NORTH.id, 'fleets'), ['a fleet of the north'])
     queryClient.setQueryData(organizationKey(ORCHARD.id, 'fleets'), [])
     await user.click(await screen.findByRole('menuitemradio', { name: /Almendral/ }))
@@ -72,5 +74,6 @@ describe('organization first (FR-AUT-02)', () => {
     expect(queryClient.getQueryData(organizationKey(NORTH.id, 'fleets'))).toBeUndefined()
     expect(queryClient.getQueryData(organizationKey(ORCHARD.id, 'fleets'))).toEqual([])
     expect(window.localStorage.getItem(`soc.organization.${PILOT.userId}`)).toBe(ORCHARD.id)
+    expect([backend.watching(NORTH.id), backend.watching(ORCHARD.id)]).toEqual([0, 1])
   })
 })
