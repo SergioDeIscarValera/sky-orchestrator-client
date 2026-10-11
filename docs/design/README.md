@@ -68,6 +68,7 @@ Minty is the palette (`CON-08`). Its hues are light: on white they reach 1.5 to
 | Body text | `#5a5a5a` (6.9:1 on white), never Minty's `#888888` | `#eceeef` |
 | Headings | `#343a40` | `#f8f9fa` |
 | Accent: own aircraft, selection | primary `#78c2ad`, cased in `#343a40` | primary |
+| Text on the primary fill (buttons) | `#1e3a33` (5.9:1); Bootstrap's emphasis `#304e45` reaches only 4.4:1 | the same |
 | Waylines | info `#6cc3d5` with a dark casing | info |
 | Geofence | success `#56cc9d` | success |
 | Breach, danger | danger `#ff7851` | danger |
