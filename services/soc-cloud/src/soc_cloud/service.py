@@ -10,6 +10,7 @@ import soc_log
 from soc_cloud.commands import CHANNEL, Commands, PostgresCommandStore
 from soc_cloud.fanout import Fanout, telemetry_topic
 from soc_cloud.files import FileServer, FlightFiles
+from soc_cloud.latency import Latencies
 from soc_cloud.link.stack import StackLink
 from soc_cloud.link.telemetry import Sample
 from soc_cloud.presence import PostgresPresenceStore, PresenceRecorder
@@ -47,9 +48,11 @@ class CloudService:
         )
         self.wire = WireContract()
         self.presence = PresenceRecorder(PostgresPresenceStore(self.database))
+        self.latencies = Latencies()
         self.fanout = Fanout(
             {stack.name: stack.organization for stack in settings.tunables.stacks},
             settings.tunables.broadcast_max_rate_hz,
+            latencies=self.latencies,
         )
         self.latest: dict[str, Sample] = {}
         self.files = FlightFiles(
@@ -76,6 +79,7 @@ class CloudService:
             self.wire,
             ttl_s=settings.tunables.command_intent_ttl_s,
             reply_timeout_s=settings.tunables.command_reply_timeout_s,
+            latencies=self.latencies,
         )
         self._bind_host = bind_host
 
@@ -102,6 +106,7 @@ class CloudService:
             group.create_task(self.realtime.run())
             group.create_task(self.presence.run())
             group.create_task(self.fanout.run(broadcaster))
+            group.create_task(self.latencies.run())
             for link in self.links:
                 group.create_task(link.run())
             group.create_task(serve(health, self.settings.health_port, self._bind_host))

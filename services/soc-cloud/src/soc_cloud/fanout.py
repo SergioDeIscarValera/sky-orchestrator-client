@@ -21,6 +21,7 @@ from typing import Protocol
 import msgspec
 
 import soc_log
+from soc_cloud.latency import Latencies
 from soc_cloud.link.telemetry import Sample
 from soc_realtime import Message, Route
 
@@ -82,12 +83,14 @@ class Fanout:
         *,
         clock: Callable[[], float] = time.monotonic,
         wall_ms: Callable[[], int] = lambda: time.time_ns() // 1_000_000,
+        latencies: Latencies | None = None,
     ) -> None:
         self._organizations = dict(organizations)
         self._interval_s = 1 / max_rate_hz
         self._clock = clock
         self._wall_ms = wall_ms
-        self._pending: dict[tuple[str, str], Sample] = {}
+        self._latencies = latencies or Latencies()
+        self._pending: dict[tuple[str, str], tuple[Sample, float]] = {}
         self._last_sent: dict[tuple[str, str], float] = {}
         self._wake = asyncio.Event()
         self.sent = 0
@@ -95,7 +98,8 @@ class Fanout:
 
     def sampled(self, sample: Sample) -> None:
         if sample.stack in self._organizations:
-            self._pending[(sample.gateway, sample.aircraft)] = sample
+            self._pending[(sample.gateway, sample.aircraft)] = (sample, self._clock())
+            self._latencies.record("telemetry_age_ms", self._wall_ms() - sample.taken_at_ms)
             self._wake.set()
 
     async def run(self, sender: Sender) -> None:
@@ -116,8 +120,9 @@ class Fanout:
         sent_at_ms = self._wall_ms()
         messages = []
         for key in due:
-            sample = self._pending.pop(key)
+            sample, read_at = self._pending.pop(key)
             self._last_sent[key] = now
+            self._latencies.record("telemetry_hold_ms", (now - read_at) * 1000)
             topic = telemetry_topic(self._organizations[sample.stack])
             messages.append(Message(topic, EVENT, payload(sample, sent_at_ms)))
         route = await sender.send(messages)

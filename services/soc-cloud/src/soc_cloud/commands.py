@@ -27,6 +27,7 @@ import aiomqtt
 import msgspec
 
 import soc_log
+from soc_cloud.latency import Latencies
 from soc_cloud.link.stack import LinkDownError, StackLink
 from soc_cloud.wire import WireContract, WireRefusedError
 from soc_db import Database
@@ -124,6 +125,8 @@ class Commands:
         ttl_s: int,
         reply_timeout_s: float,
         clock: Callable[[], float] = time.time,
+        monotonic: Callable[[], float] = time.monotonic,
+        latencies: Latencies | None = None,
     ) -> None:
         self._store = store
         self._links = links
@@ -131,6 +134,9 @@ class Commands:
         self._ttl_s = ttl_s
         self._reply_timeout_s = reply_timeout_s
         self._clock = clock
+        self._monotonic = monotonic
+        self._latencies = latencies or Latencies()
+        self._published: dict[uuid.UUID, float] = {}
         self._deadlines: dict[uuid.UUID, asyncio.TimerHandle] = {}
         self._waiting: dict[str, set[uuid.UUID]] = {}
         self._tasks: set[asyncio.Task[None]] = set()
@@ -207,6 +213,10 @@ class Commands:
         except (aiomqtt.MqttError, LinkDownError, WireRefusedError) as error:
             log.error("command_not_published", verb=intent.verb, error=str(error))
             return
+        self._published[intent.id] = self._monotonic()
+        self._latencies.record(
+            "command_publish_ms", (self._clock() - intent.requested_at.timestamp()) * 1000
+        )
         assert claimed.sent_at is not None
         log.info(
             "command_sent",
@@ -219,12 +229,16 @@ class Commands:
         deadline = self._deadlines.pop(intent, None)
         if deadline is not None:
             deadline.cancel()
+        published = self._published.pop(intent, None)
+        if published is not None:
+            self._latencies.record("command_reply_ms", (self._monotonic() - published) * 1000)
         settled = await self._store.record_reply(intent, result)
         if settled is not None:
             log.info("command_replied", command=intent, verb=settled.verb, result=result)
 
     async def _time_out(self, intent: uuid.UUID) -> None:
         self._deadlines.pop(intent, None)
+        self._published.pop(intent, None)
         if await self._store.time_out(intent) is not None:
             log.warning("command_timed_out", command=intent, after_s=self._reply_timeout_s)
 
