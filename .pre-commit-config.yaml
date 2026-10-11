@@ -178,6 +178,13 @@ repos:
         pass_filenames: false
         files: ^(libs/soc-geo/|contracts/geometry/|pyproject\.toml$|uv\.lock$)
 
+      - id: soc-site-gate
+        name: soc-site gate
+        entry: bash -c 'uv run --frozen mypy infra/site && uv run --frozen pytest infra/site/tests'
+        language: system
+        pass_filenames: false
+        files: ^(infra/site/|libs/soc-geo/|contracts/site/|pyproject\.toml$|uv\.lock$)
+
       - id: soc-realtime-gate
         name: soc-realtime gate
         entry: bash -c 'uv run --frozen mypy libs/soc-realtime && uv run --frozen pytest libs/soc-realtime/tests -m "not lane"'
