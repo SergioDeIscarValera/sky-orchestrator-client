@@ -30,8 +30,9 @@ export function overviewPose(site: Site): Pose {
 /**
  * Limits that keep the camera above the ground and over the site under any
  * input: the target stays on the site, the camera never looks from below the
- * lowest pitch, and never comes closer than the minimum distance, so its
- * height is at least MIN_DISTANCE_M × sin(LOWEST_PITCH_DEG).
+ * lowest pitch, and never comes closer than the minimum distance, so over flat
+ * ground its height is at least lowestCameraHeightM(). Over a terrain,
+ * keepAboveTerrain holds the same height over the ground beneath the camera.
  */
 export function configureControls(
   controls: CameraControls,
@@ -47,6 +48,59 @@ export function configureControls(
   controls.setBoundary(boundary(site))
   controls.smoothTime = reducedMotion ? 0 : SMOOTH_TIME_S
   controls.draggingSmoothTime = reducedMotion ? 0 : SMOOTH_TIME_S / 2
+}
+
+/** The finest step the pitch is raised in, before the last step is narrowed down. */
+const PITCH_STEP_RAD = MathUtils.degToRad(0.25)
+const BISECTIONS = 8
+const TOLERANCE_M = 1e-6
+
+/** How far the camera at `offset` from `target` is above lowestCameraHeightM() over its ground. */
+function clearanceOf(site: Site, target: Vector3, offset: Spherical): number {
+  const camera = new Vector3().setFromSpherical(offset).add(target)
+  return camera.y - site.ground(camera.x, camera.z) - lowestCameraHeightM()
+}
+
+/**
+ * The polar angle closest to the offset's own that keeps the camera
+ * lowestCameraHeightM() over the ground beneath it (FR-SCN-03): the camera looks
+ * more steeply down until it is clear of the terrain behind it. Looking straight
+ * down, it is above its target, which is never under the ground, so one is found.
+ */
+export function clearPolarAngle(site: Site, target: Vector3, offset: Spherical): number {
+  if (clearanceOf(site, target, offset) >= -TOLERANCE_M) return offset.phi
+  const trial = offset.clone()
+  let under = offset.phi
+  let over = Math.max(0, offset.phi - PITCH_STEP_RAD)
+  while (over > 0 && clearanceOf(site, target, trial.set(trial.radius, over, trial.theta)) < 0) {
+    under = over
+    over = Math.max(0, over - PITCH_STEP_RAD)
+  }
+  for (let bisection = 0; bisection < BISECTIONS; bisection += 1) {
+    const middle = (under + over) / 2
+    if (clearanceOf(site, target, trial.set(trial.radius, middle, trial.theta)) < 0) under = middle
+    else over = middle
+  }
+  return over
+}
+
+/**
+ * Holds the camera's end pose over the terrain: its target never under the
+ * ground, and the camera lowestCameraHeightM() over the ground beneath it. On
+ * camera-controls' `control` event, which comes after the user's input and before
+ * the camera moves, and after the map tools' dolly.
+ */
+export function keepAboveTerrain(controls: CameraControls, site: Site): void {
+  const transition = controls.smoothTime > 0
+  const target = controls.getTarget(new Vector3(), true)
+  const ground = site.ground(target.x, target.z)
+  if (target.y < ground) {
+    target.y = ground
+    void controls.moveTo(target.x, target.y, target.z, transition)
+  }
+  const offset = controls.getSpherical(new Spherical(), true)
+  const phi = clearPolarAngle(site, target, offset)
+  if (phi < offset.phi) void controls.rotatePolarTo(phi, transition)
 }
 
 export function lowestCameraHeightM(): number {
@@ -65,9 +119,11 @@ export function flyTo(
   transition: boolean,
 ): Promise<void> {
   const target = boundary(site).clampPoint(pose.target, new Vector3())
+  target.y = Math.max(target.y, site.ground(target.x, target.z))
   const offset = new Spherical().setFromVector3(pose.position.clone().sub(target))
   offset.phi = MathUtils.clamp(offset.phi, controls.minPolarAngle, controls.maxPolarAngle)
   offset.radius = MathUtils.clamp(offset.radius, controls.minDistance, controls.maxDistance)
+  offset.phi = clearPolarAngle(site, target, offset)
   const position = new Vector3().setFromSpherical(offset).add(target)
   return controls.setLookAt(
     position.x,
@@ -80,10 +136,11 @@ export function flyTo(
   )
 }
 
+/** Where the target may go: over the site, from its lowest ground to CEILING_M over its highest. */
 function boundary(site: Site): Box3 {
   return new Box3(
-    new Vector3(-site.halfSizeM, 0, -site.halfSizeM),
-    new Vector3(site.halfSizeM, CEILING_M, site.halfSizeM),
+    new Vector3(-site.halfSizeM, Math.min(0, site.lowestM), -site.halfSizeM),
+    new Vector3(site.halfSizeM, Math.max(0, site.highestM) + CEILING_M, site.halfSizeM),
   )
 }
 

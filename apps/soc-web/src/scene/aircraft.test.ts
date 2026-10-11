@@ -24,7 +24,7 @@ import {
 } from './aircraft'
 import { FIELD_OF_VIEW_DEG } from './camera'
 import type { ScenePalette } from './palette'
-import { groundOf, type Ground } from './terrain'
+import { groundOf, type Ground } from './site'
 
 const FARM = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
 const THRESHOLDS = { telemetryStaleAfterMs: 3000, telemetryLostAfterMs: 10000 }

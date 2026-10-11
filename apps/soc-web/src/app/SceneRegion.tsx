@@ -4,7 +4,7 @@ import { lazy, Suspense, useMemo, useState } from 'react'
 import { useBackend } from '../backend/context'
 import { useOrganization } from '../organizations/context'
 import { organizationKey } from '../organizations/scope'
-import { FLAT_SITE } from '../scene/site'
+import { siteOf } from '../scene/site'
 import { SceneBoundary, SceneMessage } from '../scene/SceneBoundary'
 import { StatsOverlay } from '../scene/StatsOverlay'
 import { supportsWebGl2, wantsStats } from '../scene/webgl'
@@ -36,10 +36,7 @@ export function SceneRegion() {
       ? null
       : { latitudeDeg: position.latitude, longitudeDeg: position.longitude }
   }, [terrain, position])
-  const site = useMemo(
-    () => (terrain === null ? FLAT_SITE : { halfSizeM: terrain.model.half_size_m }),
-    [terrain],
-  )
+  const site = useMemo(() => siteOf(terrain), [terrain])
 
   const note =
     position === null

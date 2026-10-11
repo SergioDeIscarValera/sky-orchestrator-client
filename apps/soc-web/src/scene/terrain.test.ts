@@ -5,11 +5,8 @@ import { SITE } from '../test/site'
 import type { ScenePalette } from './palette'
 import {
   COARSE_FROM_M,
-  FLAT_GROUND,
   createTerrain,
   disposeTerrain,
-  groundOf,
-  heightAt,
   paintTerrain,
   terrainGeometry,
   tintRamp,
@@ -42,24 +39,6 @@ describe('the terrain (FR-SCN-02)', () => {
     expect(vertex(4)).toEqual([0, 0, 0])
     expect(vertex(8)).toEqual([100, -10, 100])
     expect((geometry.boundingBox ?? new Box3()).getSize(new Vector3()).y).toBe(20)
-  })
-
-  it('gives the ground under a point, between vertices, and nothing off the site', () => {
-    expect(heightAt(SITE, 0, 0)).toBe(0)
-    expect(heightAt(SITE, -100, 100)).toBe(10)
-    expect(heightAt(SITE, 50, -50)).toBeCloseTo(-5, 6)
-    expect(heightAt(SITE, -50, 50)).toBeCloseTo(5, 6)
-    expect(heightAt(SITE, 101, 0)).toBeNull()
-  })
-
-  it("stands aircraft on it in the scene's axes, and on the nearest edge past it", () => {
-    const ground = groundOf(SITE)
-    // z is south: the scene's (-50, -50) is the site's 50 m west, 50 m north.
-    expect(ground(-50, -50)).toBeCloseTo(5, 6)
-    expect(ground(50, 50)).toBeCloseTo(-5, 6)
-    expect(ground(-400, -400)).toBe(10)
-    expect(ground(400, 0)).toBeCloseTo(-5, 6)
-    expect(FLAT_GROUND(-400, 400)).toBe(0)
   })
 
   it("tints from the theme's darkest token to its lightest, so dark stays dark", () => {

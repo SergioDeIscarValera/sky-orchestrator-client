@@ -18,22 +18,40 @@ import {
   INSPECTOR_SPAN_PX,
   PANEL_SPAN_PX,
   RAIL_SPAN_PX,
+  CEILING_M,
+  clearPolarAngle,
   coveredBy,
   configureControls,
   flyTo,
   follow,
   framePose,
+  keepAboveTerrain,
   lowestCameraHeightM,
   overviewPose,
 } from './camera'
 import { replaySample } from '../telemetry/replay'
 import { takeoffAfter } from '../telemetry/store'
 import { drawnAt } from './aircraft'
-import { FLAT_SITE } from './site'
+import { FLAT_SITE, type Site } from './site'
 
 CameraControls.install({
   THREE: { Box3, Matrix4, Quaternion, Raycaster, Sphere, Spherical, Vector2, Vector3, Vector4 },
 })
+
+/**
+ * A 300 m hill north-east of the origin and rolling ground around it, up to some
+ * 50° steep: steeper than the camera's lowest pitch, so only the terrain's own
+ * limit keeps the camera out of it.
+ */
+const HILLS: Site = {
+  halfSizeM: 1000,
+  ground: (x, z) =>
+    300 * Math.exp(-((x - 250) ** 2 + (z + 250) ** 2) / (2 * 220 ** 2)) +
+    25 * Math.sin(x / 60) * Math.cos(z / 45),
+  lowestM: -25,
+  highestM: 325,
+  spacingM: 8,
+}
 
 function controlsOver(site = FLAT_SITE): [CameraControls, PerspectiveCamera] {
   const camera = new PerspectiveCamera(FIELD_OF_VIEW_DEG, 16 / 9, 1, 20000)
@@ -91,6 +109,77 @@ describe('the camera (FR-SCN-03)', () => {
       expect(camera.position.y, `step ${String(step)}`).toBeGreaterThanOrEqual(lowest - 1e-6)
       expect(site.containsPoint(target), `step ${String(step)}`).toBe(true)
     }
+  })
+
+  it('stays over the terrain, its target never under it, under any input (2,000 steps)', () => {
+    const [controls, camera] = controlsOver(HILLS)
+    const next = random(20261012)
+    const span = (size: number) => (next() - 0.5) * 2 * size
+    const clearance = lowestCameraHeightM()
+    // The control event's listener, as Controls wires it after every gesture.
+    let kept = 0
+    const gesture = (input: () => unknown) => () => {
+      input()
+      const before = controls.getSpherical(new Spherical(), true).phi
+      keepAboveTerrain(controls, HILLS)
+      if (controls.getSpherical(new Spherical(), true).phi < before) kept += 1
+    }
+    const operations = [
+      gesture(() => controls.rotate(span(Math.PI), span(Math.PI), false)),
+      gesture(() => controls.dolly(span(3000), false)),
+      gesture(() => controls.truck(span(1500), span(1500), false)),
+      () => {
+        const position = new Vector3(span(1500), span(600), span(1500))
+        const target = new Vector3(span(1500), span(600), span(1500))
+        void flyTo(controls, { position, target }, HILLS, false)
+      },
+    ]
+    for (let step = 0; step < 2000; step += 1) {
+      operations[Math.floor(next() * operations.length)]?.()
+      controls.update(1 / 60)
+      const target = controls.getTarget(new Vector3())
+      const below = (point: Vector3) => HILLS.ground(point.x, point.z)
+      const where = `step ${String(step)}`
+      expect(camera.position.y - below(camera.position), where).toBeGreaterThanOrEqual(
+        clearance - 1e-4,
+      )
+      expect(target.y - below(target), where).toBeGreaterThanOrEqual(-1e-6)
+      expect(Math.max(Math.abs(target.x), Math.abs(target.z)), where).toBeLessThanOrEqual(1000)
+      expect(target.y, where).toBeLessThanOrEqual(HILLS.highestM + CEILING_M)
+    }
+    // The terrain itself held the camera, beyond the pitch's limit, again and again.
+    expect(kept).toBeGreaterThan(20)
+  })
+
+  it('looks down only as much more steeply as the terrain behind the camera needs', () => {
+    // The ground rises 1 m every metre south of z = 0: behind a camera looking north.
+    const slope: Site = { ...HILLS, ground: (_x, z) => Math.max(0, z) }
+    const target = new Vector3(0, 0, 0)
+    const low = new Spherical(100, Math.PI / 2 - 0.2, 0)
+    const phi = clearPolarAngle(slope, target, low)
+    expect(phi).toBeLessThan(low.phi)
+    const camera = new Vector3().setFromSpherical(low.clone().set(100, phi, 0))
+    expect(camera.y - camera.z).toBeCloseTo(lowestCameraHeightM(), 1)
+    expect(camera.y - camera.z).toBeGreaterThanOrEqual(lowestCameraHeightM() - 1e-6)
+    // Over flat ground, the pitch and distance limits already hold it: nothing changes.
+    const steepest = new Spherical(20, Math.PI / 2 - (10 * Math.PI) / 180, 1)
+    expect(clearPolarAngle(FLAT_SITE, target, steepest)).toBe(steepest.phi)
+  })
+
+  it('flies to a target under a hill on the hill instead, the camera over it', () => {
+    const [controls, camera] = controlsOver(HILLS)
+    void flyTo(
+      controls,
+      { position: new Vector3(250, 100, -50), target: new Vector3(250, 0, -250) },
+      HILLS,
+      false,
+    )
+    controls.update(1 / 60)
+    const target = controls.getTarget(new Vector3())
+    expect(target.y).toBeCloseTo(HILLS.ground(250, -250), 6)
+    expect(camera.position.y - HILLS.ground(camera.position.x, camera.position.z)).toBeGreaterThan(
+      lowestCameraHeightM() - 1e-4,
+    )
   })
 
   it("needs flyTo: camera-controls' own setLookAt takes the camera underground", () => {

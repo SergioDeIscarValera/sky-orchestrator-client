@@ -4,7 +4,14 @@ import type CameraControlsImpl from 'camera-controls'
 import { useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 
-import { configureControls, coveredBy, flyTo, framePose, overviewPose } from './camera'
+import {
+  configureControls,
+  coveredBy,
+  flyTo,
+  framePose,
+  keepAboveTerrain,
+  overviewPose,
+} from './camera'
 import { useView } from '../app/router'
 import type { Site } from './site'
 import { useCameraCommands } from './commands'
@@ -33,6 +40,19 @@ export function Controls({ site, organizationId }: Props) {
     void flyTo(controls, overviewPose(site), site, false)
     invalidate()
   }, [site, organizationId, reducedMotion, invalidate])
+
+  // No gesture takes the camera into the terrain, nor its target under it (FR-SCN-03).
+  useEffect(() => {
+    const controls = ref.current
+    if (controls === null) return
+    const keep = () => {
+      keepAboveTerrain(controls, site)
+    }
+    controls.addEventListener('control', keep)
+    return () => {
+      controls.removeEventListener('control', keep)
+    }
+  }, [site])
 
   // The user taking the camera unpins whatever it followed (FR-SCN-05).
   useEffect(() => {
@@ -69,6 +89,7 @@ export function Controls({ site, organizationId }: Props) {
         } else {
           const share = last.command === 'closer' ? CLOSER : FARTHER
           void controls.dolly(controls.distance * share, transition)
+          keepAboveTerrain(controls, site)
         }
         invalidate()
       }),

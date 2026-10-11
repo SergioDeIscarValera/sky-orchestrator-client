@@ -25,7 +25,7 @@ import { freshnessOf, type Freshness } from '../telemetry/freshness'
 import type { TelemetrySample } from '../telemetry/sample'
 import { IDLE_MODE, type Track } from '../telemetry/store'
 import type { ScenePalette } from './palette'
-import { FLAT_GROUND, type Ground } from './terrain'
+import { FLAT_GROUND, type Ground } from './site'
 
 /** A Mavic Air 2's span, motor to motor across, in metres. */
 export const SPAN_M = 0.42

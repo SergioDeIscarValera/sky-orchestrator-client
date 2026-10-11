@@ -60,3 +60,20 @@ the tokens, in a second place.
 - Lighting and tone mapping, if a site model ever needs them, are a new record.
 - Frame time is the time between frames while the scene moves, sampled by the
   scene itself and shown with `?stats`.
+
+## Notes
+
+- **2026-10-11, the camera over a baked terrain.** The terrain is the limit, not
+  only the flat ground. The camera's target never goes under the ground: `flyTo`
+  lifts it, and so does a listener on camera-controls' `control` event, which
+  comes after a gesture and before the camera moves. The camera stays at least
+  `lowestCameraHeightM()` over the ground beneath it, the height the flat
+  ground's limits give at their lowest, by looking more steeply down. That
+  happens in `flyTo` and in the same listener (`keepAboveTerrain`). Both read
+  the site's ground function, a bilinear look-up, never the mesh.
+  camera-controls' own colliders were rejected. They only shorten the distance
+  along the ray from the target. With the target on a slope steeper than the
+  camera's pitch, that ray enters the ground at once, and the camera would
+  collapse onto its target. A ridge between the target and the camera can still
+  hide the target: the camera is above the ground, as `FR-SCN-03` asks, and the
+  user turns it.

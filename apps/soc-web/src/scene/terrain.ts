@@ -1,7 +1,6 @@
 import {
   Color,
   LOD,
-  MathUtils,
   Mesh,
   PlaneGeometry,
   ShaderMaterial,
@@ -42,42 +41,6 @@ export function terrainGeometry(site: LoadedSite, stride = 1): PlaneGeometry {
   geometry.computeBoundingBox()
   geometry.computeBoundingSphere()
   return geometry
-}
-
-/**
- * The ground's height above the origin's at a point of the site, bilinear between
- * vertices; null outside the site.
- */
-export function heightAt(site: LoadedSite, east: number, north: number): number | null {
-  const { half_size_m: half, elevation } = site.model
-  const columns = elevation.vertices
-  const column = ((east + half) / (half * 2)) * (columns - 1)
-  const row = ((half - north) / (half * 2)) * (columns - 1)
-  if (column < 0 || row < 0 || column > columns - 1 || row > columns - 1) return null
-  const c0 = Math.min(Math.floor(column), columns - 2)
-  const r0 = Math.min(Math.floor(row), columns - 2)
-  const fc = column - c0
-  const fr = row - r0
-  const at = (r: number, c: number) => site.heights[r * columns + c] ?? elevation.at_origin_m
-  const top = at(r0, c0) * (1 - fc) + at(r0, c0 + 1) * fc
-  const bottom = at(r0 + 1, c0) * (1 - fc) + at(r0 + 1, c0 + 1) * fc
-  return top * (1 - fr) + bottom * fr - elevation.at_origin_m
-}
-
-/** The ground's height above the origin's at a point of the scene, x east and z south. */
-export type Ground = (x: number, z: number) => number
-
-/** Without a site model, the flat ground: the origin's level everywhere. */
-export const FLAT_GROUND: Ground = () => 0
-
-/**
- * The terrain as aircraft stand on it. Past the site's edge, where nothing is drawn,
- * the nearest edge's height, so an aircraft crossing it does not jump.
- */
-export function groundOf(site: LoadedSite): Ground {
-  const half = site.model.half_size_m
-  return (x, z) =>
-    heightAt(site, MathUtils.clamp(x, -half, half), MathUtils.clamp(-z, -half, half)) ?? 0
 }
 
 function luminance(colour: Color): number {
