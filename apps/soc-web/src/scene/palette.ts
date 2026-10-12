@@ -9,6 +9,7 @@ const TOKENS = {
   gridMinor: '--color-border',
   gridMajor: '--color-muted',
   accent: '--color-primary',
+  danger: '--color-danger',
   casing: '--color-casing',
 } as const
 
@@ -26,6 +27,7 @@ export function readPalette(root: HTMLElement = document.documentElement): Scene
     gridMinor: read(TOKENS.gridMinor),
     gridMajor: read(TOKENS.gridMajor),
     accent: read(TOKENS.accent),
+    danger: read(TOKENS.danger),
     casing: read(TOKENS.casing),
     aircraft: Array.from({ length: AIRCRAFT_COLOURS }, (_, index) =>
       read(aircraftColourToken(index)),
