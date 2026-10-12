@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator-client/blob/develop/contracts/geometry/design.schema.json",
+  "title": "A wayline's design and its bake",
+  "description": "What the console's wayline designer saves (FR-WAY-01 to FR-WAY-10) and what its bake turns it into (FR-WAY-07): a takeoff point, drawn primitives and their heights in; one ordered wayline out, field for field Sky Orchestrator's mission plan (contracts/sky-orchestrator/msdk/mission-plan.schema.json) without the identity and fingerprint the stored file gives it. Positions are WGS84 degrees; heights are metres above the takeoff point (ADR-0014). The TypeScript bake generates it, the Python validators check it (ADR-0009).",
+  "x-version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["design", "baked"],
+  "properties": {
+    "design": { "$ref": "#/$defs/design" },
+    "baked": {
+      "description": "The design's bake, null until it is baked. Saved with the design and loaded as saved, never baked again (FR-WAY-09).",
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/baked" }]
+    }
+  },
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latitude_deg", "longitude_deg"],
+      "properties": {
+        "latitude_deg": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude_deg": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+    "height_m": {
+      "description": "Above the takeoff point (ADR-0014).",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "speed_ms": { "type": "number", "exclusiveMinimum": 0 },
+    "action": {
+      "description": "A waypoint action, in the subset Sky Orchestrator flies (FR-WAY-12): reserved, none drawn yet.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "seconds"],
+          "properties": {
+            "type": { "const": "hover" },
+            "seconds": { "type": "integer", "minimum": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": { "type": { "const": "take_photo" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "pitch_deg"],
+          "properties": {
+            "type": { "const": "gimbal_pitch" },
+            "pitch_deg": { "type": "number", "minimum": -90, "maximum": 0 }
+          }
+        }
+      ]
+    },
+    "point": {
+      "description": "A drawn point, flown at the wayline's default height unless it gives its own (FR-WAY-06).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latitude_deg", "longitude_deg"],
+      "properties": {
+        "latitude_deg": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude_deg": { "type": "number", "minimum": -180, "maximum": 180 },
+        "height_m": { "$ref": "#/$defs/height_m" },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } }
+      }
+    },
+    "route": {
+      "description": "An ordered polyline, flown in the order drawn (FR-WAY-02).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "points"],
+      "properties": {
+        "kind": { "const": "route" },
+        "points": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/point" } }
+      }
+    },
+    "points": {
+      "description": "Points of interest, visited in the order the bake chooses (FR-WAY-03).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "points"],
+      "properties": {
+        "kind": { "const": "points" },
+        "points": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/point" } }
+      }
+    },
+    "circle": {
+      "description": "A centre and a radius, its points spaced by max_arc_spacing_m (FR-WAY-04).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "centre", "radius_m", "clockwise", "start_bearing_deg"],
+      "properties": {
+        "kind": { "const": "circle" },
+        "centre": { "$ref": "#/$defs/position" },
+        "radius_m": { "type": "number", "exclusiveMinimum": 0 },
+        "clockwise": { "type": "boolean" },
+        "start_bearing_deg": {
+          "description": "Where on the circle it starts, clockwise from true north.",
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360
+        },
+        "height_m": { "$ref": "#/$defs/height_m" }
+      }
+    },
+    "grid": {
+      "description": "An area covered back and forth, at the angle that minimises the lines unless one is given (FR-WAY-05).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "area", "line_spacing_m", "point_spacing_m"],
+      "properties": {
+        "kind": { "const": "grid" },
+        "area": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/position" } },
+        "line_spacing_m": { "type": "number", "exclusiveMinimum": 0 },
+        "point_spacing_m": { "type": "number", "exclusiveMinimum": 0 },
+        "angle_deg": {
+          "description": "The lines' bearing, clockwise from true north; absent, the bake chooses.",
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 180
+        },
+        "height_m": { "$ref": "#/$defs/height_m" }
+      }
+    },
+    "design": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "takeoff",
+        "default_height_m",
+        "takeoff_security_height_m",
+        "speed_ms",
+        "finish_action",
+        "primitives"
+      ],
+      "properties": {
+        "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+\\.[0-9]+$" },
+        "takeoff": {
+          "description": "Where it takes off from, on the terrain (FR-WAY-01): the plan's reference point.",
+          "$ref": "#/$defs/position"
+        },
+        "default_height_m": { "$ref": "#/$defs/height_m" },
+        "takeoff_security_height_m": {
+          "description": "Climbed to before the transit, as Sky Orchestrator's plan.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 120
+        },
+        "speed_ms": {
+          "description": "The wayline's one speed (FR-WAY-10).",
+          "$ref": "#/$defs/speed_ms"
+        },
+        "finish_action": { "enum": ["return_home", "hold", "land"] },
+        "primitives": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/route" },
+              { "$ref": "#/$defs/points" },
+              { "$ref": "#/$defs/circle" },
+              { "$ref": "#/$defs/grid" }
+            ]
+          }
+        }
+      }
+    },
+    "waypoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "latitude_deg", "longitude_deg", "height_m"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "latitude_deg": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude_deg": { "type": "number", "minimum": -180, "maximum": 180 },
+        "height_m": { "$ref": "#/$defs/height_m" },
+        "speed_ms": { "$ref": "#/$defs/speed_ms" },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } }
+      }
+    },
+    "violation": {
+      "description": "A rule the bake broke, with the waypoint it is about when it is one (FR-WAY-08).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "message"],
+      "properties": {
+        "rule": { "type": "string", "pattern": "^[a-z][a-z_]*$" },
+        "message": { "type": "string" },
+        "waypoint_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "baked": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "takeoff_security_height_m",
+        "reference_point",
+        "speed_ms",
+        "finish_action",
+        "waypoints",
+        "distance_m",
+        "duration_s",
+        "violations"
+      ],
+      "properties": {
+        "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+\\.[0-9]+$" },
+        "takeoff_security_height_m": { "type": "number", "exclusiveMinimum": 0, "maximum": 120 },
+        "reference_point": { "$ref": "#/$defs/position" },
+        "speed_ms": { "$ref": "#/$defs/speed_ms" },
+        "finish_action": { "enum": ["return_home", "hold", "land"] },
+        "waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/waypoint" }
+        },
+        "distance_m": {
+          "description": "From the reference point through every waypoint, in Sky Orchestrator's metric.",
+          "type": "number",
+          "minimum": 0
+        },
+        "duration_s": { "type": "number", "minimum": 0 },
+        "violations": { "type": "array", "items": { "$ref": "#/$defs/violation" } }
+      }
+    }
+  }
+}
