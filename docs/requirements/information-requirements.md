@@ -180,10 +180,9 @@ Owner: members with `editor` or above. Retention: permanent; soft delete.
 | `name` | text | |
 | `takeoff` | jsonb | `[longitude, latitude]` |
 | `default_height_m` | numeric | |
-| `speed_ms` | numeric | |
 | `design` | jsonb | The primitives as drawn: points, routes, circles, grids, with their parameters, in `contracts/geometry/design.schema.json` |
 | `waypoints` | jsonb | The baked result: `[{position: [lon, lat], height_m, actions: []}]` |
-| `metrics` | jsonb | Waypoint count, distance, estimated duration, from the bake |
+| `metrics` | jsonb | Waypoint count and distance, from the bake |
 | `bake_version` | text | Version of the bake that produced `waypoints` |
 | `created_at`, `updated_at`, `deleted_at` | timestamptz | |
 
