@@ -142,7 +142,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-SEC-07 | MUST | soc-web, infra | M1 | `apps/soc-web/nginx/`, `infra/check/tests/test_web_image.py`, `apps/soc-web/lint-rules.js` | Partial: a strict policy (scripts and styles from the console only, connections to its own Supabase only, `frame-ancestors 'none'`), no-referrer, nosniff and no server version, checked on the running image, and no CSP violation in Chrome through sign-in, switch and theme; the header check against the deployed stack arrives with the stack check |
 | NFR-SEC-08 | MUST | repository | M0 | `tools/tests/test_workflows.py::EveryWorkflow` | Partial: every action pinned to a released version and held by a test; lockfiles with hashes arrive with each unit in M1 |
 | NFR-COMP-01 | MUST | soc-cloud, soc-operations, contracts | M1 | — | Planned |
-| NFR-COMP-02 | MUST | soc-operations | M3 | — | Planned |
+| NFR-COMP-02 | MUST | soc-operations | M3 | `services/soc-operations/tests/test_so_acceptance.py`, `services/soc-operations/tests/test_flight_files.py` | Partial: every golden flight file run through Sky Orchestrator's own ingest from its checkout (`soc_operations.so_acceptance`), accepted under a permissive envelope, and refused under its defaults and a tight one for exactly the rules and waypoints SOC predicts (2026-10-12, SO `5172e08`); the HTTP dry run joins the end-to-end suite with the stack session |
 | NFR-COMP-03 | MUST | soc-cloud, soc-web, contracts | M4 | — | Planned |
 | NFR-COMP-04 | MUST | infra | M4 | — | Planned |
 | NFR-UX-01 | MUST | soc-web | M1 | `apps/soc-web/src/test/lint.test.ts`, `apps/soc-web/eslint.config.js` | Done: a lint rule refuses any colour literal outside `src/theme/theme.css`, held by its own test |

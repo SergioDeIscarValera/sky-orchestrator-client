@@ -931,6 +931,7 @@ dependencies = [
     { name = "msgspec" },
     { name = "soc-config" },
     { name = "soc-db" },
+    { name = "soc-geo" },
     { name = "soc-log" },
     { name = "soc-supervision" },
 ]
@@ -947,6 +948,7 @@ requires-dist = [
     { name = "msgspec", specifier = "==0.22.0" },
     { name = "soc-config", editable = "libs/soc-config" },
     { name = "soc-db", editable = "libs/soc-db" },
+    { name = "soc-geo", editable = "libs/soc-geo" },
     { name = "soc-log", editable = "libs/soc-log" },
     { name = "soc-supervision", editable = "libs/soc-supervision" },
 ]
