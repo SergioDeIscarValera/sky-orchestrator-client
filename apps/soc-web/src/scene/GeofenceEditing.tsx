@@ -16,6 +16,7 @@ import {
   useGeofenceEditor,
 } from '../plans/geofenceEditor'
 import { CANVAS_SETTINGS } from './canvas'
+import { CeilingVolume } from './CeilingVolume'
 import { draped, type Flat } from './drape'
 import { flatOf, groundAtPointer, placeOf, useGroundTool } from './groundTool'
 import { HandleButton, type GroundAt, type HandleButtonProps } from './HandleButton'
@@ -129,6 +130,12 @@ export function GeofenceEditing({ site, origin }: Props) {
 
   return (
     <group>
+      <CeilingVolume
+        ring={flats}
+        site={site}
+        ceilingM={editing.drawing.maxHeightM}
+        colour={palette.accent}
+      />
       {outline.length >= 2 && (
         <Line
           points={outline}

@@ -65,7 +65,9 @@ The console: one persistent 3D scene of the farm with floating panels
   each edge bends from its middle, Delete removes the vertex chosen, the arrow
   keys nudge it a metre (ten with Shift) and Ctrl or ⌘ Z undoes a step. The
   area and perimeter follow every step; edges that meet show in the danger
-  colour, and Save names every reason the geofence is not valid yet. Generate
+  colour, and Save names every reason the geofence is not valid yet. Its volume shows up to
+  its ceiling as it is drawn and when it is chosen: faint walls, the ceiling's ring and its
+  height named. Generate
   grows one round the waylines chosen, by a margin from 5 to 100 m, previewed
   as the slider moves, within `geofence_max_vertices`; reshaped by hand, it is
   saved as drawn. Each vertex is placed and measured on the scene's frame
