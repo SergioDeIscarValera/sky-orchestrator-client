@@ -104,12 +104,12 @@ The console: one persistent 3D scene of the farm with floating panels
   (`contracts/broadcast/telemetry.schema.json`) and drops one the aircraft took
   before the latest. The inspector shows a fleet's or an aircraft's live values
   with their age: live, then stale and lost at the thresholds of the console's
-  file, each crossed when it is reached. Height, battery, satellites, mode,
-  heading and distance from home are tiles, the battery with a bar that turns
-  warning under 50 % and danger under 20 %, the heading with an arrow turned to
-  it; the position and the takeoff point follow. What a sample lacks reads as
-  unavailable, never zero; what Sky Orchestrator does not send yet is named
-  once, not shown as empty tiles.
+  file, each crossed when it is reached. The mode, height, battery, satellites,
+  heading and distance from home are tiles in two columns, the battery with a
+  bar that turns warning under 50 % and danger under 20 %, the heading with an
+  arrow turned to it; the position and the takeoff point follow. What a sample
+  lacks reads as unavailable, never zero; what Sky Orchestrator does not send
+  yet has no tile until it does.
 - **The aircraft in the scene** (`FR-SCN-04`, `FR-TEL-02`): every aircraft of
   the organization with telemetry, built in code in its own colour and cased, a
   chevron on its back and a wedge on its ground disc pointing its heading, the

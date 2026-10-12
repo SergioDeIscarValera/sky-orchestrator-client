@@ -86,10 +86,6 @@ export function FleetPanel() {
 
   return (
     <div className="-mx-2 mt-3 flex min-h-0 flex-col gap-3 overflow-y-auto px-2">
-      <p className="text-muted px-1 text-xs">
-        Your registered aircraft first, then those a stack has announced that are not registered
-        yet.
-      </p>
       <Group title="Aircraft" count={total}>
         {total === 0 && (
           <Waiting>No aircraft yet: one appears here when a stack announces it.</Waiting>

@@ -59,7 +59,7 @@ function Tile({
   return (
     <div className="bg-page flex min-w-0 flex-col rounded-xl px-3 py-2">
       <dt className="text-muted text-[11px] font-medium tracking-wide uppercase">{label}</dt>
-      <dd className="text-heading font-heading flex items-center gap-1.5 truncate text-lg font-semibold tabular-nums">
+      <dd className="text-heading font-heading flex items-center gap-1.5 text-lg leading-tight font-semibold break-words tabular-nums">
         {value ?? <Unavailable />}
       </dd>
       {note !== undefined && <dd className="text-muted truncate text-[11px]">{note}</dd>}
@@ -95,7 +95,7 @@ function takeoffPoint(takeoff: Takeoff | null): ReactNode {
  * What the aircraft last said and how long ago (FR-TEL-02, FR-TEL-03, FR-FLE-04): the
  * figures that matter in flight as tiles, its position and takeoff point below. A value
  * the sample lacks reads as unavailable, never zero; the values Sky Orchestrator does
- * not send yet (DEP-08, DEP-09) are named once, not shown empty.
+ * not send yet (DEP-08, DEP-09) have no tile until it does.
  */
 export function LiveValues({
   gatewaySn,
@@ -132,7 +132,8 @@ export function LiveValues({
           {WORD[freshness]}, {formatAge(ageMs)} ago
         </span>
       </div>
-      <dl className="mt-3 grid grid-cols-3 gap-2">
+      <dl className="mt-3 grid grid-cols-2 gap-2">
+        <Tile label="Mode" value={modeName(sample.modeCode)} />
         <Tile label="Height" value={formatMetres(sample.heightM)} note="above takeoff" />
         <Tile label="Battery" value={battery === null ? null : `${String(battery)} %`}>
           {battery !== null && <BatteryBar percent={battery} />}
@@ -142,7 +143,6 @@ export function LiveValues({
           value={sample.satellites === null ? null : String(sample.satellites)}
           note={sample.gpsQuality === null ? undefined : `quality ${String(sample.gpsQuality)}`}
         />
-        <Tile label="Mode" value={modeName(sample.modeCode)} />
         <Tile
           label="Heading"
           value={
@@ -170,9 +170,6 @@ export function LiveValues({
         <dt className="text-muted">Takeoff point</dt>
         <dd className="text-heading text-right tabular-nums">{takeoffPoint(track.takeoff)}</dd>
       </dl>
-      <p className="text-muted mt-2 text-[11px]">
-        Speeds, flight time left and link quality show once Sky Orchestrator sends them.
-      </p>
     </section>
   )
 }

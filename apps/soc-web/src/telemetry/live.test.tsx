@@ -75,8 +75,7 @@ describe('live values in the inspector (FR-TEL-03, FR-FLE-04)', () => {
     expect(tile('Heading')).toHaveTextContent('270°')
     expect(tile('From home')).toHaveTextContent('34.5 m')
     expect(tile('Position')).toHaveTextContent('41.652312° N, 4.724512° W')
-    // What Sky Orchestrator does not send yet is named once, not shown as empty tiles.
-    expect(values.getByText(/Speeds, flight time left and link quality show once/)).toBeVisible()
+    // What Sky Orchestrator does not send yet has no tile, rather than an empty one.
     expect(values.queryByText('Horizontal speed')).toBeNull()
     expect(values.queryByText('0 m')).toBeNull()
   })
