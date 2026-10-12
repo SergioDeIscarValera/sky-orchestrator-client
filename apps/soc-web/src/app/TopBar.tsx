@@ -1,8 +1,7 @@
-import { Search } from 'lucide-react'
-
 import { AccountMenu } from '../account/AccountMenu'
 import { useOrganization } from '../organizations/context'
 import { OrganizationSwitcher } from '../organizations/OrganizationSwitcher'
+import { SearchBox } from '../search/SearchBox'
 import { Brand } from './Brand'
 import { LiveClock } from './LiveClock'
 import { ThemeToggle } from './ThemeToggle'
@@ -16,11 +15,8 @@ export function TopBar() {
         <Brand />
       </h1>
       <OrganizationSwitcher />
-      <div className="text-muted ml-4 flex flex-1 items-center gap-2 text-sm">
-        <Search size={16} aria-hidden />
-        <span>Search</span>
-        <kbd className="border-border rounded-md border px-1.5 text-xs">/</kbd>
-      </div>
+      <SearchBox />
+      <div className="flex-1" />
       <LiveClock timeZone={organization.timeZone} />
       <ThemeToggle />
       <AccountMenu />

@@ -114,6 +114,7 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
                     await browser.tell(stopped=True)
                     stale = await browser.expect("stale")
                     layout = await browser.expect("layout")
+                    found = await browser.expect("search")
         finally:
             for task in tasks:
                 task.cancel()
@@ -146,3 +147,6 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
     assert STALE_AFTER_MS - 100 <= stale["after_last_ms"] <= STALE_AFTER_MS + 100
     # The map tools stay bottom right when the panel closes: they once jumped to the top.
     assert layout["map_tools_moved_px"] == 0
+    # FR-SCN-05 from the top bar: the search selects the fleet, and the scene follows it.
+    assert found["selected"]
+    assert found["following"]

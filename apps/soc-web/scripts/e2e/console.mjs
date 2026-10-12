@@ -217,6 +217,26 @@ async function main() {
       map_tools_moved_px:
         open === null || shut === null ? null : Math.hypot(open.x - shut.x, open.y - shut.y),
     })
+
+    // The search: with nothing selected, `/`, a piece of the aircraft's serial and Enter
+    // select its fleet, which the inspector shows and the scene follows.
+    await page.keyboard.press('Escape')
+    await page.getByRole('complementary', { name: 'Inspector' }).waitFor({ state: 'detached' })
+    await page.keyboard.press('/')
+    await page.keyboard.type(aircraft.slice(-6))
+    await page
+      .getByRole('option', { name: new RegExp(`^${FLEET.name}`) })
+      .waitFor({ timeout: WAIT_MS })
+    await page.keyboard.press('Enter')
+    await page.getByRole('heading', { name: FLEET.name }).waitFor({ timeout: WAIT_MS })
+    emit({
+      event: 'search',
+      selected: new URL(page.url()).searchParams.has('fleet'),
+      following:
+        (await page
+          .getByRole('button', { name: 'Following', exact: true, pressed: true })
+          .count()) === 1,
+    })
   } finally {
     await browser.close()
   }

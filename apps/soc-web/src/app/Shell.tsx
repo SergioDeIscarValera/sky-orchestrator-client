@@ -8,12 +8,15 @@ import { select, selectionOf, useChangeView, useSelection } from './router'
 import { SceneRegion } from './SceneRegion'
 import { TopBar } from './TopBar'
 
-/** Escape steps back once: it clears the selection, then it closes the panel (NFR-UX-04). */
+/**
+ * Escape steps back once: it clears the selection, then it closes the panel (NFR-UX-04).
+ * An Escape something else took, closing the search's results say, is not a step back.
+ */
 function useEscapeStepsBack() {
   const change = useChangeView()
   useEffect(() => {
     const back = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
+      if (event.key !== 'Escape' || event.defaultPrevented) return
       change((view) =>
         selectionOf(view) !== null ? select(view, null) : { ...view, panel: undefined },
       )

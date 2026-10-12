@@ -47,8 +47,9 @@ What SOC takes from it:
 ```
 
 - **Navigation rail** (left): Fleet, Geofences, Waylines, Operations, Settings.
-- **Top bar**: organization switcher, search (`/`), a live clock with the link
-  state, theme, user.
+- **Top bar**: organization switcher, search (`/`): the organization's fleets
+  and aircraft by name, model or serial, choosing one selects it; a live clock
+  with the link state, theme, user.
 - **KPI row** (top left): what matters now: aircraft online, operation state,
   next check failing.
 - **Inspector** (right, 360 px): the selected entity, and nothing when nothing is

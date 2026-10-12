@@ -58,6 +58,9 @@ user created through its admin API, with a profile, and owns Finca Norte.
    sample, give or take 100 ms** (`FR-TEL-02`).
 7. The fleet panel closes, and the map tools stay where they were, bottom
    right, as the design system puts them: they once jumped to the top.
+8. Escape clears the selection; `/`, the last six characters of the aircraft's
+   serial and Enter in the top bar's search select its fleet again, and the
+   scene follows it (`FR-SCN-05`).
 
 Both latencies come from this machine's one clock: the dock stamps each OSD with
 it, and the driver reads it as Chrome hands it each frame.
