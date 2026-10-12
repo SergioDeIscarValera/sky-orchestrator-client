@@ -25,6 +25,34 @@ not exist, without a geometry library at run time
   boundary, or none when any of it is on or outside it, every edge tried against
   the leg itself, since a leg across the arms of a U leaves with both ends in.
 
+- **Sky Orchestrator's envelope** (`soc_geo.limits`): the limits so-wayline
+  judges a flight file by (its envelope.py), checked in its order, in its metric,
+  a value exactly at a limit passing, each violation under Sky Orchestrator's own
+  code with its waypoint: too many waypoints, the takeoff security height or a
+  waypoint above the ceiling, a point outside the geofence's circle, a leg too
+  long, the route too long, a speed above the limit, and given the takeoff
+  position, the transit and the distance from home. The console's bake reports
+  the same violations with the same codes (`src/geometry/limits.ts`).
+
+## What the console generates, checked here
+
+The console's TypeScript is the only generator (ADR-0009); its outputs are kept
+in `contracts/geometry/` and this package checks each independently, so a
+generator bug can only make an output the validator refuses:
+
+- `circle.json`: the circle tool's points, from the same closed form here, every
+  one at the radius within 0.1 m and no arc beyond the spacing by pyproj's
+  geodesic (`tests/circle_oracle.py`).
+- `margin.json`: the geofences grown round waylines: simple, within their
+  vertices, every point and every leg between the points at the margin or more.
+- `grid.json`: the grid tool's coverages: every point inside the area, the lines
+  parallel at the spacing within 0.1 m, none fewer at any bearing of a half-degree
+  sweep.
+- `bake.json`: designs and their bakes: the schema followed, the violations
+  exactly what `soc_geo.limits` finds, the distance in Sky Orchestrator's metric,
+  no leg beyond the envelope unless reported, no two points within half a metre;
+  a bake with no waypoint refused by the schema.
+
 ## Golden vectors
 
 `contracts/geometry/projection.json` holds 125 cases: at the farm, the equator,
