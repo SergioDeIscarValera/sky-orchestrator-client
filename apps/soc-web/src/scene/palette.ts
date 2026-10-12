@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
+import { AIRCRAFT_COLOURS, aircraftColourToken } from '../theme/aircraft'
+
 /** The scene's colours are the design tokens of the current theme (FR-SCN-08, NFR-UX-01). */
 const TOKENS = {
   page: '--color-page',
@@ -10,7 +12,10 @@ const TOKENS = {
   casing: '--color-casing',
 } as const
 
-export type ScenePalette = Readonly<Record<keyof typeof TOKENS, string>>
+export type ScenePalette = Readonly<Record<keyof typeof TOKENS, string>> & {
+  /** Each aircraft's own colour, by its index (`useAircraftColours`). */
+  readonly aircraft: readonly string[]
+}
 
 export function readPalette(root: HTMLElement = document.documentElement): ScenePalette {
   const style = getComputedStyle(root)
@@ -22,6 +27,9 @@ export function readPalette(root: HTMLElement = document.documentElement): Scene
     gridMajor: read(TOKENS.gridMajor),
     accent: read(TOKENS.accent),
     casing: read(TOKENS.casing),
+    aircraft: Array.from({ length: AIRCRAFT_COLOURS }, (_, index) =>
+      read(aircraftColourToken(index)),
+    ),
   }
 }
 

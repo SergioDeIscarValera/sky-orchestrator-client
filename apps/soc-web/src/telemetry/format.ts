@@ -31,6 +31,17 @@ export function modeName(code: number | null): string | null {
   return MODES[code] ?? `Mode ${String(code)}`
 }
 
+/** Below these, the battery reads as low, then as critical. */
+export const BATTERY_LOW_PCT = 50
+export const BATTERY_CRITICAL_PCT = 20
+
+export type BatteryLevel = 'ok' | 'low' | 'critical'
+
+export function batteryLevel(percent: number): BatteryLevel {
+  if (percent < BATTERY_CRITICAL_PCT) return 'critical'
+  return percent < BATTERY_LOW_PCT ? 'low' : 'ok'
+}
+
 /** Whole seconds, minutes past one, never a decimal that ticks. */
 export function formatAge(ageMs: number): string {
   if (ageMs < 1000) return 'under 1 s'

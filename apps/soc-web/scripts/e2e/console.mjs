@@ -5,7 +5,7 @@
 //
 //   → {"event": "ready"}                       signed in, the fleet panel open
 //   ← {"announced_at_ms": <wall ms>}           the dock has started announcing
-//   → {"event": "device", "appeared_after_ms"} the aircraft under Seen on the wire
+//   → {"event": "device", "appeared_after_ms"} the aircraft in the fleet panel
 //   → {"event": "fleet", "name"}               registered through the form, shown
 //   ← {"flying_since_ms": <wall ms>}           the dock has started its OSD
 //   → {"event": "telemetry", ...}              SOC_E2E_SAMPLES samples, measured
@@ -125,8 +125,8 @@ async function main() {
     await page.getByLabel('Email').fill(required('SOC_E2E_EMAIL'))
     await page.getByLabel('Password').fill(required('SOC_E2E_PASSWORD'))
     await page.getByRole('button', { name: 'Sign in' }).click()
-    await page.getByText('Seen on the wire').first().waitFor({ timeout: WAIT_MS })
-    const row = page.getByRole('button', { name: new RegExp(aircraft) })
+    await page.getByRole('region', { name: /^Aircraft/ }).waitFor({ timeout: WAIT_MS })
+    const row = page.getByRole('button', { name: new RegExp(`^${aircraft}`) })
     const appearing = row.waitFor({ timeout: WAIT_MS }).then(() => Date.now())
     trace('signed in, waiting for the aircraft')
     emit({ event: 'ready' })
@@ -134,8 +134,8 @@ async function main() {
     const { announced_at_ms: announcedAtMs } = await nextLine()
     emit({ event: 'device', appeared_after_ms: (await appearing) - announcedAtMs })
 
-    await row.click()
-    await page.getByRole('button', { name: 'Register as a fleet' }).click()
+    // Registered as an operator does, from the aircraft's row in the fleet panel.
+    await page.getByRole('button', { name: `Register ${aircraft}` }).click()
     const form = page.getByRole('form', { name: `Register ${aircraft}` })
     await form.getByLabel('Name').fill(FLEET.name)
     await form.getByLabel('Model').selectOption(FLEET.model)
@@ -148,6 +148,13 @@ async function main() {
     const { flying_since_ms: flyingSinceMs } = await nextLine()
     trace('the dock flies')
     const framesBefore = await page.evaluate(() => globalThis.socScene?.frames ?? 0)
+    // The selected aircraft is followed: its label holds still on the screen while it flies.
+    const label = page.locator('span.font-heading.text-xs', { hasText: FLEET.name }).first()
+    const labelAt = async () => {
+      const box = await label.boundingBox().catch(() => null)
+      return box === null ? null : { x: box.x, y: box.y }
+    }
+    let followedFrom = null
     const deadline = Date.now() + WAIT_MS + (wanted / 5) * 1000
     let firstPosition = null
     while (samples.length < wanted && Date.now() < deadline) {
@@ -155,8 +162,14 @@ async function main() {
       if (firstPosition === null && samples.length > 0) {
         firstPosition = await liveValue(page, 'Position')
       }
+      // From once the camera has flown in, a couple of seconds into the flight.
+      if (followedFrom === null && samples.length >= 15) followedFrom = await labelAt()
     }
     const lastPosition = await liveValue(page, 'Position')
+    const followedTo = await labelAt()
+    const following = await page
+      .getByRole('button', { name: 'Following', exact: true, pressed: true })
+      .count()
     const framesAfter = await page.evaluate(() => globalThis.socScene?.frames ?? 0)
     if (shots !== null) {
       mkdirSync(shots, { recursive: true })
@@ -174,6 +187,11 @@ async function main() {
       ),
       console_delivery_p95_ms: await overlayMs(page, 'delivery p95'),
       moved: firstPosition !== null && firstPosition !== lastPosition,
+      followed: following === 1,
+      label_drift_px:
+        followedFrom === null || followedTo === null
+          ? null
+          : Math.hypot(followedTo.x - followedFrom.x, followedTo.y - followedFrom.y),
       frames_drawn: framesAfter - framesBefore,
     })
 
@@ -198,6 +216,26 @@ async function main() {
       event: 'layout',
       map_tools_moved_px:
         open === null || shut === null ? null : Math.hypot(open.x - shut.x, open.y - shut.y),
+    })
+
+    // The search: with nothing selected, `/`, a piece of the aircraft's serial and Enter
+    // select its fleet, which the inspector shows and the scene follows.
+    await page.keyboard.press('Escape')
+    await page.getByRole('complementary', { name: 'Inspector' }).waitFor({ state: 'detached' })
+    await page.keyboard.press('/')
+    await page.keyboard.type(aircraft.slice(-6))
+    await page
+      .getByRole('option', { name: new RegExp(`^${FLEET.name}`) })
+      .waitFor({ timeout: WAIT_MS })
+    await page.keyboard.press('Enter')
+    await page.getByRole('heading', { name: FLEET.name }).waitFor({ timeout: WAIT_MS })
+    emit({
+      event: 'search',
+      selected: new URL(page.url()).searchParams.has('fleet'),
+      following:
+        (await page
+          .getByRole('button', { name: 'Following', exact: true, pressed: true })
+          .count()) === 1,
     })
   } finally {
     await browser.close()

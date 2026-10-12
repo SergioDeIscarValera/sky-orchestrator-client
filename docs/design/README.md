@@ -47,11 +47,18 @@ What SOC takes from it:
 ```
 
 - **Navigation rail** (left): Fleet, Geofences, Waylines, Operations, Settings.
-- **Top bar**: organization switcher, search (`/`), a live clock with the link
-  state, theme, user.
+- **Top bar**: organization switcher, search (`/`): the organization's fleets
+  and aircraft by name, model or serial, choosing one selects it; a live clock
+  with the link state, theme, user.
 - **KPI row** (top left): what matters now: aircraft online, operation state,
   next check failing.
-- **Inspector** (right, 360 px): the selected entity.
+- **Inspector** (right, 360 px): the selected entity, and nothing when nothing is
+  selected. A header with the entity's colour, name, status and the close; its
+  actions right under it (follow, register or edit, retire); the values that
+  matter in flight as tiles, the figure large and what it is measured from
+  small; then the rest folded in sections the user opens (identity, the wire,
+  the model). The battery tile carries a bar in the status colours: success,
+  warning under 50 %, danger under 20 %.
 - **Bottom area**: the operation stepper, tables (Fleets, Flights, Events), and
   during a flight the flight controls, which never move (`FR-CMD-07`).
 - **Map tools** (bottom right): zoom, rotate, back to the site overview.
@@ -67,7 +74,8 @@ Minty is the palette (`CON-08`). Its hues are light: on white they reach 1.5 to
 | Card surface | `#ffffff` | `#2b3035` |
 | Body text | `#5a5a5a` (6.9:1 on white), never Minty's `#888888` | `#eceeef` |
 | Headings | `#343a40` | `#f8f9fa` |
-| Accent: own aircraft, selection | primary `#78c2ad`, cased in `#343a40` | primary |
+| Accent: selection | primary `#78c2ad` | primary |
+| Aircraft, one colour each, cased in `#343a40` | `#2ba58a` `#3a78d4` `#9b5de5` `#e0569a` `#5fa832` `#a8743f`, by the order SO first saw them; stale fades towards muted | `#5fd1b3` `#7aa7f0` `#c09bf5` `#f28cbd` `#8fd164` `#d3a06c` |
 | Text on the primary fill (buttons) | `#1e3a33` (5.9:1); Bootstrap's emphasis `#304e45` reaches only 4.4:1 | the same |
 | Waylines | info `#6cc3d5` with a dark casing | info |
 | Geofence | success `#56cc9d` | success |
@@ -98,8 +106,11 @@ small share of the original. Contour lines are drawn in the fragment shader
 terrain; fog fades its edges into the page colour.
 
 **Aircraft** are built in code from simple shapes (a body, four arms, four rotor
-discs), matte, in the accent colour. A thin stalk drops to the ground with a disc
-under it: height is read at a glance with no shadow maps.
+discs), matte, each in its own colour, the same dot beside its name in the lists,
+the inspector and its label. A chevron in the casing's colour on its back points
+where it heads. A thin stalk drops to the ground with a disc under it, a wedge on
+the disc's rim pointing the heading too: height and heading are read at a glance,
+from any angle, with no shadow maps.
 
 **Geofences** are walls whose opacity fades upward, a ceiling outline, edges
 drawn as lines. **Waylines** are lines of constant pixel width: solid for the part

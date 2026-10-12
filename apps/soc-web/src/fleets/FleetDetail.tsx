@@ -1,6 +1,7 @@
+import { Archive, Pencil } from 'lucide-react'
 import { useId, useState } from 'react'
 
-import { useSelect } from '../app/router'
+import { useForm, useSelect } from '../app/router'
 import { ALERT, DANGER_BUTTON, QUIET_BUTTON, UNAVAILABLE } from '../app/styles'
 import { useOrganization } from '../organizations/context'
 import { useAircraftModels, useChangeFleet, useDevices, useFleets, useRetireFleet } from './data'
@@ -11,7 +12,9 @@ import { changesFleets, changesFrom, readValues, valuesOf } from './form'
 import { formatDuration, formatMoment, stackLabel } from './format'
 import { ModelSpecs } from './ModelSpecs'
 import { PresencePill } from './PresencePill'
-import { LiveValues } from '../telemetry/LiveValues'
+import { FollowButton, LiveValues } from '../telemetry/LiveValues'
+import { useAircraftColours } from './colours'
+import { Swatch } from './Swatch'
 
 /** A fleet's identity, what its stack last said of it, its model, and its changes (FR-FLE-04, FR-FLE-05). */
 export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
@@ -22,9 +25,11 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
   const change = useChangeFleet()
   const retire = useRetireFleet()
   const select = useSelect()
-  const [mode, setMode] = useState<'reading' | 'editing' | 'retiring'>('reading')
+  const [mode, setMode] = useState<'reading' | 'retiring'>('reading')
+  const [form, setForm] = useForm()
   const [refusal, setRefusal] = useState<string | null>(null)
   const heading = useId()
+  const colourOf = useAircraftColours()
   const reason = useId()
 
   if (fleets.isPending) return <Waiting>Loading the fleet…</Waiting>
@@ -51,7 +56,8 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
   const writes = changesFleets(organization.role)
   const zone = organization.timeZone
 
-  if (mode === 'editing') {
+  // Editing lives in the URL, so the fleet panel's Edit opens it here.
+  if (form === 'edit' && writes) {
     const before = readValues(valuesOf(fleet))
     return (
       <FleetForm
@@ -64,10 +70,10 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
           if (Object.keys(changes).length > 0) {
             await change.mutateAsync({ id: fleet.id, changes })
           }
-          setMode('reading')
+          setForm(null)
         }}
         onCancel={() => {
-          setMode('reading')
+          setForm(null)
         }}
       />
     )
@@ -87,10 +93,13 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
     <article aria-labelledby={heading}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 id={heading} className="text-lg font-semibold break-words">
+          <h3 id={heading} className="flex items-center gap-2.5 text-lg font-semibold break-words">
+            <Swatch colour={colourOf(aircraftKey(fleet.gatewaySn, fleet.aircraftSn))} />
             {fleet.name}
           </h3>
-          <p className="text-muted text-sm">{model?.displayName ?? fleet.model}</p>
+          <p className="text-muted text-sm">
+            {model?.displayName ?? fleet.model} · {fleet.aircraftSn}
+          </p>
         </div>
         {device !== undefined && <PresencePill device={device} />}
       </div>
@@ -128,17 +137,19 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
           </div>
         </div>
       ) : (
-        <div className="mt-4">
-          <div className="flex items-center gap-2">
+        <div className="mt-3">
+          <div className="-ml-3 flex flex-wrap items-center gap-1">
+            <FollowButton aircraft={aircraftKey(fleet.gatewaySn, fleet.aircraftSn)} />
             <button
               type="button"
-              className={`${QUIET_BUTTON} ${UNAVAILABLE} -ml-3`}
+              className={`${QUIET_BUTTON} ${UNAVAILABLE}`}
               aria-disabled={!writes}
               aria-describedby={writes ? undefined : reason}
               onClick={() => {
-                if (writes) setMode('editing')
+                if (writes) setForm('edit')
               }}
             >
+              <Pencil size={15} aria-hidden />
               Edit
             </button>
             <button
@@ -150,13 +161,16 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
                 if (writes) setMode('retiring')
               }}
             >
+              <Archive size={15} aria-hidden />
               Retire
             </button>
           </div>
           {!writes && <ReadOnlyReason id={reason} organization={organization.name} />}
         </div>
       )}
+      <LiveValues gatewaySn={fleet.gatewaySn} aircraftSn={fleet.aircraftSn} />
       <Details
+        folded
         title="Identity"
         rows={[
           ['Airframe serial', fleet.airframeSerial],
@@ -167,9 +181,9 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
           ['Registered', formatMoment(fleet.createdAt, zone)],
         ]}
       />
-      <LiveValues gatewaySn={fleet.gatewaySn} aircraftSn={fleet.aircraftSn} />
       {device !== undefined && (
         <Details
+          folded
           title="On the wire"
           rows={[
             ['Stack', stackLabel(device)],

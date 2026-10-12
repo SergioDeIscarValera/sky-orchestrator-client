@@ -99,9 +99,10 @@ its world placement with the expected positions computed from latitude,
 longitude and height, within 0.1 m.
 
 ### FR-SCN-05 — Select and pin · MUST
-Clicking an entity selects it and opens its panel. Pinning a fleet makes the
-camera follow it, keeping the user's chosen angle and distance, until unpinned or
-until the user moves the camera.
+Clicking an entity selects it and opens its panel. Selecting a fleet pins it:
+the camera follows it, keeping the user's chosen angle and distance, and the
+user may orbit it and zoom round it while it flies, until unpinned or until the
+user pans the camera away.
 
 **Acceptance**: with a fleet pinned and moving at 15 m/s, its projected position
 stays within the central fifth of the viewport over a 60 s replayed track.

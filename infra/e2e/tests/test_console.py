@@ -114,6 +114,7 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
                     await browser.tell(stopped=True)
                     stale = await browser.expect("stale")
                     layout = await browser.expect("layout")
+                    found = await browser.expect("search")
         finally:
             for task in tasks:
                 task.cancel()
@@ -126,7 +127,7 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
         f" soc-cloud hold {hold}; console's delivery p95 {telemetry['console_delivery_p95_ms']} ms;"
         f" stale {stale['after_last_ms']} ms after the last sample"
     )
-    # FR-FLE-02: an aircraft announced shows under Seen on the wire within 2 s.
+    # FR-FLE-02: an aircraft announced shows in the fleet panel within 2 s.
     assert device["appeared_after_ms"] <= 2000
     # FR-FLE-03: registered through the console's form, as the database holds it.
     assert registered == [("Norte 1", GATEWAY, AIRCRAFT)]
@@ -135,6 +136,10 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
     assert telemetry["in_order"]
     assert telemetry["moved"]
     assert telemetry["frames_drawn"] > 0
+    # FR-SCN-05: the aircraft selected is followed, its label still on the screen as it flies.
+    assert telemetry["followed"]
+    assert telemetry["label_drift_px"] is not None
+    assert telemetry["label_drift_px"] <= 40
     # NFR-PERF-01, from the dock's publish, before soc-cloud even reads it, to the browser.
     assert telemetry["from_dock_ms"]["p95"] <= 150
     assert telemetry["from_dock_ms"]["p99"] <= 300
@@ -142,3 +147,6 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
     assert STALE_AFTER_MS - 100 <= stale["after_last_ms"] <= STALE_AFTER_MS + 100
     # The map tools stay bottom right when the panel closes: they once jumped to the top.
     assert layout["map_tools_moved_px"] == 0
+    # FR-SCN-05 from the top bar: the search selects the fleet, and the scene follows it.
+    assert found["selected"]
+    assert found["following"]

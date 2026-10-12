@@ -1,7 +1,9 @@
-import type CameraControls from 'camera-controls'
+import CameraControls from 'camera-controls'
 import { Box3, MathUtils, Spherical, Vector3 } from 'three'
 
 import type { Site } from './site'
+
+const { ACTION } = CameraControls
 
 export const FIELD_OF_VIEW_DEG = 30
 export const OVERVIEW_PITCH_DEG = 50
@@ -14,6 +16,12 @@ const SMOOTH_TIME_S = 0.25
 export interface Pose {
   readonly position: Vector3
   readonly target: Vector3
+  /**
+   * How far the view is shifted right, in metres across the camera, from looking
+   * straight at the target: the target, which the camera orbits, then sits that far
+   * left of the screen's middle. Zero unless framing beside the cards.
+   */
+  readonly sideM?: number
 }
 
 /** The whole site in view, looking north at the design's pitch (FR-SCN-03). */
@@ -55,10 +63,21 @@ const PITCH_STEP_RAD = MathUtils.degToRad(0.25)
 const BISECTIONS = 8
 const TOLERANCE_M = 1e-6
 
-/** How far the camera at `offset` from `target` is above lowestCameraHeightM() over its ground. */
-function clearanceOf(site: Site, target: Vector3, offset: Spherical): number {
-  const camera = new Vector3().setFromSpherical(offset).add(target)
+/**
+ * How far the camera at `offset` from `target`, shifted `sideM` across the view, is
+ * above lowestCameraHeightM() over its ground.
+ */
+function clearanceOf(site: Site, target: Vector3, offset: Spherical, sideM = 0): number {
+  const away = new Vector3().setFromSpherical(offset)
+  const camera = away.clone().add(target)
+  if (sideM !== 0) camera.addScaledVector(rightOf(away), sideM)
   return camera.y - site.ground(camera.x, camera.z) - lowestCameraHeightM()
+}
+
+/** The view's right, level, for a camera `away` from its target. */
+function rightOf(away: Vector3): Vector3 {
+  const right = new Vector3(0, 1, 0).cross(away)
+  return right.lengthSq() === 0 ? right.set(1, 0, 0) : right.normalize()
 }
 
 /**
@@ -67,18 +86,19 @@ function clearanceOf(site: Site, target: Vector3, offset: Spherical): number {
  * more steeply down until it is clear of the terrain behind it. Looking straight
  * down, it is above its target, which is never under the ground, so one is found.
  */
-export function clearPolarAngle(site: Site, target: Vector3, offset: Spherical): number {
-  if (clearanceOf(site, target, offset) >= -TOLERANCE_M) return offset.phi
+export function clearPolarAngle(site: Site, target: Vector3, offset: Spherical, sideM = 0): number {
+  const clearance = (trial: Spherical) => clearanceOf(site, target, trial, sideM)
+  if (clearance(offset) >= -TOLERANCE_M) return offset.phi
   const trial = offset.clone()
   let under = offset.phi
   let over = Math.max(0, offset.phi - PITCH_STEP_RAD)
-  while (over > 0 && clearanceOf(site, target, trial.set(trial.radius, over, trial.theta)) < 0) {
+  while (over > 0 && clearance(trial.set(trial.radius, over, trial.theta)) < 0) {
     under = over
     over = Math.max(0, over - PITCH_STEP_RAD)
   }
   for (let bisection = 0; bisection < BISECTIONS; bisection += 1) {
     const middle = (under + over) / 2
-    if (clearanceOf(site, target, trial.set(trial.radius, middle, trial.theta)) < 0) under = middle
+    if (clearance(trial.set(trial.radius, middle, trial.theta)) < 0) under = middle
     else over = middle
   }
   return over
@@ -99,7 +119,7 @@ export function keepAboveTerrain(controls: CameraControls, site: Site): void {
     void controls.moveTo(target.x, target.y, target.z, transition)
   }
   const offset = controls.getSpherical(new Spherical(), true)
-  const phi = clearPolarAngle(site, target, offset)
+  const phi = clearPolarAngle(site, target, offset, controls.getFocalOffset(new Vector3(), true).x)
   if (phi < offset.phi) void controls.rotatePolarTo(phi, transition)
 }
 
@@ -123,8 +143,10 @@ export function flyTo(
   const offset = new Spherical().setFromVector3(pose.position.clone().sub(target))
   offset.phi = MathUtils.clamp(offset.phi, controls.minPolarAngle, controls.maxPolarAngle)
   offset.radius = MathUtils.clamp(offset.radius, controls.minDistance, controls.maxDistance)
-  offset.phi = clearPolarAngle(site, target, offset)
+  const sideM = pose.sideM ?? 0
+  offset.phi = clearPolarAngle(site, target, offset, sideM)
   const position = new Vector3().setFromSpherical(offset).add(target)
+  void controls.setFocalOffset(sideM, 0, 0, transition)
   return controls.setLookAt(
     position.x,
     position.y,
@@ -165,9 +187,27 @@ export function coveredBy(panelOpen: boolean): Covered {
 }
 
 /**
+ * How far to shift the view right, in metres at `distanceM`, so the target sits in the
+ * middle of the view the cards leave free rather than the screen's: as many pixels as
+ * the free view's middle is left of the screen's.
+ */
+export function sideShiftM(
+  distanceM: number,
+  viewportPx: { readonly width: number; readonly height: number },
+  covered: Covered,
+): number {
+  const metresPerPixel =
+    (2 * distanceM * Math.tan(MathUtils.degToRad(FIELD_OF_VIEW_DEG) / 2)) /
+    Math.max(1, viewportPx.height)
+  const free = viewportPx.width - covered.leftPx - covered.rightPx
+  const offCentrePx = free >= SMALLEST_FREE_PX ? (covered.rightPx - covered.leftPx) / 2 : 0
+  return offCentrePx * metresPerPixel
+}
+
+/**
  * The pose that frames `subject` in the middle of the view the cards leave free:
- * the camera keeps the angle the user chose and comes to FRAME_DISTANCE_M, its
- * target moved sideways by as much as the free view's middle is off the screen's.
+ * the camera keeps the angle the user chose and comes to FRAME_DISTANCE_M of the
+ * subject, which it then orbits; the view is shifted aside instead of the target.
  */
 export function framePose(
   subject: Vector3,
@@ -178,16 +218,11 @@ export function framePose(
   const direction = camera.position.clone().sub(camera.target)
   if (direction.lengthSq() === 0) direction.set(0, 1, 1)
   direction.normalize()
-  const right = new Vector3(0, 1, 0).cross(direction).normalize()
-  const metresPerPixel =
-    (2 * FRAME_DISTANCE_M * Math.tan(MathUtils.degToRad(FIELD_OF_VIEW_DEG) / 2)) /
-    Math.max(1, viewportPx.height)
-  const free = viewportPx.width - covered.leftPx - covered.rightPx
-  // The free view's middle sits this far left of the screen's; the target goes as far right.
-  const offCentrePx = free >= SMALLEST_FREE_PX ? (covered.rightPx - covered.leftPx) / 2 : 0
-  const shiftM = offCentrePx * metresPerPixel
-  const target = subject.clone().addScaledVector(right, shiftM)
-  return { target, position: target.clone().addScaledVector(direction, FRAME_DISTANCE_M) }
+  return {
+    target: subject.clone(),
+    position: subject.clone().addScaledVector(direction, FRAME_DISTANCE_M),
+    sideM: sideShiftM(FRAME_DISTANCE_M, viewportPx, covered),
+  }
 }
 
 /** Within this distance of its framing pose, a camera flying to a pinned subject has arrived. */
@@ -196,25 +231,39 @@ export const ARRIVED_M = 0.5
 export const LONGEST_FLIGHT_MS = 1200
 
 /**
- * Moves the camera with a pinned subject from `from` to `to`: its target and its
- * position shift by the subject's motion, so the user's angle and distance, and
- * where the subject sits in the view, stay as they were (FR-SCN-05). Through
- * flyTo, so within the camera's limits.
+ * Moves the camera with a pinned subject from `from` to `to` (FR-SCN-05): the target,
+ * which the camera orbits, moves by the subject's motion, and nothing else does, so
+ * the user may orbit it and come closer or farther while it flies. The view's side
+ * shift follows the distance, so the subject stays in the middle of the free view.
  */
 export function follow(
   controls: CameraControls,
   from: Vector3,
   to: Vector3,
   site: Site,
-): Promise<void> {
-  const shift = to.clone().sub(from)
-  return flyTo(
-    controls,
-    {
-      position: controls.getPosition(new Vector3()).add(shift),
-      target: controls.getTarget(new Vector3()).add(shift),
-    },
-    site,
-    false,
-  )
+  viewportPx: { readonly width: number; readonly height: number },
+  covered: Covered,
+): void {
+  const target = controls.getTarget(new Vector3(), true).add(to.clone().sub(from))
+  void controls.moveTo(target.x, target.y, target.z, false)
+  void controls.setFocalOffset(sideShiftM(controls.distance, viewportPx, covered), 0, 0, false)
+  keepAboveTerrain(controls, site)
+}
+
+/** Panning the map, by mouse or by touch, lets go of a pinned subject; orbiting and zooming do not. */
+export function unpinsOn(action: number): boolean {
+  const panning =
+    ACTION.TRUCK |
+    ACTION.SCREEN_PAN |
+    ACTION.OFFSET |
+    ACTION.TOUCH_TRUCK |
+    ACTION.TOUCH_SCREEN_PAN |
+    ACTION.TOUCH_OFFSET |
+    ACTION.TOUCH_DOLLY_TRUCK |
+    ACTION.TOUCH_DOLLY_SCREEN_PAN |
+    ACTION.TOUCH_DOLLY_OFFSET |
+    ACTION.TOUCH_ZOOM_TRUCK |
+    ACTION.TOUCH_ZOOM_SCREEN_PAN |
+    ACTION.TOUCH_ZOOM_OFFSET
+  return (action & panning) !== 0
 }

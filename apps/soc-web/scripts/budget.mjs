@@ -1,6 +1,8 @@
 // The loading budget (NFR-PERF-05), on the built application: the JavaScript the
 // entry loads before anything else, and the 3D chunk, both gzipped. It also holds
-// development-only code out of the build: the replay of src/telemetry/replay.ts.
+// development-only code out of the build, the replay of src/telemetry/replay.ts, and
+// checks that the build kept each aircraft's colour in both themes: Tailwind drops a
+// theme variable no source names, and an aircraft then draws in no colour at all.
 import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 
@@ -37,6 +39,21 @@ if (shipped.length > 0) {
 
 console.log(`initial JavaScript ${initialKb.toFixed(1)} KB gzip (budget ${INITIAL_KB})`)
 console.log(`3D chunk ${sceneKb.toFixed(1)} KB gzip (budget ${SCENE_KB})`)
+const AIRCRAFT_COLOURS = 6
+const styles = Object.values(manifest)
+  .flatMap((chunk) => [chunk.file, ...(chunk.css ?? [])])
+  .filter((file) => file.endsWith('.css'))
+  .map((file) => readFileSync(new URL(file, DIST), 'utf8'))
+  .join('\n')
+const missing = Array.from(
+  { length: AIRCRAFT_COLOURS },
+  (_, index) => `--color-aircraft-${index + 1}`,
+).filter((token) => (styles.match(new RegExp(`${token}:`, 'g')) ?? []).length < 2)
+if (missing.length > 0) {
+  console.error(`The build lost aircraft colours, light or dark: ${missing.join(', ')}.`)
+  process.exit(1)
+}
+
 if (initialKb > INITIAL_KB || sceneKb > SCENE_KB) {
   console.error('Over the loading budget (NFR-PERF-05).')
   process.exit(1)

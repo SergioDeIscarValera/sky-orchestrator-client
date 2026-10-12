@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 
 import type { FleetDraft } from '../backend/backend'
 import { SettingsContext } from '../config/settings'
+import { useCameraCommands } from '../scene/commands'
 import {
   device,
   FakeBackend,
@@ -64,13 +65,18 @@ describe('live values in the inspector (FR-TEL-03, FR-FLE-04)', () => {
     })
     const values = live()
     expect(values.getByText('Live, under 1 s ago')).toBeInTheDocument()
-    expect(values.getByText('41.652312° N, 4.724512° W')).toBeInTheDocument()
-    expect(values.getByText('270°')).toBeInTheDocument()
-    expect(values.getByText('87 %')).toBeInTheDocument()
-    expect(values.getByText('Wayline')).toBeInTheDocument()
-    const height = values.getByText('Height above takeoff').nextElementSibling
-    expect(height).toHaveTextContent('Unavailable')
-    expect(values.getByText('Horizontal speed').nextElementSibling).toHaveTextContent('Unavailable')
+    const tile = (label: string) => values.getByText(label).nextElementSibling
+    expect(tile('Height')).toHaveTextContent('Unavailable')
+    expect(values.getByText('above takeoff')).toBeInTheDocument()
+    expect(tile('Battery')).toHaveTextContent('87 %')
+    expect(tile('Satellites')).toHaveTextContent('14')
+    expect(values.getByText('quality 5')).toBeInTheDocument()
+    expect(tile('Mode')).toHaveTextContent('Wayline')
+    expect(tile('Heading')).toHaveTextContent('270°')
+    expect(tile('From home')).toHaveTextContent('34.5 m')
+    expect(tile('Position')).toHaveTextContent('41.652312° N, 4.724512° W')
+    // What Sky Orchestrator does not send yet has no tile, rather than an empty one.
+    expect(values.queryByText('Horizontal speed')).toBeNull()
     expect(values.queryByText('0 m')).toBeNull()
   })
 
@@ -105,6 +111,52 @@ describe('live values in the inspector (FR-TEL-03, FR-FLE-04)', () => {
       backend.sample(NORTH.id, sample({ batteryPct: 81, takenAtMs: 1000 }))
     })
     expect(live().getByText('80 %')).toBeInTheDocument()
+  })
+
+  it('colours the battery bar by its level, low under 50 % and critical under 20 %', async () => {
+    const backend = new FakeBackend(NEIGHBOUR)
+    backend.seen.set(NORTH.id, [device('SOTESTUAV001')])
+    window.history.replaceState(null, '', '/?gateway=SOTESTDOCK01&aircraft=SOTESTUAV001')
+    renderApp(backend)
+    await screen.findByRole('complementary', { name: 'Inspector' })
+    await inspector().findByRole('heading', { name: 'SOTESTUAV001' })
+    const bar = () => inspector().getByText('Battery').parentElement?.querySelector('[data-level]')
+    const levels: string[] = []
+    for (const [takenAtMs, batteryPct] of [
+      [1000, 87],
+      [2000, 49],
+      [3000, 19],
+    ] as const) {
+      act(() => {
+        backend.sample(NORTH.id, sample({ takenAtMs, batteryPct }))
+      })
+      levels.push(bar()?.getAttribute('data-level') ?? 'none')
+    }
+    expect(levels).toEqual(['ok', 'low', 'critical'])
+    act(() => {
+      backend.sample(NORTH.id, sample({ takenAtMs: 4000, batteryPct: null }))
+    })
+    expect(bar()).toBeNull()
+  })
+
+  it('follows the aircraft in the scene from its inspector, and lets it go', async () => {
+    useCameraCommands.getState().pin(null)
+    const backend = new FakeBackend(NEIGHBOUR)
+    backend.seen.set(NORTH.id, [device('SOTESTUAV001')])
+    window.history.replaceState(null, '', '/?gateway=SOTESTDOCK01&aircraft=SOTESTUAV001')
+    const { user } = renderApp(backend)
+    await screen.findByRole('complementary', { name: 'Inspector' })
+    await inspector().findByRole('heading', { name: 'SOTESTUAV001' })
+    await user.click(inspector().getByRole('button', { name: 'Follow' }))
+    expect(useCameraCommands.getState().pinned).toBe('SOTESTDOCK01/SOTESTUAV001')
+    const following = inspector().getByRole('button', { name: 'Following' })
+    expect(following).toHaveAttribute('aria-pressed', 'true')
+    await user.click(following)
+    expect(useCameraCommands.getState().pinned).toBeNull()
+    expect(inspector().getByRole('button', { name: 'Follow' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   })
 
   it("listens to the open organization's telemetry only", async () => {

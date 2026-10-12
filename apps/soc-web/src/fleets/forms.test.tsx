@@ -138,8 +138,7 @@ describe('editing and retiring a fleet (FR-FLE-05)', () => {
     await waitFor(() => {
       expect(backend.registered.get(NORTH.id)?.[0]?.aircraftSn).toBe('SOTESTUAV002')
     })
-    const seen = screen.getByRole('region', { name: /^Seen on the wire/ })
-    expect(await within(seen).findByRole('button', { name: /SOTESTUAV001/ })).toBeVisible()
+    expect(await screen.findByRole('button', { name: /^SOTESTUAV001/ })).toBeVisible()
     expect(search().get('fleet')).toBe(fleet.id)
   })
 
@@ -153,7 +152,8 @@ describe('editing and retiring a fleet (FR-FLE-05)', () => {
     const confirm = within(screen.getByRole('group', { name: 'Retire Norte 1' }))
     await user.click(confirm.getByRole('button', { name: 'Retire for good' }))
     expect(await inspector().findByRole('heading', { name: 'SOTESTUAV001' })).toBeVisible()
-    expect(inspector().getByText('Not in a fleet yet.')).toBeInTheDocument()
+    expect(inspector().getByText('Not registered · via lab')).toBeVisible()
+    expect(inspector().getByRole('button', { name: 'Register as a fleet' })).toBeVisible()
     expect(backend.registered.get(NORTH.id)).toEqual([])
     expect([search().get('gateway'), search().get('aircraft')]).toEqual([
       'SOTESTDOCK01',
@@ -189,6 +189,14 @@ describe('a viewer reads fleets (FR-FLE-03, FR-FLE-05)', () => {
     await user.click(inspector().getByRole('button', { name: 'Retire' }))
     expect(screen.queryByRole('form')).toBeNull()
     expect(screen.queryByRole('group', { name: /^Retire/ })).toBeNull()
+  })
+
+  it("finds no Register nor Edit in the fleet panel, and a form's link opens nothing", async () => {
+    await openAt(orchard(), '?panel=fleet&gateway=SOTESTDOCK01&aircraft=SOTESTUAV002&form=register')
+    await inspector().findByRole('button', { name: 'Register as a fleet' })
+    expect(screen.queryByRole('button', { name: /^Register SOTESTUAV/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Edit / })).toBeNull()
+    expect(screen.queryByRole('form')).toBeNull()
   })
 
   it('sees why an aircraft cannot be registered', async () => {

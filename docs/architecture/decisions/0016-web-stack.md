@@ -36,6 +36,7 @@ linted cleanly.
 | Styling | Tailwind CSS with @tailwindcss/vite | 4.3.3 | Minty's tokens in one `@theme` file (`NFR-UX-01`); floor Chrome 111, Safari 16.4, Firefox 128 |
 | Primitives | radix-ui | 1.7.0 | Accessible dialogs, menus, tooltips, tabs; one package |
 | Icons | lucide-react | 1.52.0 | Named imports |
+| Combobox | downshift | 9.4.0 | The search's WAI-ARIA 1.2 combobox, headless; Radix has none, cmdk is unmaintained since 2025, Headless UI brings floating-ui and react-aria |
 | Forms | react-hook-form, @hookform/resolvers, zod | 7.89.0, 5.9.1, 4.6.5 | The same schemas validate forms and search parameters |
 | Geometry | robust-predicates | 3.0.3 | Exact orientation tests under SOC's own small algorithms (ADR-0009) |
 | Unit tests | Vitest, Testing Library, jsdom | 5.0.3, 16.3.3, 30.1.2 | The scene graph through `@react-three/test-renderer` 9.1.1 |

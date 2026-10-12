@@ -67,20 +67,34 @@ The console: one persistent 3D scene of the farm with floating panels
   with their stack's link; the live fleets; registering, changing (the wire
   identity too) and retiring a fleet, each settled once the fleets were read
   again. A refusal names the field the database's constraint is about.
-- **The fleet panel** (`FR-FLE-02`): the organization's fleets with their model
-  and presence, and apart, under _Seen on the wire_, the aircraft its stacks
-  announced that are in no fleet; a row selects, a second click lets go. An
+- **The fleet panel** (`FR-FLE-02`): the organization's aircraft in one list,
+  each with its colour: its fleets first, with their model and presence, then the
+  aircraft its stacks announced that are in no fleet, marked _Not registered_. An
+  editor's actions are on the row: _Register_ opens an aircraft's registration
+  and the pencil a fleet's edit, in the inspector, the form kept in the URL. A
+  row selects, a second click lets go. An
   aircraft is _Online_ or _Offline_ only while its stack is connected: otherwise
   it reads as the stack's state, since a stack out of reach says nothing about
   now (`FR-LNK-02`).
-- **The inspector** follows the selection and fades it in. A fleet: its
-  identity, what its stack last said of it (stack, wire model, firmware, last
-  seen), and its model's published figures, each linked to the DJI page it was
-  read on, _Not published_ where DJI does not say (`FR-FLE-04`). An aircraft
-  seen: its gateway, wire model, stack, firmware, when it was first and last
-  seen, and its fleet if it has one. Times are in the organization's time zone.
-  A link to a fleet retired or of another organization says so and offers to
-  clear the selection.
+- **The inspector** follows the selection and fades it in. Its header names the
+  selection with its colour and presence, the close beside it; its actions sit
+  right under it: _Follow_, then a fleet's _Edit_ and _Retire_ or an aircraft's
+  _Register as a fleet_. Then the live values, and the rest folded in sections
+  the user opens. A fleet: its identity, what its stack last said of it (stack,
+  wire model, firmware, last seen), and its model's published figures, each
+  linked to the DJI page it was read on, _Not published_ where DJI does not say
+  (`FR-FLE-04`). An aircraft seen: _Not registered_ and the stack that announced
+  it, or the fleet it flies as; folded, its gateway, wire model, stack,
+  firmware, and when it was first and last seen. Times are in the
+  organization's time zone. A link to a fleet retired or of another
+  organization says so and offers to clear the selection.
+- **The search** (`FR-SCN-05`, `NFR-UX-04`) in the top bar, on `/`: the
+  organization's fleets by name, model or serial, then the aircraft in no fleet
+  by serial, gateway or stack, accents and case aside, the best match first and
+  what matched marked. Choosing one, by Enter or a click, selects it, so the
+  inspector shows it and the scene follows it; leaving the field selects
+  nothing. Escape closes the results, then clears the text, then steps back as
+  anywhere else.
 - **Registering, editing and retiring a fleet** (`FR-FLE-03`, `FR-FLE-05`), in
   the inspector, never in a dialog. An aircraft seen registers as a fleet with a
   name, a model from the catalogue, the airframe serial, optionally the
@@ -97,11 +111,18 @@ The console: one persistent 3D scene of the farm with floating panels
   (`contracts/broadcast/telemetry.schema.json`) and drops one the aircraft took
   before the latest. The inspector shows a fleet's or an aircraft's live values
   with their age: live, then stale and lost at the thresholds of the console's
-  file, each crossed when it is reached. What a sample lacks reads as
-  unavailable, never zero.
+  file, each crossed when it is reached. The mode, height, battery, satellites,
+  heading and distance from home are tiles in two columns, the battery with a
+  bar that turns warning under 50 % and danger under 20 %, the heading with an
+  arrow turned to it; the position and the takeoff point follow. What a sample
+  lacks reads as unavailable, never zero; what Sky Orchestrator does not send
+  yet has no tile until it does.
 - **The aircraft in the scene** (`FR-SCN-04`, `FR-TEL-02`): every aircraft of
-  the organization with telemetry, built in code in the accent and cased, turned
-  to its heading, a stalk dropping to a disc on the ground, placed on the local
+  the organization with telemetry, built in code in its own colour and cased, a
+  chevron on its back and a wedge on its ground disc pointing its heading, the
+  same colour beside its name in the fleet panel, the inspector and its label (six
+  colours, by the order its stacks first announced it; stale, the colour fades),
+  a stalk dropping to a disc on the ground, placed on the local
   frame (ADR-0009) and kept a few dozen pixels across however far the camera is.
   It flies at the ground of its takeoff point plus its height above takeoff
   (ADR-0014), never under the ground beneath it, and stands on that ground while
@@ -116,16 +137,17 @@ The console: one persistent 3D scene of the farm with floating panels
   threshold.
 - **Selecting an aircraft in the scene** (`FR-SCN-05`, `FR-SCN-06`): a click
   selects its fleet, or the aircraft when it is in none, as its row in the fleet
-  panel does; a soft ring marks it on the ground. A new selection, from the
-  scene, the panel or a shared link, flies the camera once to frame it in the
-  middle of the view the inspector leaves, at the angle the user chose. The
-  selected, the hovered and the alerting (stale or lost) carry a pill label
-  above them with their name, height and battery; at most 20 at once.
-- **Following an aircraft** (`FR-SCN-05`): _Follow in the scene_, in the
-  inspector's live values, pins it. The camera flies in to frame it in the
-  middle of the view the cards leave free, then moves with it, keeping the
-  user's angle and distance, until unpinned, sent back to the overview, or moved
-  by the user.
+  panel does; a soft ring marks it on the ground. The selected, the hovered and
+  the alerting (stale or lost) carry a pill label above them with their name,
+  height and battery; at most 20 at once. A click on the bare ground, the
+  inspector's close button or Escape clears the selection; with nothing
+  selected there is no inspector, and the scene has the whole width.
+- **Following the selected aircraft** (`FR-SCN-05`): a selection, from the
+  scene, the panel or a shared link, is followed. The camera flies in to frame
+  it in the middle of the view the cards leave free, then moves with it; the
+  user may orbit it and come closer or farther, the camera turning round the
+  aircraft itself. Panning the map, _Following_ in the inspector,
+  or the overview lets go; the same button follows it again.
 - **A development replay** with `?replay` (development builds and the
   measurement build of `pnpm measure` only): a synthetic aircraft stands idle for
   2 s, takes off straight up to 40 m, then circles the organization at 15 m/s,
@@ -189,7 +211,7 @@ aircraft on stack `lab`: one online in a fleet, one online in no fleet, and one 
 be registered. Almendral (viewer) has no aircraft and no fleets. Fleets change in memory, and a
 restart resets them. Realtime is not faked: there is no live telemetry, and a change made elsewhere
 shows once the console reads again; `http://localhost:5199/?replay` flies the development replay
-around Finca Norte, idle for 2 s, then taking off and circling, listed under Seen on the wire as
+around Finca Norte, idle for 2 s, then taking off and circling, listed in the fleet panel as
 REPLAYUAV, to select, follow or register; `?replay=2` flies two, both listed there. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
 
 **Measuring the frame time (`NFR-PERF-06`).** `pnpm measure` does the following:
@@ -212,15 +234,15 @@ Run it on mains power: on battery the laptop slows down. Its options:
 
 Measuring on `pnpm dev` overstates the frame time. React's development mode adds work to every render of the inspector: 23 to 27 ms there, against 17.6 ms on the production build.
 
-| Script                          | What it checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm typecheck`                | Strict TypeScript, app and tests apart (tests may use Node's API, the app may not)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `pnpm lint`                     | Type-aware rules, the hooks rules, and SOC's five in `lint-rules.js`: no colour literal outside the tokens (`NFR-UX-01`), no API plain HTTP lacks (`NFR-PORT-04`), no way to create an account (`FR-AUT-01`), no modal menu (`NFR-SEC-07`), no camera move outside `flyTo` (`FR-SCN-03`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `pnpm format:check`             | Prettier, with Tailwind's class order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `pnpm test`                     | Vitest on happy-dom ([ADR-0020](../../docs/architecture/decisions/0020-web-tests-on-happy-dom-and-zod-mini.md)), its files sharing their worker's modules ([ADR-0022](../../docs/architecture/decisions/0022-web-test-files-share-their-workers-modules.md)), under 2 s on mains power: sign-in, organization first, sign-out, the scene's ground, palette, sampler and region, a 2,000-step fuzz of the camera's limits, the configuration's checks, the Supabase implementation against a fake GoTrue, PostgREST and Realtime channel, the fleets' queries, writes and live invalidation, the fleet panel, the inspector and the fleet forms, the telemetry's contract, store, freshness and words, the aircraft's placement on the golden vectors, their glide and a 2,000-case fuzz that none is drawn past its latest sample, the contrast of every text token on every surface in both themes (`NFR-UX-02`), the lint rules themselves |
-| `pnpm build` then `pnpm budget` | The initial JavaScript ≤ 250 KB gzip and the 3D chunk ≤ 450 KB (`NFR-PERF-05`), read from Vite's manifest                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `pnpm measure`                  | The frame time ≤ 20 ms at p95 (`NFR-PERF-06`) on the production build, along the scripted 60 s path; it needs Chrome and a GPU, so it runs by hand, not in CI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `pnpm secrets`                  | No secret in the built files: no JWT, no Supabase secret key and no service's secret variable (`NFR-SEC-02`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Script                          | What it checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                | Strict TypeScript, app and tests apart (tests may use Node's API, the app may not)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `pnpm lint`                     | Type-aware rules, the hooks rules, and SOC's five in `lint-rules.js`: no colour literal outside the tokens (`NFR-UX-01`), no API plain HTTP lacks (`NFR-PORT-04`), no way to create an account (`FR-AUT-01`), no modal menu (`NFR-SEC-07`), no camera move outside `flyTo` (`FR-SCN-03`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `pnpm format:check`             | Prettier, with Tailwind's class order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `pnpm test`                     | Vitest on happy-dom ([ADR-0020](../../docs/architecture/decisions/0020-web-tests-on-happy-dom-and-zod-mini.md)), its files sharing their worker's modules ([ADR-0022](../../docs/architecture/decisions/0022-web-test-files-share-their-workers-modules.md)), under 2 s on mains power: sign-in, organization first, sign-out, the scene's ground, palette, sampler and region, a 2,000-step fuzz of the camera's limits, the configuration's checks, the Supabase implementation against a fake GoTrue, PostgREST and Realtime channel, the fleets' queries, writes and live invalidation, the fleet panel, the inspector, the fleet forms and the search, the telemetry's contract, store, freshness and words, the aircraft's placement on the golden vectors, their glide and a 2,000-case fuzz that none is drawn past its latest sample, the contrast of every text token on every surface in both themes (`NFR-UX-02`), the lint rules themselves |
+| `pnpm build` then `pnpm budget` | The initial JavaScript ≤ 250 KB gzip and the 3D chunk ≤ 450 KB (`NFR-PERF-05`), read from Vite's manifest; no development code shipped; every aircraft colour kept in both themes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `pnpm measure`                  | The frame time ≤ 20 ms at p95 (`NFR-PERF-06`) on the production build, along the scripted 60 s path; it needs Chrome and a GPU, so it runs by hand, not in CI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `pnpm secrets`                  | No secret in the built files: no JWT, no Supabase secret key and no service's secret variable (`NFR-SEC-02`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ## The image
 

@@ -19,6 +19,7 @@ const LIGHT: ScenePalette = {
   gridMajor: 'slategray',
   accent: 'teal',
   casing: 'darkslategray',
+  aircraft: ['teal', 'royalblue', 'mediumpurple', 'hotpink', 'olivedrab', 'peru'],
 }
 const DARK: ScenePalette = {
   page: 'black',
@@ -27,6 +28,7 @@ const DARK: ScenePalette = {
   gridMajor: 'silver',
   accent: 'teal',
   casing: 'whitesmoke',
+  aircraft: ['teal', 'royalblue', 'mediumpurple', 'hotpink', 'olivedrab', 'peru'],
 }
 const hex = (name: string) => new Color(name).getHexString()
 

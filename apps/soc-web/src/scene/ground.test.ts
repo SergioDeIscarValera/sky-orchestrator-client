@@ -22,6 +22,7 @@ const LIGHT: ScenePalette = {
   gridMajor: 'gray',
   accent: 'teal',
   casing: 'darkslategray',
+  aircraft: ['teal', 'royalblue', 'mediumpurple', 'hotpink', 'olivedrab', 'peru'],
 }
 const DARK: ScenePalette = { ...LIGHT, page: 'black', ground: 'dimgray', gridMinor: 'slategray' }
 

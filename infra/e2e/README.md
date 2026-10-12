@@ -38,13 +38,15 @@ user created through its admin API, with a profile, and owns Finca Norte.
 
 1. The pilot signs in through GoTrue, and the console opens their only
    organization with the fleet panel.
-2. The dock starts announcing. The aircraft appears under Seen on the wire
+2. The dock starts announcing. The aircraft appears in the fleet panel
    within **2 s** (`FR-FLE-02`).
-3. The pilot registers it through the form as _Norte 1_, and the database holds
+3. The pilot registers it from its row's _Register_, through the form, as _Norte 1_, and the database holds
    that fleet with its gateway and aircraft (`FR-FLE-03`).
 4. The dock flies. Every sample reaches the browser in order and the
    inspector's position changes. The scene draws frames
-   (`FR-TEL-01`, `FR-SCN-04`).
+   (`FR-TEL-01`, `FR-SCN-04`). The aircraft, selected since its
+   registration, is followed: its label holds still on the screen, within 40 px,
+   while it flies (`FR-SCN-05`).
 5. From the dock's publish to the browser's receipt of the frame, the latency
    is within **150 ms at p95 and 300 ms at p99** (`NFR-PERF-01`). That path
    starts before soc-cloud reads the OSD, so it bounds the requirement's own.
@@ -56,6 +58,9 @@ user created through its admin API, with a profile, and owns Finca Norte.
    sample, give or take 100 ms** (`FR-TEL-02`).
 7. The fleet panel closes, and the map tools stay where they were, bottom
    right, as the design system puts them: they once jumped to the top.
+8. Escape clears the selection; `/`, the last six characters of the aircraft's
+   serial and Enter in the top bar's search select its fleet again, and the
+   scene follows it (`FR-SCN-05`).
 
 Both latencies come from this machine's one clock: the dock stamps each OSD with
 it, and the driver reads it as Chrome hands it each frame.

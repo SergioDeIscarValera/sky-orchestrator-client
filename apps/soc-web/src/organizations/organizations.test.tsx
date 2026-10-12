@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 
-import { BackendError } from '../backend/backend'
+import { BackendError, type Fleet } from '../backend/backend'
 import { FakeBackend, NEIGHBOUR, NORTH, ORCHARD, PILOT } from '../test/FakeBackend'
 import { renderApp, signIn } from '../test/render'
 import { organizationKey } from './scope'
@@ -68,7 +68,19 @@ describe('organization first (FR-AUT-02)', () => {
     await waitFor(() => {
       expect([backend.watching(NORTH.id), backend.watching(ORCHARD.id)]).toEqual([1, 0])
     })
-    queryClient.setQueryData(organizationKey(NORTH.id, 'fleets'), ['a fleet of the north'])
+    const north: Fleet = {
+      id: '55555555-5555-4555-8555-555555555555',
+      name: 'Norte 1',
+      model: 'mavic-air-2',
+      airframeSerial: '1WNBH9',
+      controllerSerial: null,
+      gatewaySn: 'SOTESTDOCK01',
+      aircraftSn: 'SOTESTUAV001',
+      flightTimeBeforeSocS: 0,
+      createdAt: '2026-10-11T10:10:00Z',
+      updatedAt: '2026-10-11T10:10:00Z',
+    }
+    queryClient.setQueryData(organizationKey(NORTH.id, 'fleets'), [north])
     queryClient.setQueryData(organizationKey(ORCHARD.id, 'fleets'), [])
     await user.click(await screen.findByRole('menuitemradio', { name: /Almendral/ }))
 

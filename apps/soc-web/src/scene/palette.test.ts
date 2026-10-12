@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 
 import { readPalette, usePalette } from './palette'
 
+const AIRCRAFT = ['teal', 'royalblue', 'mediumpurple', 'hotpink', 'olivedrab', 'peru']
 const LIGHT = {
   page: 'white',
   surface: 'ivory',
@@ -9,8 +10,10 @@ const LIGHT = {
   muted: 'gray',
   primary: 'teal',
   casing: 'darkslategray',
+  ...Object.fromEntries(AIRCRAFT.map((colour, index) => [`aircraft-${String(index + 1)}`, colour])),
 }
 const DARK = {
+  ...LIGHT,
   page: 'black',
   surface: 'dimgray',
   border: 'slategray',
@@ -37,6 +40,7 @@ describe("the scene's palette (FR-SCN-08)", () => {
       gridMajor: 'gray',
       accent: 'teal',
       casing: 'darkslategray',
+      aircraft: AIRCRAFT,
     })
   })
 

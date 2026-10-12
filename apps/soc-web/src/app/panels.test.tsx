@@ -31,6 +31,13 @@ describe('the view in the URL (NFR-UX-03)', () => {
     expect(readView({ ...aircraft, aircraft: 'SOTEST/../UAV' })).toEqual({})
   })
 
+  it("reads a selection's open form, and no form without a selection", () => {
+    const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
+    expect(readView({ ...aircraft, form: 'register' })).toEqual({ ...aircraft, form: 'register' })
+    expect(readView({ form: 'register' })).toEqual({})
+    expect(readView({ ...aircraft, form: 'delete' })).toEqual(aircraft)
+  })
+
   it('selects one thing at a time and keeps the panel open', () => {
     const fleet = '11111111-1111-4111-8111-111111111111'
     const device = { kind: 'device', gatewaySn: 'SOTESTDOCK01', aircraftSn: 'A1' } as const
