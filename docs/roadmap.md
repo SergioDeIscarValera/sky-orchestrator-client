@@ -117,7 +117,7 @@ mini-PC and read access to Sky Orchestrator's packages, and close there.
 
 | Step | Pull request |
 | --- | --- |
-| Geometry golden vectors and the design schema; Python predicates passing them | `feature/libs/projection` (the local frame and its vectors, brought forward for the scene's aircraft in M2); `feature/libs/geometry` |
+| Geometry golden vectors and the design schema; Python predicates passing them | `feature/libs/projection` (the local frame and its vectors, brought forward for the scene's aircraft in M2); `feature/libs/geometry` (Sky Orchestrator's metric and geodesy cases, the plane's predicates and shapely's vectors, the design schema 1.0.0) |
 | The TypeScript geometry engine: projection, predicates, circle, grid, hull and margin, bake | `feature/web/geometry-engine` |
 | Geofences and waylines in the database | `feature/database/geofences-and-waylines` |
 | Geofence editor and generation from waylines | `feature/web/geofence-editor` |

@@ -51,15 +51,15 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-GEO-01 | MUST | soc-web, libs, database | M3 | — | Planned |
 | FR-GEO-02 | MUST | soc-web, libs, database | M3 | — | Planned |
 | FR-GEO-03 | MUST | soc-web, libs, database | M3 | — | Planned |
-| FR-GEO-04 | MUST | soc-web, libs, database | M3 | — | Planned |
+| FR-GEO-04 | MUST | soc-web, libs, database | M3 | `libs/soc-geo/tests/test_planar.py`, `contracts/geometry/planar.json` | Partial: a polygon is refused with each reason and the edges it is about: fewer than three vertices, an edge of no length, edges that meet (crossing, touching or doubling back), no area; decided exactly on the local frame, held to shapely's vectors; the height against the envelope's ceiling arrives with the geofences |
 | FR-WAY-01 | MUST | soc-web, libs | M3 | — | Planned |
 | FR-WAY-02 | MUST | soc-web, libs | M3 | — | Planned |
 | FR-WAY-03 | MUST | soc-web, libs | M3 | — | Planned |
 | FR-WAY-04 | SHOULD | soc-web, libs | M3 | — | Planned |
 | FR-WAY-05 | SHOULD | soc-web, libs | M3 | — | Planned |
 | FR-WAY-06 | MUST | soc-web, libs | M3 | — | Planned |
-| FR-WAY-07 | MUST | soc-web, libs | M3 | — | Planned |
-| FR-WAY-08 | MUST | soc-web, libs, soc-cloud | M3, M4 | — | Planned |
+| FR-WAY-07 | MUST | soc-web, libs | M3 | `contracts/geometry/design.schema.json`, `libs/soc-geo/tests/test_design.py` | Partial: the design and its bake have their schema, 1.0.0, the bake Sky Orchestrator's mission plan field for field (an example held to SO's vendored schema), its distance in SO's metric; the bake itself and its golden vectors arrive with the TypeScript engine |
+| FR-WAY-08 | MUST | soc-web, libs, soc-cloud | M3, M4 | `libs/soc-geo/tests/test_planar.py`, `libs/soc-geo/tests/test_sphere.py` | Partial: what the validation decides with: a leg's clearance from the geofence's boundary, none when any of it leaves, a leg across the arms of a U included; Sky Orchestrator's metric for its limits, held to its geodesy cases, a NaN refused rather than passed; the rules and their messages arrive with the validators |
 | FR-WAY-09 | MUST | soc-web, libs | M3 | — | Planned |
 | FR-WAY-10 | MUST | soc-web, libs | M3 | — | Planned |
 | FR-WAY-11 | MUST | soc-operations | M3 | — | Planned |
@@ -157,7 +157,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | NFR-MNT-02 | MUST | repository | M1 | — | Planned |
 | NFR-MNT-03 | MUST | repository | M0 | — | Planned |
 | NFR-MNT-04 | MUST | repository | M0 | `.github/workflows/ci.yml` (no file over 512 KB), `.pre-commit-config.yaml` (large files, private keys) | Done for size and keys; build output kept out by `.gitignore` |
-| NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | `contracts/geometry/projection.json`, `libs/soc-geo/tests/test_projection.py`, `apps/soc-web/src/geometry/projection.test.ts` | Partial: the local frame in closed form in Python and TypeScript, both held to 125 golden vectors from PROJ within 10⁻⁶ m, the vectors regenerated and compared in the gate; the generators, validators and file builder arrive in M3 |
+| NFR-MNT-05 | MUST | libs, soc-web, tools | M0, M3 | `contracts/geometry/projection.json`, `contracts/geometry/planar.json`, `libs/soc-geo/tests/test_projection.py`, `libs/soc-geo/tests/test_planar.py`, `libs/soc-geo/tests/test_sphere.py`, `apps/soc-web/src/geometry/projection.test.ts` | Partial: the local frame in closed form in Python and TypeScript, held to 125 golden vectors from PROJ within 10⁻⁶ m; the plane's predicates in Python held to shapely's vectors and Sky Orchestrator's metric to its own geodesy cases; every set of vectors regenerated and compared in the gate; the generators, the TypeScript predicates and the file builder arrive with M3's next steps |
 | NFR-MNT-06 | MUST | repository | M1 | — | Planned |
 | NFR-TEST-01 | MUST | repository | M0 | `tools/tests/*`, `infra/migrate/tests/*`, `libs/*/tests/*`, `services/*/tests/*`, `apps/soc-web/src/**/*.test.*` | Done so far: tooling 174, soc-migrate 26, soc-config 195, soc-log 14, soc-supervision 18, soc-db 13, soc-realtime 17, soc-cloud 83, soc-operations 15, soc-check 7, soc-web 130 tests, each Python suite under 0.3 s and the web's under 2 s (ADR-0020), per unit in pre-commit and CI |
 | NFR-TEST-02 | MUST | database | M1 | `database/tests/*`, `libs/soc-db/tests/test_against_postgres.py`, `libs/soc-realtime/tests/test_against_realtime.py`, `services/soc-cloud/tests/test_against_broker.py` | Done: an ephemeral Postgres from the production image with GoTrue's, Realtime's and VO2's surfaces loaded, the real Realtime v2.102.3 beside it, and Mosquitto 2.0.22 configured as Sky Orchestrator's broker; `soc-db`, `soc-realtime` and `soc-cloud` run their end-to-end tests there |
