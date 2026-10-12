@@ -6,6 +6,7 @@ import { useSelect, useSelection, useView } from '../app/router'
 import type { Geodetic } from '../geometry/projection'
 import { useGeofences } from '../plans/data'
 import { useGeofenceEditor } from '../plans/geofenceEditor'
+import { CeilingVolume } from './CeilingVolume'
 import { draped } from './drape'
 import { flatOf } from './groundTool'
 import { usePalette } from './palette'
@@ -21,8 +22,8 @@ interface Props {
 
 /**
  * The organization's saved geofences on the terrain (FR-GEO-02): every one while the
- * geofence panel is open, the selected one always, in the accent colour; a click on one
- * selects it. The geofence open in the editor is the editor's to draw.
+ * geofence panel is open, the selected one always, in the accent colour with its volume up
+ * to its ceiling; a click on one selects it. The geofence open in the editor is the editor's to draw.
  */
 export function Geofences({ site, origin }: Props) {
   const geofences = useGeofences()
@@ -48,19 +49,28 @@ export function Geofences({ site, origin }: Props) {
         const chosen = geofence.id === selectedId
         const ring = geofence.polygon.map((vertex) => flatOf(origin, vertex))
         return (
-          <Line
-            key={geofence.id}
-            name={`geofence ${geofence.name}`}
-            points={draped(ring, site.ground, step, LIFT_M, true)}
-            color={chosen ? palette.accent : palette.gridMajor}
-            lineWidth={chosen ? 3 : 1.5}
-            depthTest={false}
-            renderOrder={chosen ? 9 : 8}
-            onClick={(event: ThreeEvent<MouseEvent>) => {
-              event.stopPropagation()
-              select({ kind: 'geofence', geofenceId: geofence.id })
-            }}
-          />
+          <group key={geofence.id}>
+            {chosen && (
+              <CeilingVolume
+                ring={ring}
+                site={site}
+                ceilingM={geofence.maxHeightM}
+                colour={palette.accent}
+              />
+            )}
+            <Line
+              name={`geofence ${geofence.name}`}
+              points={draped(ring, site.ground, step, LIFT_M, true)}
+              color={chosen ? palette.accent : palette.gridMajor}
+              lineWidth={chosen ? 3 : 1.5}
+              depthTest={false}
+              renderOrder={chosen ? 9 : 8}
+              onClick={(event: ThreeEvent<MouseEvent>) => {
+                event.stopPropagation()
+                select({ kind: 'geofence', geofenceId: geofence.id })
+              }}
+            />
+          </group>
         )
       })}
     </group>
