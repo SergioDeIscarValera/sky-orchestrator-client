@@ -59,7 +59,7 @@
       </Placemark>
       <Placemark>
         <Point>
-          <coordinates>-4.72405,41.6523</coordinates>
+          <coordinates>-4.72405,41.65255</coordinates>
         </Point>
         <wpml:index>3</wpml:index>
         <wpml:executeHeight>35.0</wpml:executeHeight>
@@ -73,9 +73,37 @@
       </Placemark>
       <Placemark>
         <Point>
-          <coordinates>-4.7243,41.6523</coordinates>
+          <coordinates>-4.72405,41.6523</coordinates>
         </Point>
         <wpml:index>4</wpml:index>
+        <wpml:executeHeight>35.0</wpml:executeHeight>
+        <wpml:waypointSpeed>5.0</wpml:waypointSpeed>
+        <wpml:waypointHeadingParam>
+          <wpml:waypointHeadingMode>fixed</wpml:waypointHeadingMode>
+        </wpml:waypointHeadingParam>
+        <wpml:waypointTurnParam>
+          <wpml:waypointTurnMode>toPointAndStopWithDiscontinuityCurvature</wpml:waypointTurnMode>
+        </wpml:waypointTurnParam>
+      </Placemark>
+      <Placemark>
+        <Point>
+          <coordinates>-4.7243,41.6523</coordinates>
+        </Point>
+        <wpml:index>5</wpml:index>
+        <wpml:executeHeight>35.0</wpml:executeHeight>
+        <wpml:waypointSpeed>5.0</wpml:waypointSpeed>
+        <wpml:waypointHeadingParam>
+          <wpml:waypointHeadingMode>fixed</wpml:waypointHeadingMode>
+        </wpml:waypointHeadingParam>
+        <wpml:waypointTurnParam>
+          <wpml:waypointTurnMode>toPointAndStopWithDiscontinuityCurvature</wpml:waypointTurnMode>
+        </wpml:waypointTurnParam>
+      </Placemark>
+      <Placemark>
+        <Point>
+          <coordinates>-4.7243,41.6523</coordinates>
+        </Point>
+        <wpml:index>6</wpml:index>
         <wpml:executeHeight>30.0</wpml:executeHeight>
         <wpml:waypointSpeed>5.0</wpml:waypointSpeed>
         <wpml:waypointHeadingParam>

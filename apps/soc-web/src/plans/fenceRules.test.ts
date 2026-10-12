@@ -88,10 +88,14 @@ describe("a flight against its operation's geofence (FR-WAY-01, FR-WAY-06, FR-WA
       70,
     )
     const found = fenceViolations(high, U, FARM)
+    // Straight up to 61 m above the takeoff, to the first point, and level above the second
+    // before descending to its 60 m: above the ceiling at the first three.
     expect(rules(found)).toEqual([
       ['security_height_above_geofence_ceiling', undefined],
+      ['above_geofence_ceiling', 0],
       ['above_geofence_ceiling', 1],
+      ['above_geofence_ceiling', 2],
     ])
-    expect(found.at(-1)?.message).toBe("waypoint 1 is above the geofence's ceiling of 60 m")
+    expect(found.at(-1)?.message).toBe("waypoint 2 is above the geofence's ceiling of 60 m")
   })
 })

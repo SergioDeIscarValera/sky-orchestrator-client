@@ -16,7 +16,7 @@ import type { Geodetic } from './projection'
  */
 
 /** The version written; a document at any 2.x.y reads, as the schema's pattern allows. */
-const SCHEMA_VERSION = '2.1.0'
+const SCHEMA_VERSION = '2.2.0'
 const VERSION_2X = z.string().check(z.regex(/^2\.[0-9]+\.[0-9]+$/))
 
 /** positionFromStorage's answer, its refusal returned rather than thrown, for a zod transform. */

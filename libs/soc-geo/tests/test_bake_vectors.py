@@ -2,13 +2,13 @@
 
 contracts/geometry/bake.json holds designs, the waylines the TypeScript bake gives them and
 the flights an operation makes of them; this checks every one independently. A bake
-follows the schema's ``baked`` definition, climbs straight up above its takeoff first, and
-its distance is Sky Orchestrator's, from the takeoff. A flight follows ``flight``: it is
-the bake's waypoints, untouched and in order, with a leg longer than the envelope allows
-split, its violations exactly the ones the Python validator finds, its distance and
-duration in Sky Orchestrator's metric. No two points are closer than half a metre. A
-design with nothing drawn bakes to no wayline, and its flight is never a plan: the schema
-refuses it.
+follows the schema's ``baked`` definition, climbs straight up above its takeoff first, flies
+no leg on a slant, and its distance is Sky Orchestrator's, from the takeoff. A flight
+follows ``flight``: it is the bake's waypoints, untouched and in order, with a leg longer
+than the envelope allows split, its violations exactly the ones the Python validator finds,
+its distance and duration in Sky Orchestrator's metric. No two points are closer than half
+a metre unless one is straight above the other. A design with nothing drawn bakes to no
+wayline, and its flight is never a plan: the schema refuses it.
 """
 
 from __future__ import annotations
@@ -69,10 +69,18 @@ def legs_m(start: list[float], waypoints: list[dict[str, Any]]) -> list[float]:
 
 
 def assert_points_apart_and_indexed(waypoints: list[dict[str, Any]]) -> None:
-    placed = [east_north(ORIGIN, geodetic(w["position"])) for w in waypoints]
-    for a, b in itertools.pairwise(placed):
-        assert math.hypot(b.east_m - a.east_m, b.north_m - a.north_m) >= MERGE_M - 1e-9
+    for w, v in itertools.pairwise(waypoints):
+        a, b = (east_north(ORIGIN, geodetic(x["position"])) for x in (w, v))
+        apart = math.hypot(b.east_m - a.east_m, b.north_m - a.north_m) >= MERGE_M - 1e-9
+        # Closer only straight above one another: a climb or a descent where it is.
+        assert apart or (w["position"] == v["position"] and w["height_m"] != v["height_m"])
     assert [w["index"] for w in waypoints] == list(range(len(waypoints)))
+
+
+def assert_level_or_vertical(waypoints: list[dict[str, Any]]) -> None:
+    """No leg on a slant: each keeps its height, or keeps its place and climbs or descends."""
+    for w, v in itertools.pairwise(waypoints):
+        assert w["height_m"] == v["height_m"] or w["position"] == v["position"], (w, v)
 
 
 def unindexed(waypoint: dict[str, Any]) -> dict[str, Any]:
@@ -97,13 +105,14 @@ def test_every_bake_follows_the_schema_and_measures_from_the_takeoff(
 
 
 @pytest.mark.parametrize("case", DRAWN, ids=lambda case: case["name"])
-def test_every_bake_climbs_straight_up_from_its_takeoff_first(case: dict[str, Any]) -> None:
-    design, first = case["design"], case["baked"]["waypoints"][0]
-    # Right above the takeoff, at the default height; a point drawn there stands in for it.
-    if first["position"] == design["takeoff"]:
-        assert first["height_m"] == design["default_height_m"]
-    else:
-        assert legs_m(design["takeoff"], [first])[0] < MERGE_M
+def test_every_bake_climbs_straight_up_from_its_takeoff_and_never_on_a_slant(
+    case: dict[str, Any],
+) -> None:
+    design, waypoints = case["design"], case["baked"]["waypoints"]
+    # Right above the takeoff first; a point drawn there stands in for it.
+    assert legs_m(design["takeoff"], waypoints[:1])[0] < MERGE_M
+    assert_level_or_vertical(waypoints)
+    assert_level_or_vertical(case["flight"]["waypoints"])
 
 
 @pytest.mark.parametrize("case", DRAWN, ids=lambda case: case["name"])

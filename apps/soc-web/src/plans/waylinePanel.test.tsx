@@ -63,7 +63,7 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-09)', () => {
       name: 'North corridor',
       defaultHeightM: 30,
       metrics: { waypointCount: 3 },
-      bakeVersion: '2.1.0',
+      bakeVersion: '2.2.0',
     })
     // Straight up above the takeoff first, then the route.
     expect(saved?.waypoints.map(({ heightM }) => heightM)).toEqual([30, 30, 30])

@@ -55,7 +55,8 @@ def test_the_example_bake_flies_in_a_roomy_envelope() -> None:
         (
             tighter(max_height_m=32.0),
             PLAN,
-            [("height_above_max", 3)],
+            # Up to 35 m above the second point, at the third, and level above the fourth.
+            [("height_above_max", 3), ("height_above_max", 4), ("height_above_max", 5)],
         ),
         (
             tighter(max_height_m=19.0),
@@ -68,9 +69,9 @@ def test_the_example_bake_flies_in_a_roomy_envelope() -> None:
         (
             tighter(geofence_radius_m=30.0),
             PLAN,
-            # The climb above the centre, 27.8 m north and 16.6 m east are inside; 46.6 and
-            # 37.4 m are not.
-            [("outside_geofence", 2), ("outside_geofence", 3)],
+            # The climb above the centre, 27.8 m north and 16.6 m east are inside; 46.6 m, at
+            # two heights, and 37.4 m are not.
+            [("outside_geofence", 2), ("outside_geofence", 3), ("outside_geofence", 4)],
         ),
         (tighter(max_leg_m=30.0), PLAN, [("leg_too_long", 2)]),
         (tighter(max_total_distance_m=100.0), PLAN, [("total_distance_too_long", None)]),

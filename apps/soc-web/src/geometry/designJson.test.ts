@@ -91,7 +91,7 @@ const FLIGHT = (FILE.cases[0] as Vector).flight
 
 /** A design the schema accepts, with every kind of primitive and every optional key in it. */
 const DESIGN: { [key: string]: Json } = {
-  schema_version: '2.1.0',
+  schema_version: '2.2.0',
   takeoff: [-4.7245, 41.6523],
   default_height_m: 30,
   primitives: [
