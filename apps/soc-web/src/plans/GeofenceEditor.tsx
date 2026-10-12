@@ -24,6 +24,7 @@ import {
   type Editing,
   type Generating,
 } from './geofenceEditor'
+import { WaylinePicker } from './WaylinePicker'
 
 /** What the drawing shows as it changes; the rest waits for Save. */
 const LIVE: readonly Refusal[] = ['edges_meet', 'zero_length_edge', 'no_area']
@@ -175,29 +176,13 @@ export function GeofenceEditor({ editing, origin }: Props) {
         </Labelled>
         {generating !== null && (
           <>
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="text-heading text-sm font-medium">Waylines</legend>
-              <ul className="mt-1.5 flex flex-col gap-1">
-                {(waylines.data ?? []).map((wayline) => (
-                  <li key={wayline.id}>
-                    <label className="text-heading flex items-center gap-2.5 text-sm">
-                      <input
-                        type="checkbox"
-                        className="accent-primary size-4"
-                        checked={generating.waylineIds.includes(wayline.id)}
-                        onChange={(event) => {
-                          const waylineIds = event.target.checked
-                            ? [...generating.waylineIds, wayline.id]
-                            : generating.waylineIds.filter((id) => id !== wayline.id)
-                          generate({ ...generating, waylineIds })
-                        }}
-                      />
-                      {wayline.name}
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </fieldset>
+            <WaylinePicker
+              waylines={waylines.data ?? []}
+              chosen={generating.waylineIds}
+              onChange={(waylineIds) => {
+                generate({ ...generating, waylineIds })
+              }}
+            />
             <Labelled id={marginId} label="Margin">
               <div className="flex items-center gap-3">
                 <input

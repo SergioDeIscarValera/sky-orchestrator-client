@@ -94,6 +94,15 @@ export function select(view: View, selection: Selection | null): View {
   return { panel, gateway: selection.gatewaySn, aircraft: selection.aircraftSn }
 }
 
+/**
+ * The view with `panel` open, or with none, and nothing selected: the rail and the panel's
+ * close use it, so a change of panel drops the selection and its form, and the inspector
+ * closes (NFR-UX-03). The inspector's own actions keep the selection and use `useChangeView`.
+ */
+export function withPanel(panel: Panel | undefined): View {
+  return { panel }
+}
+
 export function createConsoleRouter(component: FunctionComponent): AnyRouter {
   const root = createRootRoute({ component, validateSearch: readView })
   return createRouter({ routeTree: root })
@@ -118,17 +127,6 @@ export function useForm(): readonly [Form | null, (form: Form | null) => void] {
     [change],
   )
   return [form ?? null, open]
-}
-
-/** Selects `selection` with its form open: the fleet panel's Register and Edit. */
-export function useOpenForm(): (selection: Selection, form: Form) => void {
-  const change = useChangeView()
-  return useCallback(
-    (selection: Selection, form: Form) => {
-      change((view) => ({ ...select(view, selection), form }))
-    },
-    [change],
-  )
 }
 
 export function useSelect(): (selection: Selection | null) => void {

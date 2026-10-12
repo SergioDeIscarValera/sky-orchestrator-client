@@ -66,18 +66,34 @@ describe('the fleet panel (FR-FLE-02)', () => {
     expect(fleet).not.toBe(seen)
   })
 
-  it("opens an aircraft's registration from its row", async () => {
+  it('holds no Edit nor Register on its rows: a row only selects', async () => {
+    const { backend } = await farm()
+    await openAt(backend, '?panel=fleet')
+    const list = within(await group('Aircraft'))
+    const rows = list.getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    for (const row of rows) {
+      expect(within(row).getAllByRole('button')).toHaveLength(1)
+    }
+    expect(list.queryByRole('button', { name: /^(Edit|Register)/ })).toBeNull()
+  })
+
+  it("opens an aircraft's registration from the inspector", async () => {
     const { backend } = await farm()
     const { user } = await openAt(backend, '?panel=fleet')
-    await user.click(await screen.findByRole('button', { name: 'Register SOTESTUAV002' }))
+    await user.click(within(await group('Aircraft')).getByRole('button', { name: /^SOTESTUAV002/ }))
+    await user.click(
+      await within(inspector()).findByRole('button', { name: 'Register as a fleet' }),
+    )
     expect(await screen.findByRole('form', { name: 'Register SOTESTUAV002' })).toBeVisible()
     expect([search().get('aircraft'), search().get('form')]).toEqual(['SOTESTUAV002', 'register'])
   })
 
-  it("opens a fleet's edit from its row", async () => {
+  it("opens a fleet's edit from the inspector", async () => {
     const { backend } = await farm()
     const { user } = await openAt(backend, '?panel=fleet')
-    await user.click(await screen.findByRole('button', { name: 'Edit Norte 1' }))
+    await user.click(within(await group('Aircraft')).getByRole('button', { name: /^Norte 1/ }))
+    await user.click(await within(inspector()).findByRole('button', { name: 'Edit' }))
     expect(await screen.findByRole('form', { name: 'Edit Norte 1' })).toBeVisible()
     expect(search().get('form')).toBe('edit')
   })

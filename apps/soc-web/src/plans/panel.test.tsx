@@ -184,7 +184,7 @@ describe("a geofence's changes (FR-GEO-02)", () => {
     const changed = vi.spyOn(backend, 'changeGeofence')
     const { user } = await openAt(backend, `?geofence=${square.id}`)
     await user.click(await within(inspector()).findByRole('button', { name: 'Edit' }))
-    expect(search().get('panel')).toBe('geofences')
+    expect([search().get('panel'), search().get('geofence')]).toEqual(['geofences', square.id])
     expect(await screen.findByRole('form', { name: 'Edit North field' })).toBeVisible()
     const name = screen.getByLabelText('Name')
     await user.clear(name)
@@ -284,7 +284,8 @@ describe('a geofence generated round waylines (FR-GEO-03)', () => {
     await user.click(await screen.findByRole('button', { name: 'Generate' }))
     expect(await screen.findByRole('form', { name: 'Generate a geofence' })).toBeVisible()
     expect(editing()?.drawing.vertices).toEqual([])
-    await user.click(screen.getByRole('checkbox', { name: 'Corridor 1' }))
+    await user.type(screen.getByRole('combobox', { name: 'Waylines' }), 'corridor')
+    await user.click(await screen.findByRole('option', { name: /^Corridor 1/ }))
     const vertices = editing()?.drawing.vertices.length ?? 0
     expect(vertices).toBeGreaterThanOrEqual(3)
     expect(vertices).toBeLessThanOrEqual(32)
