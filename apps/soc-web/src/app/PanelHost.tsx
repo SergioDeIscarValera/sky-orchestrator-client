@@ -12,6 +12,9 @@ import { CARD, QUIET_BUTTON } from './styles'
 const GeofencePanel = lazy(() =>
   import('../plans/GeofencePanel').then(({ GeofencePanel: panel }) => ({ default: panel })),
 )
+const WaylinePanel = lazy(() =>
+  import('../plans/WaylinePanel').then(({ WaylinePanel: panel }) => ({ default: panel })),
+)
 
 /** The open panel, floating beside the rail over the scene; Escape closes it (the shell's). */
 export function PanelHost() {
@@ -46,6 +49,10 @@ export function PanelHost() {
       ) : destination.panel === 'geofences' ? (
         <Suspense fallback={<Waiting>Loading the geofences…</Waiting>}>
           <GeofencePanel />
+        </Suspense>
+      ) : destination.panel === 'waylines' ? (
+        <Suspense fallback={<Waiting>Loading the waylines…</Waiting>}>
+          <WaylinePanel />
         </Suspense>
       ) : (
         <p className="text-muted mt-3 text-sm">

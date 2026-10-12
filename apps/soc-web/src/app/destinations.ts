@@ -14,7 +14,7 @@ interface Destination {
 export const DESTINATIONS: readonly Destination[] = [
   { panel: 'fleet', label: 'Fleet', icon: Plane },
   { panel: 'geofences', label: 'Geofences', icon: Hexagon },
-  { panel: 'waylines', label: 'Waylines', icon: Route, arrives: 'M3' },
+  { panel: 'waylines', label: 'Waylines', icon: Route },
   { panel: 'operations', label: 'Operations', icon: ListChecks, arrives: 'M4' },
   { panel: 'settings', label: 'Settings', icon: Settings, arrives: 'M4' },
 ]
