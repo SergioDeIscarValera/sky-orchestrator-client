@@ -30,17 +30,19 @@ describe('a wayline saved by the designer (FR-WAY-09, IR-WAY-01)', () => {
       name: 'North corridor',
       takeoff: at(0, 0),
       defaultHeightM: 30,
-      metrics: { waypointCount: 2, distanceM: baked.distanceM },
-      bakeVersion: '2.0.0',
+      metrics: { waypointCount: 3, distanceM: baked.distanceM },
+      bakeVersion: '2.1.0',
     })
     expect(Object.keys(draft.metrics)).toEqual(['waypointCount', 'distanceM'])
     // The bake's own points, through the local frame and back: a hair off the drawn ones.
     expect(draft.waypoints.map(({ index, heightM }) => [index, heightM])).toEqual([
       [0, 30],
-      [1, 40],
+      [1, 30],
+      [2, 40],
     ])
-    expect(draft.waypoints[1]?.position.latitudeDeg).toBeCloseTo(at(100, 50).latitudeDeg, 9)
-    expect(draft.waypoints[1]?.position.longitudeDeg).toBeCloseTo(at(100, 50).longitudeDeg, 9)
+    expect(draft.waypoints[0]?.position).toEqual(at(0, 0))
+    expect(draft.waypoints[2]?.position.latitudeDeg).toBeCloseTo(at(100, 50).latitudeDeg, 9)
+    expect(draft.waypoints[2]?.position.longitudeDeg).toBeCloseTo(at(100, 50).longitudeDeg, 9)
     expect(Object.keys(draft.design).sort()).toEqual([
       'default_height_m',
       'primitives',
@@ -74,7 +76,7 @@ describe('a wayline saved by the designer (FR-WAY-09, IR-WAY-01)', () => {
 describe("a wayline's words", () => {
   it('sums a saved wayline up by its waypoints and its distance', () => {
     expect(waylineSummary(saved(draftOf('North corridor', DESIGN, baked)))).toMatch(
-      /^2 waypoints · \d+ m$/,
+      /^3 waypoints · \d+ m$/,
     )
     const one = saved(draftOf('North corridor', DESIGN, baked))
     expect(waylineSummary({ ...one, metrics: { waypointCount: 1, distanceM: 40 } })).toBe(

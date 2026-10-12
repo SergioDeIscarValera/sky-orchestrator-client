@@ -8,6 +8,7 @@ import { circlePoints } from '../geometry/circle'
 import { cover } from '../geometry/grid'
 import type { Primitive } from '../geometry/bake'
 import { eastNorth, type Geodetic } from '../geometry/projection'
+import { formatLength } from '../plans/format'
 import { bakeSketch } from '../plans/waylineBake'
 import { clicked, primitiveChosen, useWaylineDesigner } from '../plans/waylineDesigner'
 import { CANVAS_SETTINGS } from './canvas'
@@ -108,14 +109,23 @@ export function WaylineDesigning({ site, origin }: Props) {
   const takeoff = sketch.takeoff
   // The wayline's own path: from its takeoff straight to its first waypoint, the climb being
   // the operation's (M4).
+  // The wayline climbs straight up from its takeoff to its height (FR-WAY-01): shown as
+  // soon as both are given, before anything is drawn; the bake starts there after.
+  const climb =
+    takeoff !== null && sketch.defaultHeightM !== null && sketch.defaultHeightM > 0
+      ? [{ ...takeoff, heightM: sketch.defaultHeightM }]
+      : null
+  const flown = baked !== null && baked.waypoints.length > 0 ? baked.waypoints : climb
   const path =
-    baked === null || takeoff === null
+    flown === null || takeoff === null
       ? null
       : flownPath(
-          { referencePoint: takeoff, takeoffSecurityHeightM: null, waypoints: baked.waypoints },
+          { referencePoint: takeoff, takeoffSecurityHeightM: null, waypoints: flown },
           origin,
           site,
         )
+  const top = path?.waypoints[0]
+  const topHeightM = flown?.[0]?.heightM
   const [centre] = pending
   const sized =
     sizing && centre !== undefined && hover !== null
@@ -247,6 +257,13 @@ export function WaylineDesigning({ site, origin }: Props) {
         />
       )}
       {path !== null && <Dots points={path.waypoints} colour={palette.accent} size={7} />}
+      {top !== undefined && topHeightM !== undefined && (
+        <Html position={[...top]} center zIndexRange={[19, 0]} className="pointer-events-none">
+          <span className="rounded-pill bg-surface text-heading shadow-card block translate-x-1/2 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap tabular-nums">
+            {formatLength(topHeightM)}
+          </span>
+        </Html>
+      )}
       <WaylineHandles
         designing={designing}
         site={site}

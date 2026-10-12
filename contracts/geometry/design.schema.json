@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator-client/blob/develop/contracts/geometry/design.schema.json",
   "title": "A wayline's design and its bake, and the flight an operation makes of it",
-  "description": "What the console's wayline designer saves (FR-WAY-01 to FR-WAY-09) and what its bake turns it into (FR-WAY-07): a wayline is geometry, a takeoff point, drawn primitives and their heights in, ordered waypoints with their heights and a distance out. Its speed, the climb over the takeoff, what it does at the end and its geofence belong to the operation that flies it (M4), which makes a flight of it, $defs.flight, carrying what Sky Orchestrator's mission plan needs (contracts/sky-orchestrator/msdk/mission-plan.schema.json) and what the flight file builder writes. Positions are WGS84 degrees in GeoJSON order, [longitude, latitude], and polygons rings of them, not closed, as the units table says (information requirements, rule 3); DJI's order is translated in one place only, the flight file builder. Heights are metres above the takeoff point (ADR-0014). The TypeScript generates, the Python validators check (ADR-0009). 2.0.0 (2026-10-12, ADR-0024): the wayline loses its speed, climb and finish action to the operation, and its bake its flight's fields, now $defs.flight.",
-  "x-version": "2.0.0",
+  "description": "What the console's wayline designer saves (FR-WAY-01 to FR-WAY-09) and what its bake turns it into (FR-WAY-07): a wayline is geometry, a takeoff point, drawn primitives and their heights in, ordered waypoints with their heights and a distance out. Its speed, the climb over the takeoff, what it does at the end and its geofence belong to the operation that flies it (M4), which makes a flight of it, $defs.flight, carrying what Sky Orchestrator's mission plan needs (contracts/sky-orchestrator/msdk/mission-plan.schema.json) and what the flight file builder writes. Positions are WGS84 degrees in GeoJSON order, [longitude, latitude], and polygons rings of them, not closed, as the units table says (information requirements, rule 3); DJI's order is translated in one place only, the flight file builder. Heights are metres above the takeoff point (ADR-0014). The TypeScript generates, the Python validators check (ADR-0009). 2.0.0 (2026-10-12, ADR-0024): the wayline loses its speed, climb and finish action to the operation, and its bake its flight's fields, now $defs.flight. 2.1.0 (2026-10-12): a bake's first waypoint is right above the takeoff, so the aircraft climbs straight up, never on a slant.",
+  "x-version": "2.1.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -294,7 +294,7 @@
       "description": "A wayline as drawn: where it takes off, its default height, and its primitives (FR-WAY-01 to FR-WAY-06)."
     },
     "baked": {
-      "description": "A wayline's bake (FR-WAY-07): its waypoints in the order flown, each with its height above the takeoff point, and the distance from the takeoff through them, in Sky Orchestrator's metric. Saved with the design and loaded as saved, never baked again (FR-WAY-09).",
+      "description": "A wayline's bake (FR-WAY-07): its waypoints in the order flown, each with its height above the takeoff point, the first right above the takeoff at the default height, or a point drawn there at its own, and the distance from the takeoff through them, in Sky Orchestrator's metric. Saved with the design and loaded as saved, never baked again (FR-WAY-09).",
       "type": "object",
       "additionalProperties": false,
       "required": [

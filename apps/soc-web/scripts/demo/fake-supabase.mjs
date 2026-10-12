@@ -200,12 +200,18 @@ function nearNorth(east, north) {
 /** One wayline of Finca Norte, a corridor along its north field, to generate a geofence round. */
 function seedWaylines() {
   const takeoff = nearNorth(0, 0)
-  const waypoints = [
+  const route = [
     [0, 60],
     [180, 60],
     [180, 140],
     [0, 140],
-  ].map(([east, north], index) => ({ index, position: nearNorth(east, north), height_m: 30 }))
+  ].map(([east, north]) => nearNorth(east, north))
+  // Baked as the designer bakes it: straight up above the takeoff first, then the route.
+  const waypoints = [takeoff, ...route].map((position, index) => ({
+    index,
+    position,
+    height_m: 30,
+  }))
   return [
     {
       id: '55555555-5555-4555-8555-555555555555',
@@ -215,14 +221,14 @@ function seedWaylines() {
       default_height_m: 30,
       // Its design as the designer saves it: one route through the waypoints, baked to them.
       design: {
-        schema_version: '2.0.0',
+        schema_version: '2.1.0',
         takeoff,
         default_height_m: 30,
-        primitives: [{ kind: 'route', points: waypoints.map(({ position }) => ({ position })) }],
+        primitives: [{ kind: 'route', points: route.map((position) => ({ position })) }],
       },
       waypoints,
-      metrics: { waypoint_count: 4, distance_m: 499.4 },
-      bake_version: '2.0.0',
+      metrics: { waypoint_count: 5, distance_m: 499.4 },
+      bake_version: '2.1.0',
       created_at: '2026-10-11T08:10:00+00:00',
       updated_at: '2026-10-11T08:10:00+00:00',
       deleted_at: null,

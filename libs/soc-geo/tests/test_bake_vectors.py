@@ -2,12 +2,13 @@
 
 contracts/geometry/bake.json holds designs, the waylines the TypeScript bake gives them and
 the flights an operation makes of them; this checks every one independently. A bake
-follows the schema's ``baked`` definition and its distance is Sky Orchestrator's, from the
-takeoff. A flight follows ``flight``: it is the bake's waypoints, untouched and in order,
-with a leg longer than the envelope allows split, its violations exactly the ones the
-Python validator finds, its distance and duration in Sky Orchestrator's metric. No two
-points are closer than half a metre. A design with nothing drawn bakes to no wayline, and
-its flight is never a plan: the schema refuses it.
+follows the schema's ``baked`` definition, climbs straight up above its takeoff first, and
+its distance is Sky Orchestrator's, from the takeoff. A flight follows ``flight``: it is
+the bake's waypoints, untouched and in order, with a leg longer than the envelope allows
+split, its violations exactly the ones the Python validator finds, its distance and
+duration in Sky Orchestrator's metric. No two points are closer than half a metre. A
+design with nothing drawn bakes to no wayline, and its flight is never a plan: the schema
+refuses it.
 """
 
 from __future__ import annotations
@@ -93,6 +94,16 @@ def test_every_bake_follows_the_schema_and_measures_from_the_takeoff(
     legs = legs_m(case["design"]["takeoff"], baked["waypoints"])
     assert math.fsum(legs) == pytest.approx(baked["distance_m"], abs=1e-6)
     assert_points_apart_and_indexed(baked["waypoints"])
+
+
+@pytest.mark.parametrize("case", DRAWN, ids=lambda case: case["name"])
+def test_every_bake_climbs_straight_up_from_its_takeoff_first(case: dict[str, Any]) -> None:
+    design, first = case["design"], case["baked"]["waypoints"][0]
+    # Right above the takeoff, at the default height; a point drawn there stands in for it.
+    if first["position"] == design["takeoff"]:
+        assert first["height_m"] == design["default_height_m"]
+    else:
+        assert legs_m(design["takeoff"], [first])[0] < MERGE_M
 
 
 @pytest.mark.parametrize("case", DRAWN, ids=lambda case: case["name"])

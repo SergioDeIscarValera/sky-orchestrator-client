@@ -52,7 +52,8 @@ describe("a flight against its operation's geofence (FR-WAY-01, FR-WAY-06, FR-WA
       defaultHeightM: 30,
       primitives: [{ kind: 'route', points: [at(20, 80), at(80, 80)] }],
     })
-    expect(rules(fenceViolations(across, U, FARM))).toEqual([['leg_leaves_geofence', 1]])
+    // Waypoint 0 is the climb above the takeoff; the leg across ends at waypoint 2.
+    expect(rules(fenceViolations(across, U, FARM))).toEqual([['leg_leaves_geofence', 2]])
   })
 
   it('names a point outside, and a takeoff outside, without a leg rule twice', () => {
@@ -61,9 +62,11 @@ describe("a flight against its operation's geofence (FR-WAY-01, FR-WAY-06, FR-WA
       defaultHeightM: 30,
       primitives: [{ kind: 'route', points: [at(20, 80), at(200, 80)] }],
     })
+    // The climb above an outside takeoff is outside too: the aircraft climbs there.
     expect(rules(fenceViolations(outside, U, FARM))).toEqual([
       ['takeoff_outside_geofence', undefined],
-      ['outside_geofence_polygon', 1],
+      ['outside_geofence_polygon', 0],
+      ['outside_geofence_polygon', 2],
     ])
   })
 
@@ -87,8 +90,8 @@ describe("a flight against its operation's geofence (FR-WAY-01, FR-WAY-06, FR-WA
     const found = fenceViolations(high, U, FARM)
     expect(rules(found)).toEqual([
       ['security_height_above_geofence_ceiling', undefined],
-      ['above_geofence_ceiling', 0],
+      ['above_geofence_ceiling', 1],
     ])
-    expect(found.at(-1)?.message).toBe("waypoint 0 is above the geofence's ceiling of 60 m")
+    expect(found.at(-1)?.message).toBe("waypoint 1 is above the geofence's ceiling of 60 m")
   })
 })

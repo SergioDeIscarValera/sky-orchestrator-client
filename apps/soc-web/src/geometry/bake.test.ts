@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync, writeFileSync } from 'node:fs'
 
-import { bake, MERGE_M } from './bake'
+import { bake, MERGE_M, pathLengthM, type Design } from './bake'
 import {
   bakedToJson,
   designFromJson,
@@ -9,7 +9,7 @@ import {
   flightToJson,
 } from './designJson'
 import { planFlight, SPLIT_SLACK } from './flight'
-import { eastNorth, type Geodetic } from './projection'
+import { eastNorth, geodeticAt, type Geodetic } from './projection'
 import { distanceM } from './sphere'
 
 /** contracts/geometry/bake.json: designs, their bakes and the flights made of them, which libs/soc-geo checks. */
@@ -39,7 +39,7 @@ const ROOMY = {
 }
 
 const BASE = {
-  schema_version: '2.0.0',
+  schema_version: '2.1.0',
   takeoff: near(0, 0),
   default_height_m: 30,
 }
@@ -236,18 +236,60 @@ describe('the bake (FR-WAY-07) and the flight made of it (FR-WAY-08, FR-WAY-11)'
 
   it('reports a point above the ceiling with its index, never moves it', () => {
     const { waypoints, violations } = baked(CASES[4] as (typeof CASES)[number])
-    expect(violations.map((v) => [v.rule, v.waypointIndex])).toEqual([['height_above_max', 1]])
-    expect(waypoints[1]?.heightM).toBe(150)
+    expect(violations.map((v) => [v.rule, v.waypointIndex])).toEqual([['height_above_max', 2]])
+    expect(waypoints[2]?.heightM).toBe(150)
   })
 
   it('merges points closer than half a metre into the first', () => {
     const { waypoints } = baked(CASES[5] as (typeof CASES)[number])
-    expect(waypoints).toHaveLength(2)
+    // The climb above the takeoff, then the two points left of the three drawn.
+    expect(waypoints).toHaveLength(3)
     const where = waypoints.map(local)
     for (const [index, w] of where.slice(1).entries()) {
       const prior = where[index] ?? w
       expect(Math.hypot(w[0] - prior[0], w[1] - prior[1])).toBeGreaterThanOrEqual(MERGE_M)
     }
+  })
+
+  it('climbs straight up from the takeoff to the default height before anything drawn', () => {
+    const input = CASES[0] as (typeof CASES)[number]
+    const design = designFromJson(input.design)
+    const { waypoints, distanceM } = wayline(input)
+    expect(waypoints[0]).toEqual({
+      index: 0,
+      latitudeDeg: design.takeoff.latitudeDeg,
+      longitudeDeg: design.takeoff.longitudeDeg,
+      heightM: design.defaultHeightM,
+    })
+    // Straight up: the climb adds nothing to the distance flown over the ground.
+    expect(distanceM).toBeCloseTo(pathLengthM(design.takeoff, waypoints.slice(1)), 9)
+    expect(local(waypoints[1] ?? FARM)).not.toEqual(local(design.takeoff))
+  })
+
+  it('takes a point drawn at the takeoff for the climb, at its own height', () => {
+    const takeoff = FARM
+    const design: Design = {
+      takeoff,
+      defaultHeightM: 30,
+      primitives: [
+        {
+          kind: 'route',
+          points: [
+            { ...geodeticAt(FARM, { eastM: 0.2, northM: 0.1 }), heightM: 50 },
+            geodeticAt(FARM, { eastM: 0, northM: 60 }),
+          ],
+        },
+      ],
+    }
+    const { waypoints } = bake(design, { origin: FARM, maxArcSpacingM: 10 })
+    expect(waypoints).toHaveLength(2)
+    expect(waypoints[0]?.heightM).toBe(50)
+    expect(local(waypoints[0] ?? FARM)[0]).toBeCloseTo(0.2, 6)
+    // Nothing drawn: no wayline, and no climb on its own.
+    expect(bake({ ...design, primitives: [] }, { origin: FARM, maxArcSpacingM: 10 })).toEqual({
+      waypoints: [],
+      distanceM: 0,
+    })
   })
 
   it('says when nothing is drawn', () => {
@@ -268,7 +310,7 @@ describe('the bake (FR-WAY-07) and the flight made of it (FR-WAY-08, FR-WAY-11)'
           {
             description:
               "Designs, the waylines the console's bake gives them (FR-WAY-07) at origin with max_arc_spacing_m, and the flight an operation makes of each with its climb, speed and finish against the case's envelope (FR-WAY-08). A design with nothing drawn bakes to no wayline (null). libs/soc-geo holds every bake and flight to the design schema and to the requirement: a flight's violations are exactly what the Python validator finds, its distance is Sky Orchestrator's, no leg is longer than the envelope's and no two points are closer than half a metre.",
-            'x-version': '2.0.0',
+            'x-version': '2.1.0',
             origin: [FARM.longitudeDeg, FARM.latitudeDeg],
             max_arc_spacing_m: 10,
             cases,

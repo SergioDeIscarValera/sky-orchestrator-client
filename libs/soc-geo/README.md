@@ -49,8 +49,8 @@ generator bug can only make an output the validator refuses:
   parallel at the spacing within 0.1 m, none fewer at any bearing of a half-degree
   sweep.
 - `bake.json`: designs, their bakes and the flights an operation makes of them.
-  A bake follows the schema, its distance from the takeoff in Sky Orchestrator's
-  metric. A flight follows the schema too: the bake's waypoints flown as baked
+  A bake follows the schema, climbs straight up above its takeoff first, its
+  distance from the takeoff in Sky Orchestrator's metric. A flight follows the schema too: the bake's waypoints flown as baked
   and in order, legs split only where the envelope asks, the violations exactly
   what `soc_geo.limits` finds, the distance and duration in Sky Orchestrator's
   metric, no leg beyond the envelope unless reported. No two points within half
@@ -89,11 +89,12 @@ within 10⁻⁶ m.
 
 ## The design schema
 
-`contracts/geometry/design.schema.json` (2.0.0) is a wayline as the console's
+`contracts/geometry/design.schema.json` (2.1.0) is a wayline as the console's
 designer saves it and as its bake leaves it. A wayline is geometry: the takeoff
 point, the default height and the drawn primitives (routes, points, circles,
-grids), each point with its own height if it has one; its bake, the waypoints
-and their distance from the takeoff in SO's metric. Its speed, the height it
+grids), each point with its own height if it has one; its bake, the waypoints,
+the first right above the takeoff so the aircraft climbs straight up, and their
+distance from the takeoff in SO's metric. Its speed, the height it
 climbs to over the takeoff, its finish and its geofence are the operation's
 (M4), and `$defs.flight` is what an operation makes of a bake: the reference
 point, the takeoff security height, the speed, the finish, the waypoints with

@@ -62,10 +62,11 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-09)', () => {
     expect(saved).toMatchObject({
       name: 'North corridor',
       defaultHeightM: 30,
-      metrics: { waypointCount: 2 },
-      bakeVersion: '2.0.0',
+      metrics: { waypointCount: 3 },
+      bakeVersion: '2.1.0',
     })
-    expect(saved?.waypoints.map(({ heightM }) => heightM)).toEqual([30, 30])
+    // Straight up above the takeoff first, then the route.
+    expect(saved?.waypoints.map(({ heightM }) => heightM)).toEqual([30, 30, 30])
     expect(Object.keys(saved?.design ?? {}).sort()).toEqual([
       'default_height_m',
       'primitives',
@@ -114,7 +115,7 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-09)', () => {
       expect(changed).toHaveBeenCalledOnce()
     })
     const [saved] = await backend.waylines(NORTH.id)
-    expect(saved?.metrics.waypointCount).toBe(3)
+    expect(saved?.metrics.waypointCount).toBe(4)
   })
 
   it('duplicates a wayline as saved, never baked again, and retires one for good', async () => {
