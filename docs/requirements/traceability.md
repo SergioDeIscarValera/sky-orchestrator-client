@@ -62,7 +62,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-WAY-08 | MUST | soc-web, libs, soc-cloud | M3, M4 | `libs/soc-geo/tests/test_limits.py`, `apps/soc-web/src/geometry/limits.test.ts`, `libs/soc-geo/tests/test_planar.py`, `libs/soc-geo/tests/test_sphere.py` | Partial: Sky Orchestrator's envelope checked as it checks it, in Python and TypeScript alike, one fixture per rule refused with its code and waypoint, a value at its limit passing, a NaN refused; a leg's clearance from the geofence for its polygon rule; the geofence polygon's rules and Sky Orchestrator's own verdict beside SOC's arrive with the operations |
 | FR-WAY-09 | MUST | soc-web, libs | M3 | `database/tests/test_geofences_and_waylines.py` | Partial: the database holds a wayline's design and its baked waypoints saved together, loaded as saved and never baked again; the designer arrives next |
 | FR-WAY-10 | MUST | soc-web, libs | M3 | — | Planned |
-| FR-WAY-11 | MUST | soc-operations | M3 | — | Planned |
+| FR-WAY-11 | MUST | soc-operations | M3 | `services/soc-operations/tests/test_flight_files.py`, `contracts/flight-files/` | Partial: built deterministically within Sky Orchestrator's subset, its entries stored so the bytes are the same on any machine, held to golden text files and hashes and to the subset's own tables, read back; a bake with any violation refused; Sky Orchestrator's own dry run arrives with the stack session |
 | FR-WAY-12 | COULD | soc-operations, soc-web | M7 | — | Planned |
 | FR-OPS-01 | MUST | soc-operations, soc-web, database | M4 | — | Planned |
 | FR-OPS-02 | MUST | soc-operations, soc-web, database | M4 | — | Planned |
