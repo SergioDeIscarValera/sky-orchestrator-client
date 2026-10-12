@@ -62,7 +62,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-WAY-08 | MUST | soc-web, libs, soc-cloud | M3, M4 | `libs/soc-geo/tests/test_planar.py`, `libs/soc-geo/tests/test_sphere.py` | Partial: what the validation decides with: a leg's clearance from the geofence's boundary, none when any of it leaves, a leg across the arms of a U included; Sky Orchestrator's metric for its limits, held to its geodesy cases, a NaN refused rather than passed; the rules and their messages arrive with the validators |
 | FR-WAY-09 | MUST | soc-web, libs | M3 | — | Planned |
 | FR-WAY-10 | MUST | soc-web, libs | M3 | — | Planned |
-| FR-WAY-11 | MUST | soc-operations | M3 | — | Planned |
+| FR-WAY-11 | MUST | soc-operations | M3 | `services/soc-operations/tests/test_flight_files.py`, `contracts/flight-files/` | Partial: built deterministically within Sky Orchestrator's subset, held to golden text files and to the subset's own tables, read back; Sky Orchestrator's own dry run arrives with the stack session |
 | FR-WAY-12 | COULD | soc-operations, soc-web | M7 | — | Planned |
 | FR-OPS-01 | MUST | soc-operations, soc-web, database | M4 | — | Planned |
 | FR-OPS-02 | MUST | soc-operations, soc-web, database | M4 | — | Planned |
