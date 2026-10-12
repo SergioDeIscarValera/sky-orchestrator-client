@@ -320,6 +320,18 @@ REFUSALS: list[tuple[Callable[[dict[str, Any]], object], str]] = [
         lambda b: b["waypoints"][2].update(actions=[{"type": "take_photo"}]),
         r"waypoint 2 has actions, which the flight file does not write yet \(FR-WAY-12\)",
     ),
+    (
+        lambda b: b.update(
+            violations=[
+                {"rule": "leg_too_long", "message": "...", "waypoint_index": 2},
+                {"rule": "distance_too_long", "message": "..."},
+            ]
+        ),
+        r"the bake breaks 2 rule\(s\), so it does not fly: leg_too_long at waypoint 2; "
+        r"distance_too_long$",
+    ),
+    (lambda b: b.update(violations=None), r"violations is not a list"),
+    (lambda b: b.pop("violations"), r"the bake has no violations"),
     (lambda b: b.pop("speed_ms"), r"the bake has no speed_ms"),
     (lambda b: b["waypoints"][1].pop("height_m"), r"waypoint 1 has no height_m"),
     (lambda b: b["waypoints"][1].pop("position"), r"waypoint 1 has no position"),

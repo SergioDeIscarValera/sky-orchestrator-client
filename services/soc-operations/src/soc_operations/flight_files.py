@@ -77,8 +77,9 @@ class _Wayline:
 def build(baked: Mapping[str, Any], *, name: str) -> bytes:
     """The KMZ for a bake. The same bake and name always give the same bytes.
 
-    Raises ValueError, naming the problem, for anything the subset cannot fly. Nothing is
-    produced for a refused bake.
+    Raises ValueError, naming the problem, for anything the subset cannot fly, and for a bake
+    with violations (FR-WAY-08): a flight file is only ever built from a clean bake. Nothing
+    is produced for a refused bake.
     """
     wayline = _wayline(baked, name)
     return _archive(
@@ -128,6 +129,7 @@ def read(kmz: bytes) -> dict[str, Any]:
 
 
 def _wayline(baked: Mapping[str, Any], name: str) -> _Wayline:
+    _clean(_field(baked, "violations"))
     speed = _bounded(_field(baked, "speed_ms"), MAX_SPEED_MS, "speed_ms", "m/s")
     waypoints = _waypoints(_field(baked, "waypoints"))
     # The file has no speed for the transit into waypoint 0: that leg flies at the wayline's
@@ -151,6 +153,22 @@ def _wayline(baked: Mapping[str, Any], name: str) -> _Wayline:
         finish_action=_finish_action(_field(baked, "finish_action")),
         waypoints=waypoints,
     )
+
+
+def _clean(violations: object) -> None:
+    if not isinstance(violations, list | tuple):
+        raise ValueError("violations is not a list")
+    if violations:
+        told = "; ".join(_violation(violation) for violation in violations)
+        raise ValueError(f"the bake breaks {len(violations)} rule(s), so it does not fly: {told}")
+
+
+def _violation(violation: object) -> str:
+    if not isinstance(violation, Mapping):
+        return repr(violation)
+    where = violation.get("waypoint_index")
+    at = "" if where is None else f" at waypoint {where}"
+    return f"{violation.get('rule')}{at}"
 
 
 def _name(name: str) -> str:

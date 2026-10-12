@@ -74,15 +74,16 @@ not in (0, 120] m; a speed not in (0, 15] m/s, the wayline's or a waypoint's; a
 takeoff security height not in (0, 120] m; a finish action other than the three;
 actions on a waypoint, which the file does not write until FR-WAY-12; a speed into
 waypoint 0 that differs from the wayline's, which the file cannot carry; a name that
-is empty or holds a character XML cannot carry.
+is empty or holds a character XML cannot carry; a bake with any violation (FR-WAY-08),
+each named with its rule and waypoint: a flight file is only ever built from a clean
+bake.
 
 **Read back, refused:** a DOCTYPE or an entity declaration, malformed XML, and a KMZ
 that does not hold the two files in order.
 
-**Not this module's job.** The bake's `violations` do not stop a build: a bake that
-breaks a rule still builds, and an operation becomes `planned` only with a valid
-wayline (FR-OPS-03, FR-WAY-08), which arrives with the operations. The stack's
-envelope is not checked here either. Sky Orchestrator's own verdict on the file, its
+**Not this module's job.** The stack's envelope is not checked here: the bake
+reports what breaks it as violations, which refuse the build, and the preflight
+(FR-OPS-03) checks the envelope again when it arrives with the operations. Sky Orchestrator's own verdict on the file, its
 dry run, arrives with the stack session.
 
 **Golden files.** `contracts/flight-files/` holds two reference waylines as text:
@@ -124,4 +125,4 @@ service comes up ready on the production Postgres image as `soc_operations`.
 | A bake the subset cannot fly | `flight_files.build` raises `ValueError` naming it; no file is made |
 | A change to the builder moves a byte of a flight file | The golden tests fail; a deliberate change regenerates the golden case in the same commit |
 | zlib changes its deflate output | The golden hashes fail while the texts still match; `kmz.sha256` is regenerated deliberately |
-| A bake with violations | It builds as it is; the preflight that refuses it (FR-OPS-03) arrives with the operations |
+| A bake with violations | `flight_files.build` refuses it, naming each rule and waypoint; no file is made |
