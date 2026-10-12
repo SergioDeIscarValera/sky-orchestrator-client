@@ -7,6 +7,9 @@ repository at one commit, and held there:
 | --- | --- |
 | `mqtt/` | The DJI Cloud API messages: one JSON Schema per message in a directory per topic kind, the shared envelope, the generated examples, and `dji-methods.json`, the catalogue of DJI's methods |
 | `wayline/openapi.yaml` | so-wayline's HTTP API: status, envelope, validations |
+| `msdk/geodesy-cases.json` | The distances every implementation of Sky Orchestrator's geodesy reproduces within 10⁻⁶ m: its sphere and haversine, which SOC's validators measure SO's limits in (ADR-0009, `libs/soc-geo`) |
+| `msdk/mission-plan.schema.json`, `msdk/examples/mission-plan.square.json` | The mission plan so-wayline turns a flight file into: what SOC's bake produces field for field (`contracts/geometry/design.schema.json`) |
+| `wpml/supported-subset.md` | The WPML subset Sky Orchestrator accepts, which SOC's flight files keep to (`FR-WAY-11`) |
 | `vendored.json` | Where the files came from: the repository, the commit, its `git describe` and date |
 | `vendored.sha256` | The SHA-256 of every file, in `sha256sum`'s format: `sha256sum -c vendored.sha256` checks them |
 
@@ -27,8 +30,10 @@ shape changed.
 - **Never edited here.** `tools/vendor_sky_orchestrator.py --check` fails in the
   hooks and in CI on any byte that differs from `vendored.sha256`, any file missing,
   any file added by hand. The whitespace hooks skip this directory.
-- **What is left out**: Sky Orchestrator's internal buses (`mqtt/internal/`) and
-  its prose, whose links point into its own tree.
+- **What is left out**: Sky Orchestrator's internal buses (`mqtt/internal/`), the
+  phone bridge's own API and messages (`msdk/` but the three files above), and its
+  prose, whose links point into its own tree; `wpml/supported-subset.md` is the one
+  prose file kept, since it is the contract.
 - **Closed and open.** What the dock sends is closed (`additionalProperties:
   false`); what a cloud sends is held to types and required fields. SOC validates
   everything it publishes against these before it leaves (`FR-LNK-10`).

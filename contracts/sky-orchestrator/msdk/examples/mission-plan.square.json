@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0.0",
+  "wayline_id": "3f2b8c1e-6a4d-4e2f-9b1a-7c5d3e8f0a12",
+  "fingerprint_md5": "0123456789abcdef0123456789abcdef",
+  "takeoff_security_height_m": 10.0,
+  "reference_point": {
+    "latitude_deg": 45.0,
+    "longitude_deg": 7.0
+  },
+  "speed_ms": 3.0,
+  "finish_action": "return_home",
+  "waypoints": [
+    {
+      "index": 0,
+      "latitude_deg": 45.0001349,
+      "longitude_deg": 7.0,
+      "height_m": 6.0
+    },
+    {
+      "index": 1,
+      "latitude_deg": 45.0001349,
+      "longitude_deg": 7.0001908,
+      "height_m": 6.0,
+      "heading_deg": 90.0,
+      "actions": [
+        {
+          "type": "hover",
+          "seconds": 2
+        },
+        {
+          "type": "gimbal_pitch",
+          "pitch_deg": -45
+        },
+        {
+          "type": "take_photo"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "latitude_deg": 45.0,
+      "longitude_deg": 7.0001908,
+      "height_m": 6.0,
+      "speed_ms": 2.0
+    },
+    {
+      "index": 3,
+      "latitude_deg": 45.0,
+      "longitude_deg": 7.0,
+      "height_m": 6.0
+    }
+  ]
+}
