@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { FieldRefusedError, type Backend, type Fleet } from '../../src/backend/backend'
+import { bake } from '../../src/geometry/bake'
+import { designFromJson } from '../../src/geometry/designJson'
 import { supabaseBackend } from '../../src/backend/supabase'
 import { parseRuntimeConfiguration } from '../../src/config/runtime'
 import { PASSWORD_FOR_TESTS } from '../../src/test/keys'
@@ -175,6 +177,11 @@ describe("the demo's geofences and waylines, read through the console backend", 
     expect(corridor?.takeoff.latitudeDeg).toBeCloseTo(41.6523, 9)
     expect(corridor?.takeoff.longitudeDeg).toBeCloseTo(-4.7245, 9)
     expect(corridor?.waypoints.map(({ index }) => index)).toEqual([0, 1, 2, 3])
+    // Its design reads as the designer reads it, and bakes to its waypoints.
+    const design = designFromJson(corridor?.design)
+    const baked = bake(design, { origin: design.takeoff, maxArcSpacingM: 10, envelope: null })
+    expect(baked.waypoints.map(({ heightM }) => heightM)).toEqual([30, 30, 30, 30])
+    expect(baked.distanceM).toBeCloseTo(corridor?.metrics.distanceM ?? 0, -1)
     expect(await backend.waylines(ALMENDRAL)).toEqual([])
     expect(await backend.geofences(NORTH)).toEqual([])
   })
