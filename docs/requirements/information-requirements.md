@@ -202,7 +202,8 @@ the state. Retention: permanent.
 | `id` | uuid | |
 | `organization_id` | uuid | |
 | `name` | text | |
-| `geofence_id` | uuid, nullable | Null while a draft has none |
+| `geofence_id` | uuid, nullable | Null while a draft has none. It holds for every wayline in the operation |
+| `takeoff_security_height_m` | numeric, nullable | The operation's height, climbed to over each takeoff before the transit (`FR-OPS-01`); null while a draft has none |
 | `state` | enum | Per `FR-OPS-02` |
 | `end_reason` | enum, nullable | `completed`, `operator_stop`, `operator_return`, `geofence_breach`, `envelope_breach`, `low_battery`, `link_lost`, `pilot_takeover`, `aircraft_fault`, `cancelled` |
 | `created_by` | uuid | A profile |
@@ -224,6 +225,7 @@ A wayline flown by a fleet within an operation. Owner: as `IR-OPS`.
 | `id` | uuid | |
 | `operation_id` | uuid | |
 | `wayline_id`, `fleet_id` | uuid | Each unique within the operation |
+| `speed_ms` | numeric, nullable | The speed the fleet flies the wayline at (`FR-WAY-10`); null while a draft has none |
 
 ## IR-OPR — Operator
 

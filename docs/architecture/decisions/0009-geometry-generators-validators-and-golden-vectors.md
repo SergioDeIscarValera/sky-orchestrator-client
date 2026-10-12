@@ -1,6 +1,6 @@
 # ADR-0009 — Geometry: generators in the web, validators in the services, golden vectors between them
 
-- **Status**: Accepted
+- **Status**: Accepted; where legs are split superseded by [ADR-0024](0024-a-wayline-is-geometry-the-operation-flies-it.md)
 - **Date**: 2026-10-07
 
 ## Context
