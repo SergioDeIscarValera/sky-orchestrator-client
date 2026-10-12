@@ -14,4 +14,5 @@ both sides updated in the same pull request (`NFR-MNT-02`).
 | [`catalogue/`](catalogue/README.md) | The aircraft models supported by Mobile SDK V4, with their sourced specifications | M2, here, 1.0.0 |
 | [`geometry/`](../libs/soc-geo/README.md) | Golden vectors every implementation of SOC's geometry passes, from PROJ, shapely and the other oracles (ADR-0009), and a wayline's design and bake (`design.schema.json`) | M2, here: the local frame; M3, here: the plane's predicates and the design schema 1.0.0; the generators' vectors with the bake |
 | [`site/`](site/site.schema.json) | `site.json`, which `soc-site bake` writes beside a site's elevation grid and imagery, and the console reads (ADR-0018) | M2, here, 1.0.0 |
+| [`recordings/`](recordings/README.md) | Telemetry streams a console received, each line a sample as broadcast and when it came, replayed as the console's test inputs so an incident becomes a test (`NFR-TEST-05`) | M2, here, 1.0.0: the dock's flight with its silence and a 10 s cut |
 | `wpml/` | The WPML profile SOC writes, inside SO's accepted subset | M3 |

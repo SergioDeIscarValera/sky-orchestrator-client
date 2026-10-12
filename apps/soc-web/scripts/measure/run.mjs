@@ -1,9 +1,11 @@
 // `pnpm measure`: NFR-PERF-06 on the production build. It builds the console in the
 // measurement mode (production React, with the replay kept), serves it with `vite
 // preview` against the demo's fake Supabase, and drives Chrome along path.mjs's
-// scripted path while the scene's own frame sampler measures every frame. `--serve`
-// only serves it, to look by hand; `--site <dir>` serves the site models there, as
-// SOC_SITE_DIR does for the dev server.
+// scripted path while the scene's own frame sampler measures every frame, then reads
+// what the scene holds on the GPU (NFR-RES-03). `--memory` holds the console open on
+// its live telemetry instead, the heap read each minute (NFR-RES-02, memory.mjs).
+// `--serve` only serves it, to look by hand; `--site <dir>` serves the site models
+// there, as SOC_SITE_DIR does for the dev server.
 import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { platform, tmpdir } from 'node:os'
@@ -14,7 +16,9 @@ import { chromium } from 'playwright-core'
 
 import { startFakeSupabase } from '../demo/fake-supabase.mjs'
 import { DEMO_SETTINGS, demoSupabaseKey, stopGroup } from '../demo/run.mjs'
+import { inMegabytes, memoryVerdict } from './memory.mjs'
 import {
+  AIRCRAFT,
   PATH,
   SETTLE_MS,
   VIEWPORT,
@@ -109,6 +113,29 @@ function gpuOf(page) {
   })
 }
 
+/** What the scene holds on the GPU now, in bytes, as `gpuMemory.ts` accounts it. */
+function gpuBytesOf(page) {
+  return page.evaluate(() => globalThis.socScene.gpuMemory()?.bytes ?? null)
+}
+
+/**
+ * NFR-RES-02's session: the console left open on its live telemetry for `minutes`, the
+ * heap read each minute after a full collection, so what is read is what is kept.
+ */
+async function hold(page, minutes) {
+  const cdp = await page.context().newCDPSession(page)
+  const heap = []
+  const started = Date.now()
+  for (let minute = 1; minute <= minutes; minute += 1) {
+    await page.waitForTimeout(Math.max(0, started + minute * 60_000 - Date.now()))
+    await cdp.send('HeapProfiler.collectGarbage')
+    const { usedSize } = await cdp.send('Runtime.getHeapUsage')
+    heap.push({ minute, bytes: usedSize })
+    console.log(`minute ${String(minute)} of ${String(minutes)}: heap ${inMegabytes(usedSize)}`)
+  }
+  return { heap, gpuBytes: await gpuBytesOf(page) }
+}
+
 async function measure(options) {
   const browser = await chromium.launch({
     executablePath: chromePath(options.chrome),
@@ -134,6 +161,14 @@ async function measure(options) {
     await page.waitForTimeout(SETTLE_MS)
     const terrain = await page.getByText(/Instituto Geográfico Nacional/).isVisible()
     const gpu = await gpuOf(page)
+    if (options.memory) {
+      const session = await hold(page, options.minutes)
+      return memoryVerdict(session, {
+        aircraft: AIRCRAFT,
+        site: terrain ? 'over the baked terrain' : 'over the flat ground',
+        gpu,
+      })
+    }
     await page.evaluate(() => {
       globalThis.socScene.startRun()
     })
@@ -146,6 +181,7 @@ async function measure(options) {
       site: terrain ? 'over the baked terrain' : 'over the flat ground',
       gpu,
       shots: options.shots !== null,
+      gpuBytes: await gpuBytesOf(page),
     })
   } finally {
     await browser.close()
@@ -213,7 +249,11 @@ async function main() {
       })
       return 0
     }
-    console.log(`Driving Chrome along the ${String(pathSeconds())} s path…`)
+    console.log(
+      options.memory
+        ? `Holding the console open on live telemetry for ${String(options.minutes)} minutes…`
+        : `Driving Chrome along the ${String(pathSeconds())} s path…`,
+    )
     const { ok, report } = await measure(options)
     console.log(report)
     return ok ? 0 : 1

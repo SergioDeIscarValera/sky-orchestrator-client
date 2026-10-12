@@ -14,7 +14,8 @@ The lane needs `apps/soc-web` installed (`pnpm install`), for playwright-core,
 and a Chrome on the `PATH` (`google-chrome`, `chromium`) or named by
 `SOC_E2E_CHROME`. Without a GPU, as on the runners, `SOC_E2E_SOFTWARE_GL=1`
 draws WebGL on SwiftShader. `SOC_E2E_SAMPLES=3000` flies `NFR-PERF-01`'s ten
-minutes instead of the lane's one.
+minutes instead of the lane's one. `SOC_E2E_RECORD=<file>` keeps every sample the
+page receives as a recording (`contracts/recordings`, `NFR-TEST-05`).
 
 ## What runs
 

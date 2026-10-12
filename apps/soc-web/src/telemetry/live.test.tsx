@@ -95,14 +95,15 @@ describe('live values in the inspector (FR-TEL-03, FR-FLE-04)', () => {
     })
     expect(section('Live').getByText('Live, under 1 s ago')).toBeInTheDocument()
     expect(height('Live')).toHaveClass('text-heading')
-    // Held up 5 s by a cut, then delivered: as old as that, whatever its arrival.
+    // Held up 5.5 s by a cut, then delivered: as old as that, whatever its arrival. Half
+    // a second either side of the whole second, so the clock's own millisecond cannot tip it.
     act(() => {
-      backend.sample(NORTH.id, sample({ takenAtMs: 2000, sentAtMs: Date.now() - 5005 }))
+      backend.sample(NORTH.id, sample({ takenAtMs: 2000, sentAtMs: Date.now() - 5505 }))
     })
     expect(section('Last known').getByText('Stale, 5 s ago')).toBeInTheDocument()
     expect(height('Last known')).toHaveClass('text-muted')
     act(() => {
-      backend.sample(NORTH.id, sample({ takenAtMs: 3000, sentAtMs: Date.now() - 11_005 }))
+      backend.sample(NORTH.id, sample({ takenAtMs: 3000, sentAtMs: Date.now() - 11_505 }))
     })
     expect(section('Last known').getByText('Lost, 11 s ago')).toBeInTheDocument()
   })

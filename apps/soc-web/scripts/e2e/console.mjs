@@ -21,7 +21,7 @@
 // Each sample's latency is the browser's receipt, the frame as Playwright hands it
 // over, against the dock's publish (its taken_at_ms) and against soc-cloud's
 // broadcast (its sent_at_ms); both clocks are this machine's.
-import { mkdirSync } from 'node:fs'
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
@@ -127,12 +127,22 @@ async function main() {
       process.stderr.write(`page error: ${error.message}\n`)
     })
     const samples = []
+    // With SOC_E2E_RECORD, every sample the page receives is kept as a recording
+    // (contracts/recordings, NFR-TEST-05): one line each, as broadcast, and when it came.
+    const recording = process.env.SOC_E2E_RECORD ?? null
+    if (recording !== null) writeFileSync(recording, '')
     page.on('websocket', (socket) => {
       socket.on('framereceived', ({ payload }) => {
         const receivedAtMs = Date.now()
         const sample = sampleOf(payload)
-        if (sample !== null && sample.aircraftSn === aircraft)
-          samples.push({ ...sample, receivedAtMs })
+        if (sample === null) return
+        if (recording !== null) {
+          appendFileSync(
+            recording,
+            `${JSON.stringify({ received_at_ms: receivedAtMs, sample: sample.payload })}\n`,
+          )
+        }
+        if (sample.aircraftSn === aircraft) samples.push({ ...sample, receivedAtMs })
       })
     })
 
