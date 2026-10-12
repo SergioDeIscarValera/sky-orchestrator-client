@@ -22,8 +22,8 @@ The MVP is M5: **a first real flight commanded from SOC**
 | M0 Foundations | v0.1.0 | Repository, conventions, pipelines, requirements, decisions | Closed, released |
 | M1 Platform and viability | v0.2.0 | Every unit runs, measured where the design could break | Released with 4 of 7 criteria demonstrated; 3 wait on the mini-PC's box steps and read access to SO's packages |
 | M2 Live fleet | v0.3.0, v0.3.1 | A registered aircraft's live telemetry in 3D, on the farm's terrain | Closed, released: 5 of 5 criteria, in the console end to end; v0.3.1 met the rest of its requirements the mini-PC does not wait on |
-| M3 Mission design | v0.4.0 | Geofences and waylines drawn, baked, validated, turned into files SO accepts | In progress: the geometry and the TypeScript engine in review |
-| M4 Operations | v0.5.0 | A whole operation flown from the web against SO's fake bridge | Planned |
+| M3 Mission design | v0.4.0 | Geofences and waylines drawn, baked, validated, turned into files SO accepts | Closed, released: 4 of 4 criteria; Sky Orchestrator's own ingest accepts every reference file and refuses as SOC predicts |
+| M4 Operations | v0.5.0 | A whole operation flown from the web against SO's fake bridge | Next |
 | M5 First real flight | v0.6.0 | **MVP**: the same, with the real aircraft | Planned |
 
 ---
@@ -119,22 +119,22 @@ memory over an hour, the GPU's share and recorded flights as fixtures (#90).
 
 ---
 
-## M3 — Mission design · v0.4.0
+## M3 — Mission design · *closed 2026-10-12, v0.4.0*
 
 | Step | Pull request |
 | --- | --- |
-| Geometry golden vectors and the design schema; Python predicates passing them | `feature/libs/projection` (the local frame and its vectors, brought forward for the scene's aircraft in M2); `feature/libs/geometry` (Sky Orchestrator's metric and geodesy cases, the plane's predicates and shapely's vectors, the design schema 1.0.0) |
-| The TypeScript geometry engine: projection, predicates, circle, grid, hull and margin, bake | `feature/web/geometry-engine` (the inverse projection, exact predicates, Sky Orchestrator's metric and envelope, the circle and grid tools, the grown geofence and the bake, each with vectors libs/soc-geo checks) |
-| Geofences and waylines in the database | `feature/database/geofences-and-waylines` |
-| Geofence editor and generation from waylines | `feature/web/geofence-editor` |
-| Wayline designer: takeoff, points, route, circle, grid, bake, validation | `feature/web/wayline-designer` |
-| Flight file builder: the WPML profile, deterministic KMZ, golden files, SO's verdict | `feature/operations/flight-files` |
+| Geometry golden vectors and the design schema; Python predicates passing them | `feature/libs/projection` (#66, the local frame and its vectors, brought forward for the scene's aircraft in M2); `feature/libs/geometry` (#92: Sky Orchestrator's metric and geodesy cases, the plane's predicates and shapely's vectors, the design schema 1.0.0) |
+| The TypeScript geometry engine: projection, predicates, circle, grid, hull and margin, bake | `feature/web/geometry-engine` (#94: the inverse projection, exact predicates, Sky Orchestrator's metric and envelope, the circle and grid tools, the grown geofence and the bake, each with vectors libs/soc-geo checks) |
+| Geofences and waylines in the database | `feature/database/geofences-and-waylines` (#95); the console's data, `feature/web/geofence-wayline-data` (#97) |
+| Geofence editor and generation from waylines | `feature/web/geofence-editor` (#99) |
+| Wayline designer: takeoff, points, route, circle, grid, bake, validation | `feature/web/design-json` (#100, the design read and written as the schema says); `feature/web/wayline-designer` (#101) |
+| Flight file builder: the WPML profile, deterministic KMZ, golden files, SO's verdict | `feature/operations/flight-files` (#96); `feature/operations/so-acceptance` (#98, Sky Orchestrator's own ingest) |
 
 **Exit criteria**
 
-- [ ] The golden vectors pass in TypeScript and in Python (`FR-WAY-07`, `NFR-MNT-05`)
-- [ ] A geofence generated with a 5 m margin keeps every waypoint and leg at least 5 m inside (`FR-GEO-03`)
-- [ ] The reference waylines bake identically every time and build byte-identical files (`FR-WAY-07`, `FR-WAY-11`)
+- [x] The golden vectors pass in TypeScript and in Python (`FR-WAY-07`, `NFR-MNT-05`): circle, grid, grown geofence and bake, each written by the TypeScript and checked again by `soc-geo` in the gate
+- [x] A geofence generated with a 5 m margin keeps every waypoint and leg at least 5 m inside (`FR-GEO-03`): the 5 m golden case and every other margin, by the Python validator
+- [x] The reference waylines bake identically every time and build byte-identical files (`FR-WAY-07`, `FR-WAY-11`): the bake vectors rewrite unchanged, and the flight files' entries are stored, so their hashes hold on any machine
 - [x] SO accepts every reference file, and refuses each invalid fixture for the reason SOC predicted (`NFR-COMP-02`, `FR-WAY-08`): its own ingest, run from its checkout by `soc_operations.so_acceptance`
 
 ---
