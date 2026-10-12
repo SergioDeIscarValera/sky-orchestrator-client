@@ -129,7 +129,7 @@ mini-PC and read access to Sky Orchestrator's packages, and close there.
 - [ ] The golden vectors pass in TypeScript and in Python (`FR-WAY-07`, `NFR-MNT-05`)
 - [ ] A geofence generated with a 5 m margin keeps every waypoint and leg at least 5 m inside (`FR-GEO-03`)
 - [ ] The reference waylines bake identically every time and build byte-identical files (`FR-WAY-07`, `FR-WAY-11`)
-- [ ] SO accepts every reference file, and refuses each invalid fixture for the reason SOC predicted (`NFR-COMP-02`, `FR-WAY-08`)
+- [x] SO accepts every reference file, and refuses each invalid fixture for the reason SOC predicted (`NFR-COMP-02`, `FR-WAY-08`): its own ingest, run from its checkout by `soc_operations.so_acceptance`
 
 ---
 
