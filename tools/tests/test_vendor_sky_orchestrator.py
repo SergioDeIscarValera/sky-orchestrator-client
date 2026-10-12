@@ -80,16 +80,23 @@ class Selection(unittest.TestCase):
             "contracts/mqtt/examples/osd.aircraft.json",
             "contracts/mqtt/dji-methods.json",
             "contracts/wayline/openapi.yaml",
+            "contracts/msdk/geodesy-cases.json",
+            "contracts/msdk/mission-plan.schema.json",
+            "contracts/msdk/examples/mission-plan.square.json",
+            "contracts/wpml/supported-subset.md",
         ):
             with self.subTest(path=path):
                 self.assertTrue(vso.wanted(PurePosixPath(path)))
 
-    def test_internal_buses_and_prose_are_not(self) -> None:
+    def test_internal_buses_the_phone_bridge_and_prose_are_not(self) -> None:
         for path in (
             "contracts/mqtt/internal/bridge-link.schema.json",
             "contracts/mqtt/internal/examples/bridge-link.up.json",
             "contracts/mqtt/README.md",
             "contracts/wayline/README.md",
+            "contracts/msdk/openapi.yaml",
+            "contracts/msdk/examples/bridge/telemetry.json",
+            "contracts/msdk/README.md",
         ):
             with self.subTest(path=path):
                 self.assertFalse(vso.wanted(PurePosixPath(path)))

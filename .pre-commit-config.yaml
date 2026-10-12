@@ -183,7 +183,7 @@ repos:
         entry: bash -c 'uv run --frozen mypy libs/soc-geo && uv run --frozen pytest libs/soc-geo/tests'
         language: system
         pass_filenames: false
-        files: ^(libs/soc-geo/|contracts/geometry/|pyproject\.toml$|uv\.lock$)
+        files: ^(libs/soc-geo/|contracts/geometry/|contracts/sky-orchestrator/msdk/|pyproject\.toml$|uv\.lock$)
 
       - id: soc-site-gate
         name: soc-site gate
