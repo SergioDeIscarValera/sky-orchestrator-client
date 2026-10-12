@@ -1,23 +1,17 @@
-import { Pencil, RotateCw } from 'lucide-react'
+import { RotateCw } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 
 import { aircraftKey, type Device, type Fleet } from '../backend/backend'
-import { useOpenForm, useSelect, useSelection, type Selection } from '../app/router'
+import { useSelect, useSelection, type Selection } from '../app/router'
 import { ALERT, QUIET_BUTTON } from '../app/styles'
-import { useOrganization } from '../organizations/context'
 import { useAircraftColours } from './colours'
 import { useAircraftModels, useDevices, useFleets } from './data'
 import { Waiting } from './Details'
-import { changesFleets } from './form'
 import { PresencePill } from './PresencePill'
 import { Swatch } from './Swatch'
 
 const ROW =
   'hover:bg-primary-subtle aria-pressed:bg-primary-subtle flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition-colors duration-200'
-const ROW_ACTION =
-  'text-muted hover:bg-primary-subtle hover:text-primary-emphasis grid size-9 shrink-0 place-items-center rounded-xl transition-colors duration-200'
-const REGISTER_ACTION =
-  'rounded-pill bg-primary-subtle text-primary-emphasis hover:bg-primary hover:text-on-primary h-8 shrink-0 px-3 text-xs font-semibold transition-colors duration-200'
 
 function sameAircraft(fleet: Fleet, device: Device): boolean {
   return fleet.gatewaySn === device.gatewaySn && fleet.aircraftSn === device.aircraftSn
@@ -37,9 +31,9 @@ function isSelected(selection: Selection | null, candidate: Selection): boolean 
 }
 
 /**
- * The organization's aircraft in one list (FR-FLE-02): its fleets first, then the
- * aircraft its stacks announced that are in none, each with what an editor does to it,
- * Edit or Register, at hand.
+ * The organization's aircraft in one list (FR-FLE-02): its fleets first, then the aircraft
+ * its stacks announced that are in none. A row only selects; Register and Edit are in the
+ * inspector, where the selection shows them (FR-FLE-03, FR-FLE-05).
  */
 export function FleetPanel() {
   const fleets = useFleets()
@@ -48,8 +42,6 @@ export function FleetPanel() {
   const models = useAircraftModels()
   const selection = useSelection()
   const select = useSelect()
-  const openForm = useOpenForm()
-  const { organization } = useOrganization()
 
   if (fleets.isPending || devices.isPending) return <Waiting>Loading the fleet…</Waiting>
   if (fleets.isError || devices.isError) {
@@ -78,7 +70,6 @@ export function FleetPanel() {
   const unregistered = devices.data.filter(
     (device) => !fleets.data.some((fleet) => sameAircraft(fleet, device)),
   )
-  const writes = changesFleets(organization.role)
   const toggle = (candidate: Selection) => {
     select(isSelected(selection, candidate) ? null : candidate)
   }
@@ -94,7 +85,7 @@ export function FleetPanel() {
           const candidate: Selection = { kind: 'fleet', fleetId: fleet.id }
           const device = devices.data.find((seen) => sameAircraft(fleet, seen))
           return (
-            <li key={fleet.id} className="flex items-center gap-1">
+            <li key={fleet.id} className="flex">
               <button
                 type="button"
                 aria-pressed={isSelected(selection, candidate)}
@@ -114,19 +105,6 @@ export function FleetPanel() {
                 </span>
                 {device !== undefined && <PresencePill device={device} />}
               </button>
-              {writes && (
-                <button
-                  type="button"
-                  aria-label={`Edit ${fleet.name}`}
-                  title={`Edit ${fleet.name}`}
-                  className={ROW_ACTION}
-                  onClick={() => {
-                    openForm(candidate, 'edit')
-                  }}
-                >
-                  <Pencil size={15} aria-hidden />
-                </button>
-              )}
             </li>
           )
         })}
@@ -137,10 +115,7 @@ export function FleetPanel() {
             aircraftSn: device.aircraftSn,
           }
           return (
-            <li
-              key={`${device.gatewaySn}/${device.aircraftSn}`}
-              className="flex items-center gap-1"
-            >
+            <li key={`${device.gatewaySn}/${device.aircraftSn}`} className="flex">
               <button
                 type="button"
                 aria-pressed={isSelected(selection, candidate)}
@@ -162,18 +137,6 @@ export function FleetPanel() {
                 </span>
                 <PresencePill device={device} />
               </button>
-              {writes && (
-                <button
-                  type="button"
-                  aria-label={`Register ${device.aircraftSn}`}
-                  className={REGISTER_ACTION}
-                  onClick={() => {
-                    openForm(candidate, 'register')
-                  }}
-                >
-                  Register
-                </button>
-              )}
             </li>
           )
         })}

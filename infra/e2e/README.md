@@ -41,8 +41,9 @@ user created through its admin API, with a profile, and owns Finca Norte.
    organization with the fleet panel.
 2. The dock starts announcing. The aircraft appears in the fleet panel
    within **2 s** (`FR-FLE-02`).
-3. The pilot registers it from its row's _Register_, through the form, as _Norte 1_, and the database holds
-   that fleet with its gateway and aircraft (`FR-FLE-03`).
+3. The pilot selects it in the fleet panel and registers it from the inspector,
+   through the form, as _Norte 1_, and the database holds that fleet with its
+   gateway and aircraft (`FR-FLE-03`).
 4. The dock flies. Every sample reaches the browser in order and the
    inspector's position changes. The scene draws frames
    (`FR-TEL-01`, `FR-SCN-04`). The aircraft, selected since its
@@ -57,11 +58,12 @@ user created through its admin API, with a profile, and owns Finca Norte.
    - the console's delivery figure from `?stats`.
 6. The dock falls silent, and the inspector says Stale **3 s after the last
    sample, give or take 100 ms** (`FR-TEL-02`).
-7. The fleet panel closes, and the map tools stay where they were, bottom
-   right, as the design system puts them: they once jumped to the top.
-8. Escape clears the selection; `/`, the last six characters of the aircraft's
-   serial and Enter in the top bar's search select its fleet again, and the
-   scene follows it (`FR-SCN-05`).
+7. The inspector closes, and then the fleet panel does: the map tools stay where
+   they were, bottom right, as the design system puts them: they once jumped to
+   the top.
+8. With nothing selected, `/`, the last six characters of the aircraft's serial and
+   Enter in the top bar's search select its fleet again, and the scene follows it
+   (`FR-SCN-05`).
 9. The dock flies again and the browser's network is cut for **10 s**, while the
    fleet is renamed in the database (`NFR-REL-07`). Nothing reaches the page;
    the top bar says Reconnecting within a second, every presence reads unknown,
