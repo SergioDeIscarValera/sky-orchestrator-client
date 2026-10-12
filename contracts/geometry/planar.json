@@ -1,0 +1,1965 @@
+{
+  "description": "Plane geometry on the local frame that every implementation of SOC's validators and generators reproduces within tolerance_m (ADR-0009): polygons with their simplicity, area and perimeter; points located inside, on or outside them; legs with their clearance from the boundary, null when any of a leg is on or outside it. Written by libs/soc-geo/tests/planar_oracle.py from shapely.",
+  "x-version": "1.0.0",
+  "tolerance_m": 1e-06,
+  "polygons": [
+    {
+      "name": "square",
+      "polygon": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          100.0,
+          0.0
+        ],
+        [
+          100.0,
+          100.0
+        ],
+        [
+          0.0,
+          100.0
+        ]
+      ],
+      "simple": true,
+      "rules": [],
+      "crossing_edges": [],
+      "area_m2": 10000.0,
+      "perimeter_m": 400.0,
+      "counter_clockwise": true
+    },
+    {
+      "name": "triangle clockwise",
+      "polygon": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -40.0,
+          80.0
+        ],
+        [
+          60.0,
+          30.0
+        ]
+      ],
+      "simple": true,
+      "rules": [],
+      "crossing_edges": [],
+      "area_m2": 3000.0,
+      "perimeter_m": 268.3281573,
+      "counter_clockwise": false
+    },
+    {
+      "name": "u",
+      "polygon": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          100.0,
+          0.0
+        ],
+        [
+          100.0,
+          100.0
+        ],
+        [
+          70.0,
+          100.0
+        ],
+        [
+          70.0,
+          30.0
+        ],
+        [
+          30.0,
+          30.0
+        ],
+        [
+          30.0,
+          100.0
+        ],
+        [
+          0.0,
+          100.0
+        ]
+      ],
+      "simple": true,
+      "rules": [],
+      "crossing_edges": [],
+      "area_m2": 7200.0,
+      "perimeter_m": 540.0,
+      "counter_clockwise": true
+    },
+    {
+      "name": "farm",
+      "polygon": [
+        [
+          429.533,
+          0.0
+        ],
+        [
+          353.416,
+          70.299
+        ],
+        [
+          517.718,
+          214.446
+        ],
+        [
+          273.532,
+          182.768
+        ],
+        [
+          363.702,
+          363.702
+        ],
+        [
+          247.937,
+          371.065
+        ],
+        [
+          123.683,
+          298.597
+        ],
+        [
+          98.125,
+          493.31
+        ],
+        [
+          0.0,
+          314.998
+        ],
+        [
+          -92.367,
+          464.361
+        ],
+        [
+          -125.498,
+          302.979
+        ],
+        [
+          -186.83,
+          279.611
+        ],
+        [
+          -332.204,
+          332.204
+        ],
+        [
+          -524.442,
+          350.421
+        ],
+        [
+          -322.915,
+          133.756
+        ],
+        [
+          -381.815,
+          75.948
+        ],
+        [
+          -550.973,
+          0.0
+        ],
+        [
+          -666.035,
+          -132.483
+        ],
+        [
+          -490.433,
+          -203.144
+        ],
+        [
+          -381.372,
+          -254.825
+        ],
+        [
+          -488.259,
+          -488.259
+        ],
+        [
+          -177.023,
+          -264.934
+        ],
+        [
+          -246.214,
+          -594.412
+        ],
+        [
+          -81.127,
+          -407.853
+        ],
+        [
+          -0.0,
+          -357.702
+        ],
+        [
+          67.719,
+          -340.447
+        ],
+        [
+          162.025,
+          -391.164
+        ],
+        [
+          348.037,
+          -520.875
+        ],
+        [
+          263.249,
+          -263.249
+        ],
+        [
+          442.874,
+          -295.919
+        ],
+        [
+          513.275,
+          -212.606
+        ],
+        [
+          440.332,
+          -87.588
+        ]
+      ],
+      "simple": true,
+      "rules": [],
+      "crossing_edges": [],
+      "area_m2": 652311.7604895,
+      "perimeter_m": 5753.877346402,
+      "counter_clockwise": true
+    },
+    {
+      "name": "bow-tie",
+      "polygon": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          100.0,
+          100.0
+        ],
+        [
+          100.0,
+          0.0
+        ],
+        [
+          0.0,
+          100.0
+        ]
+      ],
+      "simple": false,
+      "rules": [
+        "edges_meet"
+      ],
+      "crossing_edges": [
+        [
+          0,
+          2
+        ]
+      ],
+      "area_m2": null,
+      "perimeter_m": 482.842712475,
+      "counter_clockwise": null
+    },
+    {
+      "name": "spike doubling back",
+      "polygon": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          100.0,
+          0.0
+        ],
+        [
+          100.0,
+          100.0
+        ],
+        [
+          100.0,
+          50.0
+        ],
+        [
+          0.0,
+          100.0
+        ]
+      ],
+      "simple": false,
+      "rules": [
+        "edges_meet"
+      ],
+      "crossing_edges": [
+        [
+          1,
+          2
+        ],
+        [
+          1,
+          3
+        ]
+      ],
+      "area_m2": null,
+      "perimeter_m": 461.803398875,
+      "counter_clockwise": null
+    },
+    {
+      "name": "collinear",
+      "polygon": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          50.0,
+          50.0
+        ],
+        [
+          100.0,
+          100.0
+        ]
+      ],
+      "simple": false,
+      "rules": [
+        "edges_meet"
+      ],
+      "crossing_edges": [
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "area_m2": null,
+      "perimeter_m": 282.842712475,
+      "counter_clockwise": null
+    },
+    {
+      "name": "vertex repeated",
+      "polygon": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          100.0,
+          0.0
+        ],
+        [
+          100.0,
+          0.0
+        ],
+        [
+          100.0,
+          100.0
+        ]
+      ],
+      "simple": false,
+      "rules": [
+        "edges_meet",
+        "zero_length_edge"
+      ],
+      "crossing_edges": [
+        [
+          0,
+          2
+        ]
+      ],
+      "area_m2": null,
+      "perimeter_m": 341.421356237,
+      "counter_clockwise": null
+    },
+    {
+      "name": "two vertices",
+      "polygon": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          100.0,
+          0.0
+        ]
+      ],
+      "simple": false,
+      "rules": [
+        "too_few_vertices"
+      ]
+    }
+  ],
+  "points": [
+    {
+      "polygon": "square",
+      "point": [
+        0.0,
+        0.0
+      ],
+      "place": "boundary"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        100.0,
+        0.0
+      ],
+      "place": "boundary"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        50.0,
+        0.0
+      ],
+      "place": "boundary"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        -3.323,
+        50.352
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        51.655,
+        100.4
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        -5.631,
+        11.26
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        64.144,
+        57.918
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        89.672,
+        56.694
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        82.275,
+        87.536
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        85.144,
+        62.113
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        13.591,
+        65.989
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        -4.497,
+        94.347
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        42.952,
+        94.067
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        75.925,
+        75.114
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        9.431,
+        15.212
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        117.188,
+        110.104
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        92.719,
+        119.952
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        51.902,
+        -9.315
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        27.655,
+        58.043
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        20.897,
+        44.043
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        102.706,
+        78.557
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        60.839,
+        -16.536
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        79.521,
+        30.896
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "square",
+      "point": [
+        39.11,
+        35.828
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        0.0,
+        0.0
+      ],
+      "place": "boundary"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        -40.0,
+        80.0
+      ],
+      "place": "boundary"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        22.0,
+        39.815
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        -43.697,
+        40.763
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        45.021,
+        52.02
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        8.744,
+        90.011
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        -23.79,
+        30.396
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        69.673,
+        37.503
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        12.518,
+        -16.955
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        -28.567,
+        -4.52
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        -53.156,
+        64.56
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        64.155,
+        -7.691
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        27.123,
+        36.405
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        7.496,
+        7.471
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        64.029,
+        55.2
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        3.951,
+        36.329
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        70.125,
+        98.467
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        16.389,
+        47.176
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        33.766,
+        16.915
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        51.972,
+        40.228
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        7.045,
+        86.134
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        0.629,
+        15.325
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        -22.335,
+        -16.027
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "triangle clockwise",
+      "point": [
+        31.79,
+        51.673
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        0.0,
+        0.0
+      ],
+      "place": "boundary"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        100.0,
+        0.0
+      ],
+      "place": "boundary"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        50.0,
+        0.0
+      ],
+      "place": "boundary"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        44.152,
+        53.204
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        48.532,
+        109.011
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        16.415,
+        47.98
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        51.577,
+        95.664
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        93.114,
+        58.097
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        107.017,
+        96.396
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        24.332,
+        108.354
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        -6.228,
+        76.507
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        89.912,
+        52.124
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        43.409,
+        115.138
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        115.417,
+        97.942
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        47.08,
+        -10.999
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        17.305,
+        49.779
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        -6.467,
+        84.657
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        37.584,
+        42.915
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        -18.035,
+        -19.97
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        61.29,
+        110.505
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        -8.371,
+        91.128
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        14.697,
+        66.95
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        85.26,
+        113.891
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "u",
+      "point": [
+        73.587,
+        68.957
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        429.533,
+        0.0
+      ],
+      "place": "boundary"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        353.416,
+        70.299
+      ],
+      "place": "boundary"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -496.646,
+        -260.936
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        27.493,
+        253.401
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        476.451,
+        -59.585
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        195.646,
+        -462.322
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -413.227,
+        48.615
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        486.66,
+        373.465
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -68.381,
+        -519.195
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        132.111,
+        440.071
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        272.7,
+        417.472
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -311.561,
+        -149.746
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        302.751,
+        -27.962
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -445.326,
+        -598.475
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -556.153,
+        386.747
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -623.164,
+        -223.072
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -253.557,
+        253.408
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -654.474,
+        -38.836
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -284.938,
+        -271.955
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -287.039,
+        -477.537
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        475.04,
+        30.214
+      ],
+      "place": "outside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        299.011,
+        -440.866
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -50.156,
+        -125.423
+      ],
+      "place": "inside"
+    },
+    {
+      "polygon": "farm",
+      "point": [
+        -274.341,
+        60.213
+      ],
+      "place": "inside"
+    }
+  ],
+  "legs": [
+    {
+      "polygon": "u",
+      "from": [
+        15.0,
+        90.0
+      ],
+      "to": [
+        85.0,
+        90.0
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        15.0,
+        20.0
+      ],
+      "to": [
+        85.0,
+        15.0
+      ],
+      "clearance_m": 11.043292748
+    },
+    {
+      "polygon": "square",
+      "from": [
+        67.85,
+        6.951
+      ],
+      "to": [
+        39.916,
+        19.549
+      ],
+      "clearance_m": 6.951
+    },
+    {
+      "polygon": "square",
+      "from": [
+        92.146,
+        4.524
+      ],
+      "to": [
+        54.477,
+        83.898
+      ],
+      "clearance_m": 4.524
+    },
+    {
+      "polygon": "square",
+      "from": [
+        45.182,
+        75.471
+      ],
+      "to": [
+        18.853,
+        71.095
+      ],
+      "clearance_m": 18.853
+    },
+    {
+      "polygon": "square",
+      "from": [
+        87.782,
+        12.914
+      ],
+      "to": [
+        52.994,
+        78.541
+      ],
+      "clearance_m": 12.218
+    },
+    {
+      "polygon": "square",
+      "from": [
+        51.685,
+        95.659
+      ],
+      "to": [
+        16.039,
+        84.437
+      ],
+      "clearance_m": 4.341
+    },
+    {
+      "polygon": "square",
+      "from": [
+        38.997,
+        42.535
+      ],
+      "to": [
+        41.409,
+        7.866
+      ],
+      "clearance_m": 7.866
+    },
+    {
+      "polygon": "square",
+      "from": [
+        30.491,
+        34.407
+      ],
+      "to": [
+        26.344,
+        49.76
+      ],
+      "clearance_m": 26.344
+    },
+    {
+      "polygon": "square",
+      "from": [
+        78.025,
+        41.574
+      ],
+      "to": [
+        46.77,
+        32.579
+      ],
+      "clearance_m": 21.975
+    },
+    {
+      "polygon": "square",
+      "from": [
+        48.205,
+        12.011
+      ],
+      "to": [
+        79.66,
+        79.671
+      ],
+      "clearance_m": 12.011
+    },
+    {
+      "polygon": "square",
+      "from": [
+        81.615,
+        84.787
+      ],
+      "to": [
+        23.133,
+        95.367
+      ],
+      "clearance_m": 4.633
+    },
+    {
+      "polygon": "square",
+      "from": [
+        87.862,
+        64.568
+      ],
+      "to": [
+        40.8,
+        78.331
+      ],
+      "clearance_m": 12.138
+    },
+    {
+      "polygon": "square",
+      "from": [
+        84.949,
+        67.04
+      ],
+      "to": [
+        96.12,
+        35.195
+      ],
+      "clearance_m": 3.88
+    },
+    {
+      "polygon": "square",
+      "from": [
+        15.676,
+        56.2
+      ],
+      "to": [
+        57.233,
+        53.838
+      ],
+      "clearance_m": 15.676
+    },
+    {
+      "polygon": "square",
+      "from": [
+        10.969,
+        71.601
+      ],
+      "to": [
+        55.58,
+        56.804
+      ],
+      "clearance_m": 10.969
+    },
+    {
+      "polygon": "square",
+      "from": [
+        21.444,
+        29.47
+      ],
+      "to": [
+        26.81,
+        55.573
+      ],
+      "clearance_m": 21.444
+    },
+    {
+      "polygon": "square",
+      "from": [
+        10.146,
+        26.371
+      ],
+      "to": [
+        95.488,
+        17.128
+      ],
+      "clearance_m": 4.512
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        28.455,
+        60.729
+      ],
+      "to": [
+        32.236,
+        14.84
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        23.009,
+        40.53
+      ],
+      "to": [
+        -12.321,
+        66.991
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        -10.896,
+        25.168
+      ],
+      "to": [
+        -13.914,
+        5.03
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        1.164,
+        71.844
+      ],
+      "to": [
+        37.678,
+        33.162
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        -38.457,
+        7.716
+      ],
+      "to": [
+        -37.702,
+        9.842
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        28.583,
+        46.118
+      ],
+      "to": [
+        53.611,
+        28.025
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        37.976,
+        48.58
+      ],
+      "to": [
+        25.472,
+        49.212
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        52.474,
+        25.285
+      ],
+      "to": [
+        -18.436,
+        37.014
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        57.911,
+        70.272
+      ],
+      "to": [
+        28.646,
+        68.904
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        28.14,
+        73.899
+      ],
+      "to": [
+        -1.095,
+        75.765
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        -4.368,
+        58.831
+      ],
+      "to": [
+        3.674,
+        1.893
+      ],
+      "clearance_m": 0.050087923
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        29.53,
+        23.164
+      ],
+      "to": [
+        55.828,
+        63.987
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        -27.768,
+        61.431
+      ],
+      "to": [
+        -8.112,
+        72.237
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        14.216,
+        27.399
+      ],
+      "to": [
+        16.086,
+        57.734
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        -28.74,
+        49.518
+      ],
+      "to": [
+        -28.172,
+        10.055
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "triangle clockwise",
+      "from": [
+        -4.596,
+        51.831
+      ],
+      "to": [
+        25.58,
+        2.304
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        57.813,
+        35.597
+      ],
+      "to": [
+        38.411,
+        23.931
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        42.099,
+        21.957
+      ],
+      "to": [
+        12.521,
+        54.293
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        66.156,
+        93.467
+      ],
+      "to": [
+        68.375,
+        39.686
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        25.497,
+        14.768
+      ],
+      "to": [
+        2.336,
+        27.683
+      ],
+      "clearance_m": 2.336
+    },
+    {
+      "polygon": "u",
+      "from": [
+        47.884,
+        26.382
+      ],
+      "to": [
+        31.474,
+        94.423
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        59.365,
+        83.955
+      ],
+      "to": [
+        55.298,
+        65.021
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        96.131,
+        51.405
+      ],
+      "to": [
+        26.522,
+        63.301
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        75.453,
+        31.75
+      ],
+      "to": [
+        65.787,
+        1.141
+      ],
+      "clearance_m": 1.141
+    },
+    {
+      "polygon": "u",
+      "from": [
+        97.813,
+        47.055
+      ],
+      "to": [
+        97.019,
+        67.914
+      ],
+      "clearance_m": 2.187
+    },
+    {
+      "polygon": "u",
+      "from": [
+        86.211,
+        92.723
+      ],
+      "to": [
+        90.605,
+        39.907
+      ],
+      "clearance_m": 7.277
+    },
+    {
+      "polygon": "u",
+      "from": [
+        97.617,
+        95.1
+      ],
+      "to": [
+        23.251,
+        82.905
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        34.369,
+        20.098
+      ],
+      "to": [
+        35.911,
+        63.701
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        54.88,
+        47.406
+      ],
+      "to": [
+        78.863,
+        58.058
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "u",
+      "from": [
+        18.79,
+        62.802
+      ],
+      "to": [
+        15.378,
+        89.38
+      ],
+      "clearance_m": 10.62
+    },
+    {
+      "polygon": "u",
+      "from": [
+        95.044,
+        81.375
+      ],
+      "to": [
+        83.506,
+        70.235
+      ],
+      "clearance_m": 4.956
+    },
+    {
+      "polygon": "u",
+      "from": [
+        79.537,
+        63.912
+      ],
+      "to": [
+        8.421,
+        37.279
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        199.298,
+        -444.349
+      ],
+      "to": [
+        209.374,
+        492.017
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        -644.31,
+        -358.243
+      ],
+      "to": [
+        338.63,
+        39.065
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        11.817,
+        444.953
+      ],
+      "to": [
+        -215.52,
+        453.22
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        -54.513,
+        106.132
+      ],
+      "to": [
+        -478.95,
+        -41.021
+      ],
+      "clearance_m": 66.922020278
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        -564.781,
+        202.427
+      ],
+      "to": [
+        -271.123,
+        -310.034
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        -616.804,
+        50.305
+      ],
+      "to": [
+        265.867,
+        -417.972
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        -319.298,
+        -5.775
+      ],
+      "to": [
+        -243.171,
+        463.674
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        -442.664,
+        218.119
+      ],
+      "to": [
+        -654.85,
+        64.694
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        -97.819,
+        -134.683
+      ],
+      "to": [
+        295.324,
+        386.852
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        492.886,
+        489.84
+      ],
+      "to": [
+        -463.749,
+        -32.94
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        -453.406,
+        -8.025
+      ],
+      "to": [
+        -471.973,
+        370.607
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        -56.411,
+        365.311
+      ],
+      "to": [
+        95.597,
+        -592.244
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        -222.652,
+        -194.134
+      ],
+      "to": [
+        -410.118,
+        -426.657
+      ],
+      "clearance_m": 4.495067431
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        56.076,
+        -456.789
+      ],
+      "to": [
+        500.001,
+        -67.34
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        368.538,
+        195.953
+      ],
+      "to": [
+        -214.79,
+        76.663
+      ],
+      "clearance_m": null
+    },
+    {
+      "polygon": "farm",
+      "from": [
+        100.499,
+        -216.103
+      ],
+      "to": [
+        410.588,
+        -462.864
+      ],
+      "clearance_m": null
+    }
+  ]
+}
