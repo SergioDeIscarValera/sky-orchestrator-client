@@ -409,6 +409,24 @@ async def test_the_shape_checks_answer_false_on_odd_json_and_never_raise(
 
 
 @pytest.mark.parametrize("table", ["geofences", "waylines"])
+async def test_a_change_is_timed_by_the_database(
+    session: asyncpg.Connection, tenancy: Tenancy, table: str
+) -> None:
+    editor = await tenancy.member("editor")
+    row = await insert(session, editor, table, FIELDS[table])
+    assert row["created_at"] == row["updated_at"]
+    async with committed_as(session, editor.user_id):
+        changed = await session.fetchrow(
+            f"update soc.{table} set name = 'Renamed' where id = $1"  # noqa: S608 - fixed names
+            " returning created_at, updated_at, now() as database_now",
+            row["id"],
+        )
+    assert changed is not None
+    assert changed["updated_at"] == changed["database_now"]
+    assert changed["created_at"] == row["created_at"] < changed["updated_at"]
+
+
+@pytest.mark.parametrize("table", ["geofences", "waylines"])
 async def test_retiring_is_final_and_timed_by_the_database(
     session: asyncpg.Connection, tenancy: Tenancy, table: str
 ) -> None:
