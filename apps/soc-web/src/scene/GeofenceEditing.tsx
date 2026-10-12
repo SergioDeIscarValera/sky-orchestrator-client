@@ -1,8 +1,9 @@
 import { Html, Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useRef, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, type KeyboardEvent } from 'react'
 
 import type { Geodetic } from '../geometry/projection'
+import { useWaylines } from '../plans/data'
 import { measure } from '../plans/geofenceDrawing'
 import {
   chosen,
@@ -17,13 +18,12 @@ import {
 import { CANVAS_SETTINGS } from './canvas'
 import { draped, type Flat } from './drape'
 import { flatOf, groundAtPointer, placeOf, useGroundTool } from './groundTool'
+import { HandleButton, type GroundAt, type HandleButtonProps } from './HandleButton'
 import { usePalette } from './palette'
 import type { Site } from './site'
 
 /** Above the ground, so the line is not lost among the terrain's facets. */
 const LIFT_M = 1
-/** A press that moves less than this is a click, not a drag. */
-const CLICK_PX = 4
 /** How far an arrow key moves the chosen vertex; ten times with Shift. */
 const NUDGE_M = 1
 const ARROWS: Readonly<Record<string, Flat>> = {
@@ -32,8 +32,6 @@ const ARROWS: Readonly<Record<string, Flat>> = {
   ArrowLeft: { x: -1, z: 0 },
   ArrowRight: { x: 1, z: 0 },
 }
-
-type GroundAt = (clientX: number, clientY: number) => Geodetic | null
 
 interface Props {
   readonly site: Site
@@ -46,11 +44,13 @@ interface Props {
  * over the ground, the edges that keep it from being simple in the danger colour, a
  * handle on each vertex to drag, and while shaping one on each edge's middle to bend
  * it. While placing, a click on the ground adds a vertex and the ring's closing edge
- * shows dashed; a click on the first vertex closes it.
+ * shows dashed; a click on the first vertex closes it. Generated, it has no handles, and
+ * the waylines it is generated round show dashed under it (FR-GEO-03).
  */
 export function GeofenceEditing({ site, origin }: Props) {
   const editing = useGeofenceEditor((state) => state.editing)
   const change = useGeofenceEditor((state) => state.change)
+  const waylines = useWaylines()
   const palette = usePalette()
   const camera = useThree((state) => state.camera)
   const canvas = useThree((state) => state.gl.domElement)
@@ -95,6 +95,10 @@ export function GeofenceEditing({ site, origin }: Props) {
 
   if (editing === null) return null
   const shaping = editing.phase === 'shaping'
+  // Generated, the shape follows the waylines and the margin: nothing to move by hand.
+  const handled = editing.generating === null
+  const chosenIds = editing.generating?.waylineIds ?? []
+  const followed = (waylines.data ?? []).filter(({ id }) => chosenIds.includes(id))
   const flats = editing.drawing.vertices.map((vertex) => flatOf(origin, vertex))
   const step = site.spacingM === null ? Infinity : site.spacingM / 2
   const lay = (points: readonly Flat[], closing: boolean) =>
@@ -159,33 +163,53 @@ export function GeofenceEditing({ site, origin }: Props) {
           />
         )
       })}
-      {flats.map((flat, index) => (
-        <Handle
-          key={`vertex-${String(index)}`}
-          at={lifted(flat)}
-          label={`Vertex ${String(index + 1)}`}
-          look={editing.picked === index ? 'chosen' : 'vertex'}
-          groundAt={groundAt}
-          onGrab={() => {
-            change((current) => grabbed(current, index))
-          }}
-          onMove={(to) => {
-            change((current) => dragged(current, to))
-          }}
-          onLetGo={(moved) => {
-            change((current) => {
-              const after = released(current)
-              const closes = !moved && index === 0 && after.phase === 'placing'
-              return closes ? closed(after) : after
-            })
-          }}
-          onFocus={() => {
-            change((current) => (current.held === null ? chosen(current, index) : current))
-          }}
-          onKeyDown={nudge(index)}
+      {followed.map((wayline) => (
+        <Line
+          key={`wayline-${wayline.id}`}
+          points={lay(
+            [wayline.takeoff, ...wayline.waypoints.map(({ position }) => position)].map(
+              (position) => flatOf(origin, position),
+            ),
+            false,
+          )}
+          color={palette.gridMajor}
+          lineWidth={1.5}
+          dashed
+          dashSize={3}
+          gapSize={3}
+          depthTest={false}
+          renderOrder={9}
         />
       ))}
+      {handled &&
+        flats.map((flat, index) => (
+          <Handle
+            key={`vertex-${String(index)}`}
+            at={lifted(flat)}
+            label={`Vertex ${String(index + 1)}`}
+            look={editing.picked === index ? 'chosen' : 'vertex'}
+            groundAt={groundAt}
+            onGrab={() => {
+              change((current) => grabbed(current, index))
+            }}
+            onMove={(to) => {
+              change((current) => dragged(current, to))
+            }}
+            onLetGo={(moved) => {
+              change((current) => {
+                const after = released(current)
+                const closes = !moved && index === 0 && after.phase === 'placing'
+                return closes ? closed(after) : after
+              })
+            }}
+            onFocus={() => {
+              change((current) => (current.held === null ? chosen(current, index) : current))
+            }}
+            onKeyDown={nudge(index)}
+          />
+        ))}
       {shaping &&
+        handled &&
         flats.map((_, edge) => {
           const ends = edgeOf(edge)
           if (ends === null) return null
@@ -218,80 +242,13 @@ export function GeofenceEditing({ site, origin }: Props) {
   )
 }
 
-const LOOKS = {
-  vertex: 'size-3.5 border-2 border-primary bg-surface',
-  chosen: 'size-4 border-2 border-surface bg-primary',
-  middle: 'size-2.5 border border-primary bg-surface opacity-80 hover:opacity-100',
-} as const
-
-interface HandleProps {
-  readonly at: readonly [number, number, number]
-  readonly label: string
-  readonly look: keyof typeof LOOKS
-  readonly groundAt: GroundAt
-  readonly onGrab: () => void
-  readonly onMove: (to: Geodetic) => void
-  /** The press is over: `moved` false for a click. */
-  readonly onLetGo: (moved: boolean) => void
-  readonly onFocus?: () => void
-  readonly onKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void
-  /** Enter or Space on the handle, which presses no pointer. */
-  readonly onKeyboardClick?: () => void
-}
-
-/**
- * A handle over the scene, a button on the page: it keeps the pointer while dragged, so
- * the camera never moves under a drag, and takes the keyboard's focus.
- */
 function Handle({
   at,
-  label,
-  look,
-  groundAt,
-  onGrab,
-  onMove,
-  onLetGo,
-  onFocus,
-  onKeyDown,
-  onKeyboardClick,
-}: HandleProps) {
-  const press = useRef<{ x: number; y: number; moved: boolean } | null>(null)
-  const letGo = () => {
-    const pressed = press.current
-    if (pressed === null) return
-    press.current = null
-    onLetGo(pressed.moved)
-  }
+  ...button
+}: { readonly at: readonly [number, number, number] } & HandleButtonProps) {
   return (
     <Html position={[...at]} center zIndexRange={[30, 21]}>
-      <button
-        type="button"
-        aria-label={label}
-        className={`${LOOKS[look]} shadow-card focus-visible:outline-primary block cursor-grab touch-none rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing`}
-        onPointerDown={(event) => {
-          if (event.button !== 0) return
-          event.currentTarget.setPointerCapture(event.pointerId)
-          press.current = { x: event.clientX, y: event.clientY, moved: false }
-          onGrab()
-        }}
-        onPointerMove={(event) => {
-          const pressed = press.current
-          if (pressed === null) return
-          const distance = Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y)
-          if (!pressed.moved && distance < CLICK_PX) return
-          pressed.moved = true
-          const to = groundAt(event.clientX, event.clientY)
-          if (to !== null) onMove(to)
-        }}
-        onPointerUp={letGo}
-        onLostPointerCapture={letGo}
-        onFocus={onFocus}
-        onKeyDown={onKeyDown}
-        onClick={(event) => {
-          // A pointer's click was the press; only the keyboard's comes with no detail.
-          if (event.detail === 0) onKeyboardClick?.()
-        }}
-      />
+      <HandleButton {...button} />
     </Html>
   )
 }

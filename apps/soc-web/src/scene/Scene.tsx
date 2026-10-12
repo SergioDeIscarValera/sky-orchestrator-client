@@ -1,4 +1,5 @@
 import { Canvas } from '@react-three/fiber'
+import { Raycaster } from 'three'
 
 import { useSelect, useView } from '../app/router'
 
@@ -10,6 +11,7 @@ import type { Site } from './site'
 import { CANVAS_SETTINGS } from './canvas'
 import { Controls } from './Controls'
 import { GeofenceEditing } from './GeofenceEditing'
+import { Geofences } from './Geofences'
 import { useGroundTool } from './groundTool'
 import { Meter } from './Meter'
 import { SceneContents } from './SceneContents'
@@ -23,6 +25,10 @@ interface Props {
   readonly terrain: LoadedSite | null
 }
 
+/** A wide line is picked this many pixels either side of it: a geofence's outline is a target. */
+const LINE_PICK_PX = 8
+const RAYCASTER = { params: { ...new Raycaster().params, Line2: { threshold: LINE_PICK_PX } } }
+
 /** The one persistent scene (FR-SCN-01), loaded apart from the rest (NFR-PERF-05). */
 export default function Scene({ site, organizationId, origin, terrain }: Props) {
   const select = useSelect()
@@ -31,6 +37,7 @@ export default function Scene({ site, organizationId, origin, terrain }: Props) 
     <Canvas
       {...CANVAS_SETTINGS}
       dpr={[...CANVAS_SETTINGS.dpr]}
+      raycaster={RAYCASTER}
       // A click on the ground, not a drag, clears the selection, or goes to the editor
       // holding the ground; an aircraft's click selects it.
       onPointerMissed={(event) => {
@@ -43,6 +50,7 @@ export default function Scene({ site, organizationId, origin, terrain }: Props) 
       <SceneContents site={site} flat={terrain === null} />
       {terrain !== null && <Terrain site={terrain} />}
       <Aircraft origin={origin} site={site} />
+      {origin !== null && <Geofences site={site} origin={origin} />}
       {origin !== null && panel === 'geofences' && <GeofenceEditing site={site} origin={origin} />}
       <Controls site={site} organizationId={organizationId} />
       <Meter />
