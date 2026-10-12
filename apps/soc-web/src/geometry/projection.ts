@@ -49,3 +49,37 @@ export function eastNorth(origin: Geodetic, point: Geodetic): EastNorth {
     northM: -sinLat * cosLon * dx - sinLat * sinLon * dy + cosLat * dz,
   }
 }
+
+/**
+ * The point at the ellipsoid's surface that `eastNorth` puts at `place`: Newton's
+ * method on the closed form, from the radii of curvature at the origin, as
+ * libs/soc-geo's `geodetic_at`. Within the site's extent it converges in three or four
+ * steps; it throws rather than return a point it did not reach.
+ */
+export function geodeticAt(origin: Geodetic, place: EastNorth, toleranceM = 1e-7): Geodetic {
+  const latitude = radians(origin.latitudeDeg)
+  const sine = Math.sin(latitude)
+  const meridian =
+    (SEMI_MAJOR_AXIS_M * (1 - ECCENTRICITY_SQUARED)) /
+    (1 - ECCENTRICITY_SQUARED * sine * sine) ** 1.5
+  const primeVertical = SEMI_MAJOR_AXIS_M / Math.sqrt(1 - ECCENTRICITY_SQUARED * sine * sine)
+  const metresPerDegreeNorth = radians(1) * meridian
+  const metresPerDegreeEast = radians(1) * primeVertical * Math.cos(latitude)
+  let guess: Geodetic = {
+    latitudeDeg: origin.latitudeDeg + place.northM / metresPerDegreeNorth,
+    longitudeDeg: origin.longitudeDeg + place.eastM / metresPerDegreeEast,
+  }
+  for (let step = 0; step < 12; step += 1) {
+    const placed = eastNorth(origin, guess)
+    const missEast = place.eastM - placed.eastM
+    const missNorth = place.northM - placed.northM
+    if (Math.hypot(missEast, missNorth) <= toleranceM) return guess
+    guess = {
+      latitudeDeg: guess.latitudeDeg + missNorth / metresPerDegreeNorth,
+      longitudeDeg: guess.longitudeDeg + missEast / metresPerDegreeEast,
+    }
+  }
+  throw new RangeError(
+    `${String(place.eastM)} m east, ${String(place.northM)} m north does not converge`,
+  )
+}

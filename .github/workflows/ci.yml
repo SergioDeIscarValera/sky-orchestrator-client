@@ -217,7 +217,7 @@ jobs:
           if [ -n "$BASE_REF" ]; then
             changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
           fi
-          if [ -z "$BASE_REF" ] || grep -qE '^(apps/soc-web/|contracts/(config|broadcast|geometry|recordings|site)/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
+          if [ -z "$BASE_REF" ] || grep -qE '^(apps/soc-web/|contracts/(config|broadcast|geometry|recordings|site|sky-orchestrator)/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"

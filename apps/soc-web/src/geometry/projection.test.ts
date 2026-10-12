@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 
-import { eastNorth } from './projection'
+import { eastNorth, geodeticAt } from './projection'
 
 interface Point {
   readonly latitude_deg: number
@@ -38,5 +38,23 @@ describe('the local frame (ADR-0009, ADR-0014)', () => {
       return off <= GOLDEN.tolerance_m ? [] : [`${golden.name}: ${String(off)} m off`]
     })
     expect(misses).toEqual([])
+  })
+
+  it('finds the point back from every vector, within a nanodegree', () => {
+    const missed = GOLDEN.cases.filter((vector) => {
+      const found = geodeticAt(geodetic(vector.origin), {
+        eastM: vector.east_m,
+        northM: vector.north_m,
+      })
+      const placed = eastNorth(geodetic(vector.origin), found)
+      const longitudeOff =
+        ((((found.longitudeDeg - vector.point.longitude_deg + 180) % 360) + 360) % 360) - 180
+      return (
+        Math.hypot(placed.eastM - vector.east_m, placed.northM - vector.north_m) >= 1e-6 ||
+        Math.abs(found.latitudeDeg - vector.point.latitude_deg) >= 1e-9 ||
+        Math.abs(longitudeOff) >= 1e-9
+      )
+    })
+    expect(missed.map(({ name }) => name)).toEqual([])
   })
 })
