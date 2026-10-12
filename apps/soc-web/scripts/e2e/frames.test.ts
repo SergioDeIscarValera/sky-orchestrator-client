@@ -31,6 +31,7 @@ describe("the console end to end's frames (NFR-PERF-01)", () => {
       aircraftSn: 'SOTESTUAV001',
       takenAtMs: SAMPLE.taken_at_ms,
       sentAtMs: SAMPLE.sent_at_ms,
+      payload: SAMPLE,
     })
     expect(sampleOf(binary('sample', SAMPLE, '{"replayed":false}'))?.sentAtMs).toBe(
       SAMPLE.sent_at_ms,
