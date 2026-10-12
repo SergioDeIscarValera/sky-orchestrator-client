@@ -4,7 +4,7 @@ import {
   type Fleet,
   type FleetChanges,
   type FleetDraft,
-  type FleetField,
+  type RefusedField,
   type Role,
 } from '../backend/backend'
 
@@ -117,8 +117,8 @@ export function changesFrom(before: FleetDraft, after: FleetDraft): FleetChanges
   return changes
 }
 
-/** Where on the form a field the database refused is shown. */
-export function formFieldOf(field: FleetField | null): FormField | null {
+/** Where on the form a field the database refused is shown; the fleet form shows no other field. */
+export function formFieldOf(field: RefusedField | null): FormField | null {
   switch (field) {
     case null:
       return null
@@ -127,7 +127,12 @@ export function formFieldOf(field: FleetField | null): FormField | null {
       return 'aircraft'
     case 'flightTimeBeforeSocS':
       return 'flightTime'
-    default:
+    case 'name':
+    case 'model':
+    case 'airframeSerial':
+    case 'controllerSerial':
       return field
+    default:
+      return null
   }
 }
