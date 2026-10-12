@@ -22,7 +22,8 @@ describe('a sketch baked live (FR-WAY-07)', () => {
 
   it('bakes the design into its waypoints and their distance, nothing of a flight', () => {
     const baked = bakeSketch(SKETCH, SETTINGS)
-    expect(baked?.waypoints.map(({ heightM }) => heightM)).toEqual([30, 30])
+    // Straight up above the takeoff first, then the route.
+    expect(baked?.waypoints.map(({ heightM }) => heightM)).toEqual([30, 30, 30])
     expect(baked?.distanceM).toBeCloseTo(50 + 200, 0)
     expect(Object.keys(baked ?? {})).toEqual(['waypoints', 'distanceM'])
   })

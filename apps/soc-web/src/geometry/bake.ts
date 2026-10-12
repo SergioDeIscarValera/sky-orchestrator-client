@@ -11,7 +11,9 @@ import { distanceM } from './sphere'
  * shortest; grids keep their back and forth from whichever corner shortens it; points of
  * interest are visited once each in the order that does. Units are ordered exactly by
  * Held-Karp up to EXACT_UNITS, above that by nearest neighbour improved by 2-opt. Points
- * closer than MERGE_M merge. A wayline is geometry: the operation that flies it gives its
+ * closer than MERGE_M merge. The first waypoint is right above the takeoff, at the default
+ * height: the aircraft climbs straight up and descends straight down, never on a slant,
+ * which costs it more energy. A wayline is geometry: the operation that flies it gives its
  * speed, its climb and its finish, splits a leg longer than its stack allows, and judges it
  * against its envelope and geofence (flight.ts). The same design always bakes the same.
  */
@@ -69,7 +71,7 @@ export interface Baked {
  * The version of this bake, saved with every wayline it bakes (IR-WAY-01): a change to
  * how it orders or merges bumps it, so a saved wayline says what made it.
  */
-export const BAKE_VERSION = '2.0.0'
+export const BAKE_VERSION = '2.1.0'
 
 /** Points closer than this merge into the first of them (FR-WAY-07). */
 export const MERGE_M = 0.5
@@ -301,8 +303,17 @@ export function bake(design: Design, settings: BakeSettings): Baked {
   const order =
     units.length <= EXACT_UNITS ? exactOrder(units, start) : heuristicOrder(units, start)
   const flown = order.flatMap(({ unit, variant }) => units[unit]?.variants[variant] ?? [])
-  const waypoints = merged(flown).map((stop, index): BakedWaypoint => {
-    const place = geodeticAt(settings.origin, { eastM: stop.at[0], northM: stop.at[1] })
+  // Straight up from the takeoff to the wayline's height first, unless a point drawn there
+  // is that climb already, at its own height. Nothing drawn is no wayline: no climb either.
+  const [first] = flown
+  const climbs = first !== undefined && distance(first.at, start) >= MERGE_M
+  const stops = climbs ? [{ at: start, heightM: design.defaultHeightM }, ...flown] : flown
+  const waypoints = merged(stops).map((stop, index): BakedWaypoint => {
+    // The climb is at the takeoff itself, not at its image through the local frame.
+    const place =
+      climbs && index === 0
+        ? { latitudeDeg: design.takeoff.latitudeDeg, longitudeDeg: design.takeoff.longitudeDeg }
+        : geodeticAt(settings.origin, { eastM: stop.at[0], northM: stop.at[1] })
     return { index, ...place, heightM: stop.heightM }
   })
   return { waypoints, distanceM: pathLengthM(design.takeoff, waypoints) }

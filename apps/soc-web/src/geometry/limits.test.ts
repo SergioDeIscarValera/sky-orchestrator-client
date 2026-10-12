@@ -55,16 +55,16 @@ describe("Sky Orchestrator's envelope, as libs/soc-geo checks it (FR-WAY-08)", (
 
   it.each([
     ['max_waypoints', { maxWaypoints: 3 }, [['too_many_waypoints', undefined]]],
-    ['max_height_m', { maxHeightM: 32 }, [['height_above_max', 2]]],
+    ['max_height_m', { maxHeightM: 32 }, [['height_above_max', 3]]],
     [
       'geofence',
       { geofenceRadiusM: 30 },
       [
-        ['outside_geofence', 1],
         ['outside_geofence', 2],
+        ['outside_geofence', 3],
       ],
     ],
-    ['max_leg_m', { maxLegM: 30 }, [['leg_too_long', 1]]],
+    ['max_leg_m', { maxLegM: 30 }, [['leg_too_long', 2]]],
     ['max_total_distance_m', { maxTotalDistanceM: 100 }, [['total_distance_too_long', undefined]]],
     ['max_horizontal_speed_ms', { maxHorizontalSpeedMs: 4 }, [['speed_above_max', undefined]]],
   ] as const)('%s: refused with its code and waypoint', (_name, limits, expected) => {
