@@ -379,7 +379,9 @@ takeoff outside the operation's geofence is refused when the operation is
 planned (`FR-OPS-03`).
 
 ### FR-WAY-02 — Route tool · MUST
-An ordered polyline flown in the order drawn, with its direction shown.
+An ordered polyline flown in the order drawn, with its direction shown. Once
+drawn, its points move and its legs bend, as every primitive's place and figures
+change after it is drawn.
 
 **Acceptance**: the baked wayline visits the route's points in drawn order.
 
@@ -389,8 +391,9 @@ Points of interest, visited in the order the bake chooses.
 **Acceptance**: the bake visits every point exactly once.
 
 ### FR-WAY-04 — Circle tool · SHOULD
-A centre and a radius, previewed live as the radius changes, with direction and a
-number of points derived from `max_arc_spacing_m`.
+A centre and a radius, set with the pointer or typed exactly, previewed live as
+the radius changes, with direction and a number of points derived from
+`max_arc_spacing_m`.
 
 **Acceptance**: every generated point lies at the radius within 0.1 m, and no arc
 between consecutive points exceeds the spacing.

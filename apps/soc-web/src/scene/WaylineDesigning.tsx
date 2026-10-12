@@ -1,5 +1,5 @@
 import { Html, Line } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
+import { useThree, type ThreeEvent } from '@react-three/fiber'
 import { MapPin } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -9,13 +9,14 @@ import { cover } from '../geometry/grid'
 import type { Primitive } from '../geometry/bake'
 import { eastNorth, type Geodetic } from '../geometry/projection'
 import { bakeSketch } from '../plans/waylineBake'
-import { clicked, useWaylineDesigner } from '../plans/waylineDesigner'
+import { clicked, primitiveChosen, useWaylineDesigner } from '../plans/waylineDesigner'
 import { CANVAS_SETTINGS } from './canvas'
 import { draped, type Flat } from './drape'
 import { flatOf, groundAtPointer, placeOf, useGroundTool } from './groundTool'
 import { usePalette } from './palette'
 import type { Site } from './site'
 import { Dots } from './Dots'
+import { WaylineHandles } from './WaylineHandles'
 import { flownPath } from './waylinePath'
 
 /** Above the ground, as the geofences' lines. */
@@ -30,7 +31,8 @@ interface Props {
 /**
  * The wayline open in the designer, on the terrain (FR-WAY-01 to FR-WAY-07): its takeoff,
  * what is drawn laid over the ground, what is being drawn in the accent colour, and its
- * bake at its heights above the takeoff. The ground's clicks go to the tool taken up.
+ * bake at its heights above the takeoff. The ground's clicks go to the tool taken up; with
+ * none, a click on what is drawn opens it in its editor, its handles over it.
  */
 export function WaylineDesigning({ site, origin }: Props) {
   const designing = useWaylineDesigner((state) => state.designing)
@@ -147,57 +149,40 @@ export function WaylineDesigning({ site, origin }: Props) {
 
   const drawnLine = (primitive: Primitive, index: number) => {
     const key = `drawn-${String(index)}`
+    const open = designing.selected === index
+    const colour = open ? palette.accent : palette.gridMajor
+    // With no tool, what is drawn is chosen by a click; a tool's clicks go to the ground.
+    const choose =
+      designing.tool === null
+        ? (event: ThreeEvent<MouseEvent>) => {
+            event.stopPropagation()
+            change((current) => primitiveChosen(current, index))
+          }
+        : undefined
+    const line = (points: readonly Flat[], closing: boolean, dashed: boolean) => (
+      <Line
+        key={key}
+        name={`drawn ${String(index + 1)}`}
+        points={lay(points, closing)}
+        color={colour}
+        lineWidth={open ? 2 : 1.5}
+        dashed={dashed}
+        dashSize={3}
+        gapSize={2}
+        depthTest={false}
+        renderOrder={open ? 9 : 8}
+        onClick={choose}
+      />
+    )
     switch (primitive.kind) {
       case 'route':
-        return (
-          <Line
-            key={key}
-            points={lay(primitive.points.map(flat), false)}
-            color={palette.gridMajor}
-            lineWidth={1.5}
-            dashed
-            dashSize={3}
-            gapSize={2}
-            depthTest={false}
-            renderOrder={8}
-          />
-        )
+        return line(primitive.points.map(flat), false, true)
       case 'points':
-        return (
-          <Dots
-            key={key}
-            points={primitive.points.map(onGround)}
-            colour={palette.gridMajor}
-            size={7}
-          />
-        )
-      case 'circle': {
-        const ring = circlePoints(origin, primitive, settings.maxArcSpacingM).map(flat)
-        return (
-          <Line
-            key={key}
-            points={lay(ring, false)}
-            color={palette.gridMajor}
-            lineWidth={1.5}
-            dashed
-            dashSize={3}
-            gapSize={2}
-            depthTest={false}
-            renderOrder={8}
-          />
-        )
-      }
+        return <Dots key={key} points={primitive.points.map(onGround)} colour={colour} size={7} />
+      case 'circle':
+        return line(circlePoints(origin, primitive, settings.maxArcSpacingM).map(flat), false, true)
       case 'grid':
-        return (
-          <Line
-            key={key}
-            points={lay(primitive.area.map(flat), true)}
-            color={palette.gridMajor}
-            lineWidth={1.5}
-            depthTest={false}
-            renderOrder={8}
-          />
-        )
+        return line(primitive.area.map(flat), true, false)
     }
   }
 
@@ -262,6 +247,13 @@ export function WaylineDesigning({ site, origin }: Props) {
         />
       )}
       {path !== null && <Dots points={path.waypoints} colour={palette.accent} size={7} />}
+      <WaylineHandles
+        designing={designing}
+        site={site}
+        origin={origin}
+        groundAt={groundAt}
+        change={change}
+      />
       {sketch.takeoff !== null && (
         <Html
           position={onGround(sketch.takeoff)}

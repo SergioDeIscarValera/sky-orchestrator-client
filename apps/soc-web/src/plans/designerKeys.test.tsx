@@ -2,7 +2,13 @@ import { fireEvent, render } from '@testing-library/react'
 
 import { geodeticAt, type Geodetic } from '../geometry/projection'
 import { useDesignerKeys } from './designerKeys'
-import { clicked, startedDesign, toolChosen, useWaylineDesigner } from './waylineDesigner'
+import {
+  clicked,
+  handleChosen,
+  startedDesign,
+  toolChosen,
+  useWaylineDesigner,
+} from './waylineDesigner'
 
 const FARM: Geodetic = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
 const at = (east: number, north: number) => geodeticAt(FARM, { eastM: east, northM: north })
@@ -44,11 +50,23 @@ describe("the designer's keys (FR-WAY-02)", () => {
     expect(designing()?.pending).toHaveLength(2)
     fireEvent.keyDown(document.body, { key: 'Enter' })
     expect(designing()?.sketch.primitives).toHaveLength(1)
-    // Nothing is being drawn: Delete leaves the design alone.
-    fireEvent.keyDown(document.body, { key: 'Delete' })
-    expect(designing()?.sketch.primitives).toHaveLength(1)
     fireEvent.keyDown(document.body, { key: 'z', metaKey: true })
     expect(designing()?.sketch.primitives).toHaveLength(0)
+  })
+
+  it('deletes the chosen point of the primitive open, then the primitive itself', () => {
+    render(<Keys />)
+    routing()
+    fireEvent.keyDown(document.body, { key: 'Enter' })
+    // The route just finished is open, no point chosen: Delete would take it whole.
+    const { change } = useWaylineDesigner.getState()
+    change((current) => handleChosen(current, { kind: 'point', index: 1 }))
+    fireEvent.keyDown(document.body, { key: 'Delete' })
+    const [route] = designing()?.sketch.primitives ?? []
+    expect(route?.kind === 'route' ? route.points : []).toEqual([at(0, 10), at(40, 50)])
+    fireEvent.keyDown(document.body, { key: 'Delete' })
+    expect(designing()?.sketch.primitives).toEqual([])
+    expect(designing()?.selected).toBeNull()
   })
 
   it('leaves the keys to a field, and Enter to a focused button', () => {
