@@ -1,4 +1,4 @@
-import { Html, Line } from '@react-three/drei'
+import { Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, type KeyboardEvent } from 'react'
 
@@ -19,8 +19,9 @@ import { CANVAS_SETTINGS } from './canvas'
 import { CeilingVolume } from './CeilingVolume'
 import { draped, type Flat } from './drape'
 import { flatOf, groundAtPointer, placeOf, useGroundTool } from './groundTool'
-import { HandleButton, type GroundAt, type HandleButtonProps } from './HandleButton'
+import type { GroundAt } from './HandleButton'
 import { usePalette } from './palette'
+import { SceneHandle } from './SceneHandle'
 import type { Site } from './site'
 
 /** Above the ground, so the line is not lost among the terrain's facets. */
@@ -190,7 +191,7 @@ export function GeofenceEditing({ site, origin }: Props) {
       ))}
       {handled &&
         flats.map((flat, index) => (
-          <Handle
+          <SceneHandle
             key={`vertex-${String(index)}`}
             at={lifted(flat)}
             label={`Vertex ${String(index + 1)}`}
@@ -224,7 +225,7 @@ export function GeofenceEditing({ site, origin }: Props) {
           const middle = { x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 }
           const bend = () => placeOf(origin, middle)
           return (
-            <Handle
+            <SceneHandle
               key={`middle-${String(edge)}`}
               at={lifted(middle)}
               label={`Bend edge ${String(edge + 1)}`}
@@ -246,16 +247,5 @@ export function GeofenceEditing({ site, origin }: Props) {
           )
         })}
     </group>
-  )
-}
-
-function Handle({
-  at,
-  ...button
-}: { readonly at: readonly [number, number, number] } & HandleButtonProps) {
-  return (
-    <Html position={[...at]} center zIndexRange={[30, 21]}>
-      <HandleButton {...button} />
-    </Html>
   )
 }
