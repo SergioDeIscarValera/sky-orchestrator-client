@@ -1,9 +1,16 @@
 import { X } from 'lucide-react'
+import { lazy, Suspense } from 'react'
 
+import { Waiting } from '../fleets/Details'
 import { DeviceDetail } from '../fleets/DeviceDetail'
 import { FleetDetail } from '../fleets/FleetDetail'
 import { useSelect, useSelection } from './router'
 import { CARD, QUIET_BUTTON } from './styles'
+
+// A plan's detail loads with the plans' geometry, when first shown (NFR-PERF-05).
+const GeofenceDetail = lazy(() =>
+  import('../plans/GeofenceDetail').then(({ GeofenceDetail: detail }) => ({ default: detail })),
+)
 
 /**
  * Whatever is selected, faded in afresh when the selection changes; nothing at all
@@ -16,7 +23,9 @@ export function Inspector() {
   const key =
     selection.kind === 'fleet'
       ? selection.fleetId
-      : `${selection.gatewaySn}/${selection.aircraftSn}`
+      : selection.kind === 'geofence'
+        ? selection.geofenceId
+        : `${selection.gatewaySn}/${selection.aircraftSn}`
   return (
     <aside
       aria-label="Inspector"
@@ -37,6 +46,10 @@ export function Inspector() {
         </button>
         {selection.kind === 'fleet' ? (
           <FleetDetail fleetId={selection.fleetId} />
+        ) : selection.kind === 'geofence' ? (
+          <Suspense fallback={<Waiting>Loading the geofence…</Waiting>}>
+            <GeofenceDetail geofenceId={selection.geofenceId} />
+          </Suspense>
         ) : (
           <DeviceDetail gatewaySn={selection.gatewaySn} aircraftSn={selection.aircraftSn} />
         )}

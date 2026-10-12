@@ -204,6 +204,8 @@ interface GeofenceEditor {
   readonly start: (
     geofence: { readonly id: string; readonly drawing: GeofenceDrawing } | null,
   ) => void
+  /** Opens a geofence as `editing` sets it out: generated, or a saved one. */
+  readonly begin: (editing: Editing) => void
   /** One step, from the transitions above; nothing while no geofence is open. */
   readonly change: (step: (editing: Editing) => Editing) => void
   readonly stop: () => void
@@ -218,6 +220,9 @@ export const useGeofenceEditor = create<GeofenceEditor>()((set) => ({
   editing: null,
   start: (geofence) => {
     set({ editing: started(geofence) })
+  },
+  begin: (editing) => {
+    set({ editing })
   },
   change: (step) => {
     set(({ editing }) => (editing === null ? {} : { editing: step(editing) }))
