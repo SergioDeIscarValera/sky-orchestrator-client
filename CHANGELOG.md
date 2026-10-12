@@ -10,6 +10,75 @@ requests it merged.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-12
+
+M3 (mission design) closed: geofences and waylines drawn on the farm's terrain,
+baked, validated, and turned into flight files that Sky Orchestrator's own ingest
+accepts, and refuses for exactly the reasons SOC predicts. Its four exit criteria
+are met.
+
+### Added
+
+- `soc-geo`: the plane's predicates decided exactly, Sky Orchestrator's metric
+  and envelope as it checks them, and the validators that hold every vector the
+  console generates; the design schema, positions in GeoJSON order (#92, #94).
+- The console's geometry engine, the only generator (ADR-0009): the local
+  frame's inverse, exact orientation, the circle and grid tools, the geofence
+  grown round the waylines by its margin, and the bake, ordered exactly up to 13
+  units, each held to golden vectors that Python checks again (#94).
+- Geofences and waylines in the database, with their checks, policies and
+  broadcasts (migration `0008`), and the console's data for them, every
+  position converted in one place (#95, #97).
+- `soc-operations`: a wayline's flight file, deterministic on any machine,
+  within Sky Orchestrator's WPML subset, refused for a bake with any violation,
+  held to golden texts and hashes (#96).
+- `soc_operations.so_acceptance`: every golden flight file run through Sky
+  Orchestrator's own ingest from its checkout, compared rule by rule and
+  waypoint by waypoint with SOC's prediction (#98).
+- The console:
+  - the geofence editor: drawn on the terrain vertex by vertex, dragged, bent,
+    undone, its area and perimeter live, crossing edges in the danger colour;
+    generated round the chosen waylines by a margin previewed live; listed,
+    duplicated and retired (#99);
+  - a design and its bake read and written exactly as the schema says (#100);
+  - the wayline designer: takeoff, route, points, circle and grid on the
+    terrain, previewed live; baked on every change, the path flown at its
+    heights; every violation named by its rule and waypoint, the geofence's
+    included; saved only clean, its design and bake together (#101);
+  - `pnpm demo` answers geofences and waylines, with a seeded wayline.
+
+### Changed
+
+- The scene's overlays (labels, handles) stay under the panels, and a tall
+  panel scrolls inside itself with the map tools in view (#99, #101).
+
+### Fixed
+
+- A drag on a geofence's handle no longer orbits the camera, and a click on a
+  vertex no longer places another (#99).
+
+### Measured
+
+- Sky Orchestrator's ingest (SO `5172e08`, v0.4.2) on both reference flight
+  files: `VALID` under a permissive envelope; under its defaults and a tight one,
+  45 refusals, every one the rule and waypoint SOC predicted (`NFR-COMP-02`).
+- The golden designs bake identically in TypeScript, and the Python validator
+  finds exactly their violations (`FR-WAY-07`, `NFR-MNT-05`); every golden
+  geofence grown by its margin keeps every point and leg at the margin or more
+  (`FR-GEO-03`).
+- The console's first load: 232.7 KB of JavaScript gzip (budget 250); the plans'
+  panels load when first opened.
+
+### Known limitations
+
+- The stack's envelope reaches the console with the operations (FR-LNK-09, M4):
+  until then the designer splits no leg and checks none of the stack's limits,
+  and a geofence's ceiling is held to being above zero. The operation's
+  preflight checks them before any flight.
+- Sky Orchestrator's HTTP dry run (`POST /v1/validations`) joins the end-to-end
+  suite with the stack session; the acceptance above runs the same ingest
+  in-process.
+
 ## [0.3.1] — 2026-10-12
 
 M2's remaining requirements, and the console reworked after Sergio's review of
