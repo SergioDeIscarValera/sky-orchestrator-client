@@ -62,6 +62,11 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
 
 - The settings read exactly the keys the contract gives `soc-cloud`, nested
   views included (`FR-DEP-03`); no secret shows in them.
+- Never invented (`FR-SAF-03`): the OSD's structs, its mapping to a sample and
+  the broadcast payload are searched through their syntax tree for any way to
+  fill a missing value (`or`, a conditional falling back to a value, `.get`
+  with a default, a field defaulting to other than None), the search held to
+  planted cases; an OSD with no measurement is broadcast with each one None.
 - Every vendored example passes its schema; a reply missing its result is
   refused with the reason; the envelope is enforced through its reference.
 - A refused configuration stops the process with exit status 2 and one
