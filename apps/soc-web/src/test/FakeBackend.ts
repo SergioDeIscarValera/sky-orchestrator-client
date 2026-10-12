@@ -12,6 +12,7 @@ import {
   type SignInFailure,
   type StateEvent,
 } from '../backend/backend'
+import type { Link } from '../backend/link'
 import { untouched } from '../backend/supabaseFleets'
 import type { LoadedSite } from '../scene/siteModel'
 import type { TelemetrySample } from '../telemetry/sample'
@@ -196,6 +197,24 @@ export class FakeBackend implements Backend {
     listeners.add(listener)
     this.telemetryListeners.set(organizationId, listeners)
     return () => listeners.delete(listener)
+  }
+
+  private linked: Link = 'up'
+  private readonly linkListeners = new Set<(link: Link) => void>()
+
+  link(): Link {
+    return this.linked
+  }
+
+  onLink(listener: (link: Link) => void): () => void {
+    this.linkListeners.add(listener)
+    return () => this.linkListeners.delete(listener)
+  }
+
+  /** The console's link to Realtime lost, joined again, or joining (NFR-REL-07). */
+  setLink(link: Link): void {
+    this.linked = link
+    for (const listener of this.linkListeners) listener(link)
   }
 
   /** The site models served beside the console, by organization: none unless a test adds one. */

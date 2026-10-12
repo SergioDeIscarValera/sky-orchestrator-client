@@ -80,6 +80,33 @@ describe('live values in the inspector (FR-TEL-03, FR-FLE-04)', () => {
     expect(values.queryByText('0 m')).toBeNull()
   })
 
+  it('never shows a sample held up as live: last known and greyed (FR-SAF-02, NFR-REL-07)', async () => {
+    const backend = new FakeBackend(NEIGHBOUR)
+    backend.seen.set(NORTH.id, [device('SOTESTUAV001')])
+    window.history.replaceState(null, '', '/?gateway=SOTESTDOCK01&aircraft=SOTESTUAV001')
+    renderApp(backend)
+    await screen.findByRole('complementary', { name: 'Inspector' })
+    await inspector().findByRole('heading', { name: 'SOTESTUAV001' })
+    const section = (name: string) => within(inspector().getByRole('region', { name }))
+    const height = (name: string) => section(name).getByText('Height').nextElementSibling
+    // On time: 5 ms from soc-cloud's send to the browser.
+    act(() => {
+      backend.sample(NORTH.id, sample({ takenAtMs: 1000, sentAtMs: Date.now() - 5 }))
+    })
+    expect(section('Live').getByText('Live, under 1 s ago')).toBeInTheDocument()
+    expect(height('Live')).toHaveClass('text-heading')
+    // Held up 5 s by a cut, then delivered: as old as that, whatever its arrival.
+    act(() => {
+      backend.sample(NORTH.id, sample({ takenAtMs: 2000, sentAtMs: Date.now() - 5005 }))
+    })
+    expect(section('Last known').getByText('Stale, 5 s ago')).toBeInTheDocument()
+    expect(height('Last known')).toHaveClass('text-muted')
+    act(() => {
+      backend.sample(NORTH.id, sample({ takenAtMs: 3000, sentAtMs: Date.now() - 11_005 }))
+    })
+    expect(section('Last known').getByText('Lost, 11 s ago')).toBeInTheDocument()
+  })
+
   it('says where the height is measured from, once the aircraft has stood idle', async () => {
     const backend = new FakeBackend(NEIGHBOUR)
     backend.seen.set(NORTH.id, [device('SOTESTUAV001')])
@@ -191,7 +218,8 @@ describe('a value turns stale and lost on time (FR-TEL-02)', () => {
       </SettingsContext>
     )
     const receivedAt = performance.now()
-    const { result } = renderHook(() => useFreshness(receivedAt), { wrapper })
+    const latest = { receivedAt, dueAt: receivedAt }
+    const { result } = renderHook(() => useFreshness(latest), { wrapper })
     expect(result.current.freshness).toBe('live')
 
     act(() => {

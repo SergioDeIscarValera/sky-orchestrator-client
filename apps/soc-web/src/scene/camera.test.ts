@@ -297,11 +297,15 @@ describe('following a pinned aircraft (FR-SCN-05)', () => {
   const at = (ms: number) => {
     const index = Math.floor(ms / 200)
     const track = {
-      latest: { sample: replaySample(farm, index, 0), receivedAt: index * 200 },
+      latest: { sample: replaySample(farm, index, 0), receivedAt: index * 200, dueAt: index * 200 },
       previous:
         index === 0
           ? null
-          : { sample: replaySample(farm, index - 1, 0), receivedAt: index * 200 - 200 },
+          : {
+              sample: replaySample(farm, index - 1, 0),
+              receivedAt: index * 200 - 200,
+              dueAt: index * 200 - 200,
+            },
       // The replay stands idle where its circle starts, and takes off there.
       takeoff: takeoffAfter(null, replaySample(farm, 0, 0)),
     }

@@ -3,6 +3,7 @@ import { useOrganization } from '../organizations/context'
 import { OrganizationSwitcher } from '../organizations/OrganizationSwitcher'
 import { SearchBox } from '../search/SearchBox'
 import { Brand } from './Brand'
+import { LinkPill } from './LinkPill'
 import { LiveClock } from './LiveClock'
 import { ThemeToggle } from './ThemeToggle'
 import { CARD } from './styles'
@@ -17,6 +18,7 @@ export function TopBar() {
       <OrganizationSwitcher />
       <SearchBox />
       <div className="flex-1" />
+      <LinkPill />
       <LiveClock timeZone={organization.timeZone} />
       <ThemeToggle />
       <AccountMenu />

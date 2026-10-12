@@ -116,7 +116,17 @@ The console: one persistent 3D scene of the farm with floating panels
   bar that turns warning under 50 % and danger under 20 %, the heading with an
   arrow turned to it; the position and the takeoff point follow. What a sample
   lacks reads as unavailable, never zero; what Sky Orchestrator does not send
-  yet has no tile until it does.
+  yet has no tile until it does. A sample's age counts from when it was due: its
+  arrival, less any delay beyond the link's usual transit over the last 30 s,
+  so a sample a cut held up reads as old as it is when it arrives (`FR-SAF-02`).
+  Stale or lost, the values are the last known: the section says so and greys
+  them.
+- **The link** (`NFR-REL-07`): the console's live topics, watched through
+  Realtime's heartbeat every 5 s, each channel's status and the browser's
+  offline and online events. Cut off, the top bar says Reconnecting beside the
+  clock and every presence reads unknown, since the console knows them as of the
+  cut. Back, the socket reconnects at once, every channel rejoins and what the
+  console shows is read again.
 - **The aircraft in the scene** (`FR-SCN-04`, `FR-TEL-02`): every aircraft of
   the organization with telemetry, built in code in its own colour and cased, a
   chevron on its back and a wedge on its ground disc pointing its heading, the
@@ -131,7 +141,9 @@ The console: one persistent 3D scene of the farm with floating panels
   is not flying); first seen in flight, the scene assumes the ground under that
   first position, and the inspector's _Takeoff point_ says it was not seen.
   It glides from one sample to the next over their interval and stops at the
-  latest, never past it, above any ridge crossed between them; stale it turns
+  latest, never past it, above any ridge crossed between them; samples a stale
+  threshold or more apart, by the aircraft's own clock, are a gap, and it is
+  drawn where it is rather than glided across what was not seen; stale it turns
   muted, lost it is only a muted disc where it was last known. All aircraft are
   four draws. The scene draws frames only while one glides or crosses a
   threshold.
@@ -295,40 +307,44 @@ for `/favicon.ico`.
 
 ## Failure modes
 
-| Failure                                                                     | What happens                                                                                                                                     |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Local storage unavailable (a private window, blocked storage)               | The theme follows the system; the session and the organization are not remembered across reloads                                                 |
-| A colour written outside the token file                                     | `pnpm lint` fails, in the hooks and in CI                                                                                                        |
-| A token change that drops text below 4.5:1                                  | `pnpm test` fails, naming the pair and the theme                                                                                                 |
-| An API that needs a secure context                                          | `pnpm lint` fails: the console is served over plain HTTP on the LAN                                                                              |
-| `/config.json` missing, not JSON, or refused                                | The console does not start; one page names every problem, nothing talks to Supabase                                                              |
-| The console's file missing a key, out of range, or breaking a relation      | `soc-web-check` refuses it and the console does not start; served anyway, the browser refuses it on the startup page, naming each key (ADR-0023) |
-| The service role key given as the key                                       | Refused at start, before any request: it must never reach a browser                                                                              |
-| Supabase does not answer at sign-in                                         | The sign-in names the address it tried                                                                                                           |
-| Wrong email or password, too many attempts, unconfirmed email               | The sign-in says which, also when CORS hides GoTrue's error code from the browser                                                                |
-| Schema `soc` not served by PostgREST (`DEP-21`)                             | The organizations page names the missing setting, with a button to try again                                                                     |
-| `soc.member_organizations` missing                                          | The organizations page says SOC's migrations are not applied                                                                                     |
-| The account has no live organization                                        | A page says so and offers sign-out; nothing opens                                                                                                |
-| The remembered organization is no longer the user's                         | The picker opens again                                                                                                                           |
-| The session ends on the server (revoked, refresh expired)                   | The console returns to sign-in and forgets everything it fetched                                                                                 |
-| An organization's time zone unknown to the browser                          | The clock shows the device's zone and says so on hover                                                                                           |
-| A browser without WebGL 2                                                   | The scene's place says so; the panels keep working                                                                                               |
-| The scene fails while drawing                                               | Its place says what stopped and asks for a reload; the panels keep working                                                                       |
-| A camera move that skips the camera's limits                                | `pnpm lint` refuses it outside `src/scene/camera.ts`; `flyTo` constrains it                                                                      |
-| The container's address or key missing or refused                           | It exits with status 2 and one `configuration_refused` line naming each problem, never the key; compose shows it down                            |
-| A modal menu or another inline style                                        | The policy blocks it in the browser; `pnpm lint` refuses modal menus before that                                                                 |
-| A module mock in a test                                                     | `pnpm lint` refuses it: test files share their worker's modules, so it would leak into the next file (ADR-0022)                                  |
-| A stack out of reach, displaced or still connecting                         | Its aircraft read as the stack's state, never as the online flag it last reported                                                                |
-| A link to a fleet retired, unknown, or of another organization              | The inspector says so and offers to clear the selection                                                                                          |
-| The state topic drops and rejoins                                           | Everything the console read of the organization is read again on the rejoin                                                                      |
-| A telemetry sample that breaks the contract, or one taken before the latest | Dropped: the console shows the latest sample that follows the contract, and a track never runs backwards                                         |
-| No sample for `telemetry_stale_after_ms`, then `telemetry_lost_after_ms`    | The aircraft's live values read as stale, then lost, within a few milliseconds of each threshold                                                 |
-| No site model for the organization (a 404)                                  | The flat ground and grid, and a note saying so                                                                                                   |
-| A site model off its contract, or a grid of the wrong size                  | The note names the problem and the ground stays flat; nothing wrong is drawn                                                                     |
-| An aircraft whose sample has no position                                    | It is not drawn; the inspector says the position is unavailable                                                                                  |
-| An aircraft below the ground under it, idle, or without a height            | It is drawn on the ground beneath it; the inspector shows the height above takeoff or that it is unavailable                                     |
-| An aircraft first seen in flight                                            | Its takeoff level is assumed to be the ground under its first position; the inspector's takeoff point says it was not seen                       |
-| An aircraft beyond the site model's edge                                    | It is drawn over the height of the nearest edge, so crossing it makes no jump                                                                    |
-| A viewer's change or retirement of a fleet                                  | Row security leaves the row untouched without an error; the console counts the rows returned and says nothing changed                            |
-| A fleet's write the database refuses                                        | The refusal names the field its constraint is about: the name, the model, the airframe serial, the aircraft, its stack                           |
-| A viewer opens a fleet or an aircraft seen                                  | Edit, Retire and Register stay focusable, say why they do nothing, and open nothing; the database refuses the write anyway                       |
+| Failure                                                                     | What happens                                                                                                                                                        |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local storage unavailable (a private window, blocked storage)               | The theme follows the system; the session and the organization are not remembered across reloads                                                                    |
+| A colour written outside the token file                                     | `pnpm lint` fails, in the hooks and in CI                                                                                                                           |
+| A token change that drops text below 4.5:1                                  | `pnpm test` fails, naming the pair and the theme                                                                                                                    |
+| An API that needs a secure context                                          | `pnpm lint` fails: the console is served over plain HTTP on the LAN                                                                                                 |
+| `/config.json` missing, not JSON, or refused                                | The console does not start; one page names every problem, nothing talks to Supabase                                                                                 |
+| The console's file missing a key, out of range, or breaking a relation      | `soc-web-check` refuses it and the console does not start; served anyway, the browser refuses it on the startup page, naming each key (ADR-0023)                    |
+| The service role key given as the key                                       | Refused at start, before any request: it must never reach a browser                                                                                                 |
+| Supabase does not answer at sign-in                                         | The sign-in names the address it tried                                                                                                                              |
+| Wrong email or password, too many attempts, unconfirmed email               | The sign-in says which, also when CORS hides GoTrue's error code from the browser                                                                                   |
+| Schema `soc` not served by PostgREST (`DEP-21`)                             | The organizations page names the missing setting, with a button to try again                                                                                        |
+| `soc.member_organizations` missing                                          | The organizations page says SOC's migrations are not applied                                                                                                        |
+| The account has no live organization                                        | A page says so and offers sign-out; nothing opens                                                                                                                   |
+| The remembered organization is no longer the user's                         | The picker opens again                                                                                                                                              |
+| The session ends on the server (revoked, refresh expired)                   | The console returns to sign-in and forgets everything it fetched                                                                                                    |
+| An organization's time zone unknown to the browser                          | The clock shows the device's zone and says so on hover                                                                                                              |
+| A browser without WebGL 2                                                   | The scene's place says so; the panels keep working                                                                                                                  |
+| The scene fails while drawing                                               | Its place says what stopped and asks for a reload; the panels keep working                                                                                          |
+| A camera move that skips the camera's limits                                | `pnpm lint` refuses it outside `src/scene/camera.ts`; `flyTo` constrains it                                                                                         |
+| The container's address or key missing or refused                           | It exits with status 2 and one `configuration_refused` line naming each problem, never the key; compose shows it down                                               |
+| A modal menu or another inline style                                        | The policy blocks it in the browser; `pnpm lint` refuses modal menus before that                                                                                    |
+| A module mock in a test                                                     | `pnpm lint` refuses it: test files share their worker's modules, so it would leak into the next file (ADR-0022)                                                     |
+| A stack out of reach, displaced or still connecting                         | Its aircraft read as the stack's state, never as the online flag it last reported                                                                                   |
+| A link to a fleet retired, unknown, or of another organization              | The inspector says so and offers to clear the selection                                                                                                             |
+| The state topic drops and rejoins                                           | Everything the console read of the organization is read again on the rejoin                                                                                         |
+| A telemetry sample that breaks the contract, or one taken before the latest | Dropped: the console shows the latest sample that follows the contract, and a track never runs backwards                                                            |
+| No sample for `telemetry_stale_after_ms`, then `telemetry_lost_after_ms`    | The aircraft's live values read as stale, then lost, within a few milliseconds of each threshold                                                                    |
+| The browser's network cut, or the socket dead without closing               | The top bar says Reconnecting at once (offline) or within two 5 s heartbeats; every presence reads unknown; the aircraft go stale, then lost                        |
+| The network back                                                            | The socket reconnects at once, every channel rejoins, and what the console shows is fetched again; the aircraft are drawn where they are, not glided across the gap |
+| Samples held up by a cut and delivered late, all at once                    | Each reads as old as it is, from when it was due: stale or lost on arrival, never live (FR-SAF-02)                                                                  |
+| A missing measurement                                                       | Null from the wire to the screen, never a default: a search of the mapping's syntax fails the gate if one is written (FR-SAF-03)                                    |
+| No site model for the organization (a 404)                                  | The flat ground and grid, and a note saying so                                                                                                                      |
+| A site model off its contract, or a grid of the wrong size                  | The note names the problem and the ground stays flat; nothing wrong is drawn                                                                                        |
+| An aircraft whose sample has no position                                    | It is not drawn; the inspector says the position is unavailable                                                                                                     |
+| An aircraft below the ground under it, idle, or without a height            | It is drawn on the ground beneath it; the inspector shows the height above takeoff or that it is unavailable                                                        |
+| An aircraft first seen in flight                                            | Its takeoff level is assumed to be the ground under its first position; the inspector's takeoff point says it was not seen                                          |
+| An aircraft beyond the site model's edge                                    | It is drawn over the height of the nearest edge, so crossing it makes no jump                                                                                       |
+| A viewer's change or retirement of a fleet                                  | Row security leaves the row untouched without an error; the console counts the rows returned and says nothing changed                                               |
+| A fleet's write the database refuses                                        | The refusal names the field its constraint is about: the name, the model, the airframe serial, the aircraft, its stack                                              |
+| A viewer opens a fleet or an aircraft seen                                  | Edit, Retire and Register stay focusable, say why they do nothing, and open nothing; the database refuses the write anyway                                          |

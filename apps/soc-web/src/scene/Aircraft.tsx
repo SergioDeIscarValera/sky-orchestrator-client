@@ -110,7 +110,7 @@ export function Aircraft({
       const now = performance.now()
       for (const track of store.getState().tracks.values()) {
         for (const threshold of [settings.telemetryStaleAfterMs, settings.telemetryLostAfterMs]) {
-          const wait = track.latest.receivedAt + threshold - now
+          const wait = track.latest.dueAt + threshold - now
           if (wait > 0) timers.push(setTimeout(invalidate, wait))
         }
       }
@@ -274,7 +274,7 @@ function AircraftLabel({
 }) {
   const [gatewaySn = '', aircraftSn = ''] = aircraft.split('/')
   const track = useTrack(gatewaySn, aircraftSn)
-  const { freshness } = useFreshness(track?.latest.receivedAt ?? null)
+  const { freshness } = useFreshness(track?.latest)
   const anchor = useRef<Group>(null)
 
   useFrame(() => {

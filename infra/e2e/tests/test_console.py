@@ -1,10 +1,11 @@
 """M2's exit criteria through the console, in Chrome (FR-FLE-02, FR-FLE-03, FR-TEL-01,
-FR-TEL-02, NFR-PERF-01).
+FR-TEL-02, NFR-PERF-01), and the browser's network cut for 10 s (NFR-REL-07).
 
 Virtual Origen's platform behind Kong, SOC's migrations, soc-cloud on one stack, a
 dock announcing and flying an aircraft on the broker, and the console's own image:
 an operator signs in, sees the aircraft appear, registers it as a fleet, and
-watches it fly, then go stale when the dock falls silent.
+watches it fly, then go stale when the dock falls silent; found again from the
+search, it flies on while the browser's network is cut and the fleet is renamed.
 """
 
 from __future__ import annotations
@@ -34,6 +35,10 @@ FINCA_NORTE = Geodetic(41.6523, -4.7245)
 #: A minute at 5 Hz on the lane; SOC_E2E_SAMPLES=3000 runs NFR-PERF-01's ten minutes.
 SAMPLES = int(os.environ.get("SOC_E2E_SAMPLES", "300"))
 STALE_AFTER_MS = 3000
+#: What the fleet is renamed to while the browser's network is cut (NFR-REL-07).
+RENAMED = "Norte Uno"
+#: How soon after the network comes back the console must have caught up.
+CAUGHT_UP_MS = 10_000
 
 
 async def farm_of(platform: Platform, user: uuid.UUID, email: str) -> uuid.UUID:
@@ -50,6 +55,19 @@ async def farm_of(platform: Platform, user: uuid.UUID, email: str) -> uuid.UUID:
             name="Finca Norte",
             position=(FINCA_NORTE.latitude_deg, FINCA_NORTE.longitude_deg),
             timezone="Europe/Madrid",
+        )
+    finally:
+        await admin.close()
+
+
+async def rename(platform: Platform, organization: uuid.UUID, name: str) -> None:
+    """Renames the organization's fleet in the database, as another console would."""
+    admin = await platform.stack.postgres.connect("supabase_admin")
+    try:
+        await admin.execute(
+            "update soc.fleets set name = $2 where organization_id = $1 and deleted_at is null",
+            organization,
+            name,
         )
     finally:
         await admin.close()
@@ -115,6 +133,15 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
                     stale = await browser.expect("stale")
                     layout = await browser.expect("layout")
                     found = await browser.expect("search")
+
+                    flying = asyncio.create_task(dock.fly())
+                    tasks.append(flying)
+                    await browser.tell(flying_again=True)
+                    await browser.expect("cut")
+                    await rename(platform, organization, RENAMED)
+                    await browser.tell(renamed_to=RENAMED)
+                    reconnected = await browser.expect("reconnected")
+                    flying.cancel()
         finally:
             for task in tasks:
                 task.cancel()
@@ -125,7 +152,11 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
         f" dock to browser {telemetry['from_dock_ms']};"
         f" soc-cloud broadcast to browser {telemetry['from_cloud_ms']};"
         f" soc-cloud hold {hold}; console's delivery p95 {telemetry['console_delivery_p95_ms']} ms;"
-        f" stale {stale['after_last_ms']} ms after the last sample"
+        f" stale {stale['after_last_ms']} ms after the last sample;"
+        f" after a 10 s cut, link back in {reconnected['link_back_after_ms']} ms,"
+        f" live in {reconnected['live_after_ms']} ms,"
+        f" renamed in {reconnected['renamed_after_ms']} ms,"
+        f" {reconnected['sockets_opened_after_restore']} new sockets"
     )
     # FR-FLE-02: an aircraft announced shows in the fleet panel within 2 s.
     assert device["appeared_after_ms"] <= 2000
@@ -150,3 +181,15 @@ async def test_an_aircraft_announced_is_registered_and_flies_in_the_console(
     # FR-SCN-05 from the top bar: the search selects the fleet, and the scene follows it.
     assert found["selected"]
     assert found["following"]
+    # NFR-REL-07: the cut was real, nothing reached the page, and the console said so at
+    # once; what it showed went stale, not live; back, it rejoined, the aircraft is live
+    # again, and the fleet renamed meanwhile shows under its new name.
+    assert reconnected["frames_during_cut"] == 0
+    assert reconnected["reconnecting_after_ms"] <= 1000
+    assert reconnected["presence_unknown_during_cut"]
+    assert not reconnected["freshness_at_restore"].startswith("Live")
+    assert reconnected["link_back_after_ms"] is not None
+    assert reconnected["link_back_after_ms"] <= CAUGHT_UP_MS
+    assert reconnected["live_after_ms"] is not None
+    assert reconnected["live_after_ms"] <= CAUGHT_UP_MS
+    assert reconnected["renamed_after_ms"] <= CAUGHT_UP_MS

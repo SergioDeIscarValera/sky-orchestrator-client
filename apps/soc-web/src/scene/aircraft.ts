@@ -171,7 +171,8 @@ export interface Drawn {
 /**
  * Where to draw an aircraft at `now` (FR-TEL-02). From the latest sample's arrival
  * it glides from the previous sample to the latest, over their interval, and stops
- * there: motion is interpolated between samples, never extrapolated past the latest.
+ * there: motion is interpolated between samples, never extrapolated past the latest,
+ * nor across a gap in them. Its freshness counts from when the latest was due.
  * Lost, the latest sample is where it was last known, which the scene marks on the
  * ground only, never as a current position.
  */
@@ -182,14 +183,22 @@ export function drawnAt(
   thresholds: { readonly telemetryStaleAfterMs: number; readonly telemetryLostAfterMs: number },
   ground: Ground = FLAT_GROUND,
 ): Drawn | null {
-  const freshness = freshnessOf(Math.max(0, now - track.latest.receivedAt), thresholds)
+  const freshness = freshnessOf(Math.max(0, now - track.latest.dueAt), thresholds)
   const takeoff = takeoffLevel(track, origin, ground)
   const latest = placement(origin, track.latest.sample, ground, takeoff)
   if (latest === null) return null
   if (freshness === 'lost') return { placement: latest, freshness, gliding: false }
   const previous =
     track.previous === null ? null : placement(origin, track.previous.sample, ground, takeoff)
-  if (previous === null || track.previous === null) {
+  // Samples a stale threshold or more apart, the aircraft's own clock says, had a gap
+  // between them: the aircraft is drawn where it is, not glided across what was not seen
+  // (NFR-REL-07).
+  if (
+    previous === null ||
+    track.previous === null ||
+    track.latest.sample.takenAtMs - track.previous.sample.takenAtMs >=
+      thresholds.telemetryStaleAfterMs
+  ) {
     return { placement: latest, freshness, gliding: false }
   }
   const glideMs = Math.min(track.latest.receivedAt - track.previous.receivedAt, MAX_GLIDE_MS)
