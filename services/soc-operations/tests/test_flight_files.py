@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import io
+import json
 import re
 import struct
 import xml.etree.ElementTree as ET
@@ -21,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import jsonschema_rs
 import pytest
 
 from soc_operations import flight_files
@@ -583,3 +585,99 @@ def test_the_placemarks_are_indexed_in_document_order(baked: dict[str, Any]) -> 
 def test_no_element_carries_an_attribute(baked: dict[str, Any], path: str) -> None:
     for element_path, element in element_paths(parsed(baked, path)):
         assert element.attrib == {}, element_path
+
+
+# --- the golden texts: the reference waylines, held byte for byte ---------------------------
+
+# Each contract is named in full, as REPOSITORY / "contracts" / "<unit>": the change guard in
+# tools/tests reads the contracts a lane test uses from those spellings.
+GOLDEN = REPOSITORY / "contracts" / "flight-files"
+ROUTE_EXAMPLE = REPOSITORY / "contracts" / "geometry" / "examples" / "design.route.json"
+DESIGN_SCHEMA: dict[str, Any] = json.loads(
+    (REPOSITORY / "contracts" / "geometry" / "design.schema.json").read_text(encoding="utf-8")
+)
+#: The bake's own definition, checked on its own: a golden bake must be a bake the schema allows.
+BAKED_SCHEMA = jsonschema_rs.validator_for(
+    {
+        "$schema": DESIGN_SCHEMA["$schema"],
+        "$id": DESIGN_SCHEMA["$id"],
+        "$defs": DESIGN_SCHEMA["$defs"],
+        "$ref": "#/$defs/baked",
+    }
+)
+#: Each case's wayline name, as its golden template.kml carries it.
+GOLDEN_NAMES = {
+    "route-return-home": "Route return home",
+    "six-waypoints-land": "Six waypoints land",
+}
+GOLDEN_FILES = ("bake.json", "template.kml", "waylines.wpml", "kmz.sha256")
+
+
+def golden_bake(case: str) -> dict[str, Any]:
+    loaded: dict[str, Any] = json.loads((GOLDEN / case / "bake.json").read_text(encoding="utf-8"))
+    return loaded
+
+
+def golden_file(case: str, name: str) -> bytes:
+    return (GOLDEN / case / name).read_bytes()
+
+
+def test_the_golden_directories_are_exactly_the_cases_held() -> None:
+    assert {path.name for path in GOLDEN.iterdir() if path.is_dir()} == set(GOLDEN_NAMES)
+
+
+@pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
+def test_each_golden_case_holds_its_four_files(case: str) -> None:
+    assert sorted(path.name for path in (GOLDEN / case).iterdir()) == sorted(GOLDEN_FILES)
+
+
+@pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
+def test_the_builder_writes_the_golden_texts(case: str) -> None:
+    written = members(flight_files.build(golden_bake(case), name=GOLDEN_NAMES[case]))
+    assert written[TEMPLATE] == golden_file(case, "template.kml")
+    assert written[WAYLINES] == golden_file(case, "waylines.wpml")
+
+
+@pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
+def test_the_kmz_hashes_are_the_golden_hashes(case: str) -> None:
+    kmz = flight_files.build(golden_bake(case), name=GOLDEN_NAMES[case])
+    recorded = dict(
+        line.split(": ", 1) for line in golden_file(case, "kmz.sha256").decode().splitlines()
+    )
+    assert recorded == {
+        "sha256": hashlib.sha256(kmz).hexdigest(),
+        "fingerprint_md5": flight_files.fingerprint(kmz),
+    }
+
+
+@pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
+def test_building_a_golden_case_twice_gives_identical_bytes(case: str) -> None:
+    baked = golden_bake(case)
+    assert flight_files.build(baked, name=GOLDEN_NAMES[case]) == flight_files.build(
+        baked, name=GOLDEN_NAMES[case]
+    )
+
+
+@pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
+def test_each_golden_flight_file_reads_back_as_its_bake(case: str) -> None:
+    baked = golden_bake(case)
+    assert flight_files.read(flight_files.build(baked, name=GOLDEN_NAMES[case])) == (
+        expected_fields(baked)
+    )
+
+
+@pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
+def test_each_golden_bake_follows_the_baked_definition_of_the_design_schema(case: str) -> None:
+    assert list(BAKED_SCHEMA.iter_errors(golden_bake(case))) == []
+
+
+def test_the_route_case_is_the_route_examples_bake() -> None:
+    example = json.loads(ROUTE_EXAMPLE.read_text(encoding="utf-8"))
+    assert golden_bake("route-return-home") == example["baked"]
+
+
+def test_the_six_waypoint_case_has_six_waypoints_speeds_into_two_and_lands() -> None:
+    baked = golden_bake("six-waypoints-land")
+    assert len(baked["waypoints"]) == 6
+    assert [w["index"] for w in baked["waypoints"] if "speed_ms" in w] == [1, 3]
+    assert baked["finish_action"] == "land"

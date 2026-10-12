@@ -154,8 +154,9 @@ repos:
         entry: bash -c 'uv run --frozen mypy services/soc-operations && uv run --frozen pytest services/soc-operations/tests -m "not lane"'
         language: system
         pass_filenames: false
-        # The flight file tests read Sky Orchestrator's WPML subset page.
-        files: ^(services/soc-operations/|libs/|contracts/config/|contracts/sky-orchestrator/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+        # The flight file tests read Sky Orchestrator's WPML subset page, the golden texts and
+        # the route example's bake, and the bake's schema.
+        files: ^(services/soc-operations/|libs/|contracts/(config|flight-files|geometry|sky-orchestrator)/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
 
       - id: soc-check-gate
         name: soc-check gate
