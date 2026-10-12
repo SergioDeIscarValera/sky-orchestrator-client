@@ -100,19 +100,32 @@ export function rank(words: readonly string[], query: string): number | null {
 }
 
 /**
+ * The entries `query` matches, best first, the earlier ones first at the same rank; with
+ * no query, every entry in the order given. An entry's words are normalised, as
+ * `searchables` makes them. Nothing is cut off: `search` is the capped one.
+ */
+export function matching<Entry extends { readonly words: readonly string[] }>(
+  entries: readonly Entry[],
+  query: string,
+): Entry[] {
+  const wanted = normalise(query)
+  if (wanted === '') return [...entries]
+  return entries
+    .map((entry, order) => ({ entry, order, rank: rank(entry.words, wanted) }))
+    .filter((ranked): ranked is typeof ranked & { rank: number } => ranked.rank !== null)
+    .sort((a, b) => a.rank - b.rank || a.order - b.order)
+    .map(({ entry }) => entry)
+}
+
+/**
  * The entries `query` finds, best first, the fleets before the aircraft at the same
  * rank, then in the order given; with no query, every entry in that order. Never
  * more than `MAX_FOUND`.
  */
 export function search(entries: readonly Searchable[], query: string): Found[] {
-  const wanted = normalise(query)
-  if (wanted === '') return entries.slice(0, MAX_FOUND).map(({ found }) => found)
-  return entries
-    .map((entry, order) => ({ entry, order, rank: rank(entry.words, wanted) }))
-    .filter((ranked): ranked is typeof ranked & { rank: number } => ranked.rank !== null)
-    .sort((a, b) => a.rank - b.rank || a.order - b.order)
+  return matching(entries, query)
     .slice(0, MAX_FOUND)
-    .map(({ entry }) => entry.found)
+    .map(({ found }) => found)
 }
 
 const LETTERS = new Intl.Segmenter('en', { granularity: 'grapheme' })

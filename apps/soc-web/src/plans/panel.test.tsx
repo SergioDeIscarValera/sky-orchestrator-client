@@ -285,7 +285,8 @@ describe('a geofence generated round waylines (FR-GEO-03)', () => {
     await user.click(await screen.findByRole('button', { name: 'Generate' }))
     expect(await screen.findByRole('form', { name: 'Generate a geofence' })).toBeVisible()
     expect(editing()?.drawing.vertices).toEqual([])
-    await user.click(screen.getByRole('checkbox', { name: 'Corridor 1' }))
+    await user.type(screen.getByRole('combobox', { name: 'Waylines' }), 'corridor')
+    await user.click(await screen.findByRole('option', { name: /^Corridor 1/ }))
     const vertices = editing()?.drawing.vertices.length ?? 0
     expect(vertices).toBeGreaterThanOrEqual(3)
     expect(vertices).toBeLessThanOrEqual(32)
