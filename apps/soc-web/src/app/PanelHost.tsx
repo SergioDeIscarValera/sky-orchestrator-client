@@ -24,7 +24,7 @@ export function PanelHost() {
   return (
     <section
       aria-labelledby={heading}
-      className={`${CARD} pointer-events-auto flex max-h-full w-96 flex-col p-5`}
+      className={`${CARD} pointer-events-auto flex max-h-full min-h-0 w-96 flex-col p-5`}
     >
       <div className="flex items-center justify-between">
         <h2 id={heading} className="text-sm font-semibold tracking-wider uppercase">
