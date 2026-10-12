@@ -48,18 +48,23 @@ function Unavailable() {
 function Tile({
   label,
   value,
+  current,
   note,
   children,
 }: {
   readonly label: string
   readonly value: ReactNode
+  /** False once stale: the figure is greyed, as of then, not now (FR-SAF-02). */
+  readonly current: boolean
   readonly note?: ReactNode
   readonly children?: ReactNode
 }) {
   return (
     <div className="bg-page flex min-w-0 flex-col rounded-xl px-3 py-2">
       <dt className="text-muted text-[11px] font-medium tracking-wide uppercase">{label}</dt>
-      <dd className="text-heading font-heading flex items-center gap-1.5 text-lg leading-tight font-semibold break-words tabular-nums">
+      <dd
+        className={`${current ? 'text-heading' : 'text-muted'} font-heading flex items-center gap-1.5 text-lg leading-tight font-semibold break-words tabular-nums`}
+      >
         {value ?? <Unavailable />}
       </dd>
       {note !== undefined && <dd className="text-muted truncate text-[11px]">{note}</dd>}
@@ -68,14 +73,14 @@ function Tile({
   )
 }
 
-/** The battery's level as a bar, in the status colours below its thresholds. */
-function BatteryBar({ percent }: { readonly percent: number }) {
+/** The battery's level as a bar, in the status colours below its thresholds; grey once stale. */
+function BatteryBar({ percent, current }: { readonly percent: number; readonly current: boolean }) {
   const level = batteryLevel(percent)
   return (
     <dd className="bg-border mt-1 h-1.5 overflow-hidden rounded-full" aria-hidden>
       <div
         data-level={level}
-        className={`h-full rounded-full ${BATTERY_TONE[level]}`}
+        className={`h-full rounded-full ${current ? BATTERY_TONE[level] : 'bg-muted'}`}
         style={{ width: `${String(Math.min(100, Math.max(0, percent)))}%` }}
       />
     </dd>
@@ -105,7 +110,7 @@ export function LiveValues({
   readonly aircraftSn: string
 }) {
   const track = useTrack(gatewaySn, aircraftSn)
-  const { freshness, ageMs } = useFreshness(track?.latest.receivedAt ?? null)
+  const { freshness, ageMs } = useFreshness(track?.latest)
   const heading = useId()
 
   if (track === undefined || freshness === null || ageMs === null) {
@@ -120,11 +125,14 @@ export function LiveValues({
   }
   const sample = track.latest.sample
   const battery = sample.batteryPct
+  // Stale or lost, the values are the last known, not now's: said so, and greyed.
+  const current = freshness === 'live'
+  const value = current ? 'text-heading' : 'text-muted'
   return (
     <section aria-labelledby={heading} className="mt-5">
       <div className="flex items-center justify-between gap-3">
         <h4 id={heading} className="text-muted text-xs font-semibold tracking-wider uppercase">
-          Live
+          {current ? 'Live' : 'Last known'}
         </h4>
         <span
           className={`rounded-pill inline-flex h-6 items-center px-2.5 text-xs font-medium ${TONE[freshness]}`}
@@ -133,17 +141,28 @@ export function LiveValues({
         </span>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-2">
-        <Tile label="Mode" value={modeName(sample.modeCode)} />
-        <Tile label="Height" value={formatMetres(sample.heightM)} note="above takeoff" />
-        <Tile label="Battery" value={battery === null ? null : `${String(battery)} %`}>
-          {battery !== null && <BatteryBar percent={battery} />}
+        <Tile label="Mode" value={modeName(sample.modeCode)} current={current} />
+        <Tile
+          label="Height"
+          value={formatMetres(sample.heightM)}
+          note="above takeoff"
+          current={current}
+        />
+        <Tile
+          label="Battery"
+          value={battery === null ? null : `${String(battery)} %`}
+          current={current}
+        >
+          {battery !== null && <BatteryBar percent={battery} current={current} />}
         </Tile>
         <Tile
+          current={current}
           label="Satellites"
           value={sample.satellites === null ? null : String(sample.satellites)}
           note={sample.gpsQuality === null ? undefined : `quality ${String(sample.gpsQuality)}`}
         />
         <Tile
+          current={current}
           label="Heading"
           value={
             sample.headingDeg === null ? null : (
@@ -160,15 +179,15 @@ export function LiveValues({
             )
           }
         />
-        <Tile label="From home" value={formatMetres(sample.homeDistanceM)} />
+        <Tile label="From home" value={formatMetres(sample.homeDistanceM)} current={current} />
       </dl>
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
         <dt className="text-muted">Position</dt>
-        <dd className="text-heading text-right tabular-nums">
+        <dd className={`${value} text-right tabular-nums`}>
           {formatCoordinates(sample.latitudeDeg, sample.longitudeDeg) ?? <Unavailable />}
         </dd>
         <dt className="text-muted">Takeoff point</dt>
-        <dd className="text-heading text-right tabular-nums">{takeoffPoint(track.takeoff)}</dd>
+        <dd className={`${value} text-right tabular-nums`}>{takeoffPoint(track.takeoff)}</dd>
       </dl>
     </section>
   )

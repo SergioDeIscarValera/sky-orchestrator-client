@@ -69,8 +69,11 @@ function track(
 ): Track {
   const samples = previous === null ? [sample(latest)] : [sample(previous), sample(latest)]
   return {
-    latest: { sample: sample(latest), receivedAt: latestAt },
-    previous: previous === null ? null : { sample: sample(previous), receivedAt: previousAt },
+    latest: { sample: sample(latest), receivedAt: latestAt, dueAt: latestAt },
+    previous:
+      previous === null
+        ? null
+        : { sample: sample(previous), receivedAt: previousAt, dueAt: previousAt },
     takeoff: samples.reduce(takeoffAfter, null),
   }
 }
@@ -264,6 +267,33 @@ describe('motion between samples (FR-TEL-02)', () => {
     })
     expect(halfway?.gliding).toBe(true)
     expect(Math.abs(halfway?.placement.yawRad ?? 0)).toBeCloseTo(Math.PI, 3)
+  })
+
+  it('is drawn where it is after a gap in its samples, never glided across it (NFR-REL-07)', () => {
+    // The aircraft's own clock says 3 s or more went unseen between the two.
+    const across = (gapMs: number) =>
+      drawnAt(
+        track(
+          { longitudeDeg: east(0), takenAtMs: 0 },
+          { longitudeDeg: east(100), takenAtMs: gapMs },
+          0,
+          gapMs,
+        ),
+        FARM,
+        gapMs + 100,
+        THRESHOLDS,
+      )
+    expect(across(3000)).toMatchObject({ gliding: false })
+    expect(across(3000)?.placement.x).toBeCloseTo(100, 0)
+    expect(across(2800)).toMatchObject({ gliding: true })
+    expect(across(2800)?.placement.x).toBeLessThan(100)
+  })
+
+  it('reads its freshness from when its latest sample was due, not when it arrived', () => {
+    const late = track(null, {}, 0, 10_000)
+    const held = { ...late, latest: { ...late.latest, dueAt: 2000 } }
+    expect(drawnAt(held, FARM, 10_000, THRESHOLDS)?.freshness).toBe('stale')
+    expect(drawnAt(held, FARM, 12_000, THRESHOLDS)?.freshness).toBe('lost')
   })
 
   it('is drawn as stale, then lost where it was last known', () => {
