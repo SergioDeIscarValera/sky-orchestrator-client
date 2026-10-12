@@ -76,6 +76,10 @@ describe("a wayline's words", () => {
     expect(waylineSummary(saved(draftOf('North corridor', DESIGN, baked)))).toMatch(
       /^2 waypoints · \d+ m$/,
     )
+    const one = saved(draftOf('North corridor', DESIGN, baked))
+    expect(waylineSummary({ ...one, metrics: { waypointCount: 1, distanceM: 40 } })).toBe(
+      '1 waypoint · 40 m',
+    )
   })
 
   it('names each primitive by its kind and size, and its own height when all its points share it', () => {

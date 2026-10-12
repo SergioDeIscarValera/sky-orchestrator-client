@@ -8,7 +8,8 @@ import type { WaylineSketch } from './waylineSketch'
 /** What the list and the inspector say under a wayline's name. */
 export function waylineSummary(wayline: Wayline): string {
   const { waypointCount, distanceM } = wayline.metrics
-  return `${String(waypointCount)} waypoints · ${formatLength(distanceM)}`
+  const waypoints = waypointCount === 1 ? '1 waypoint' : `${String(waypointCount)} waypoints`
+  return `${waypoints} · ${formatLength(distanceM)}`
 }
 
 /** A primitive in a word and its size, as the designer lists them. */
