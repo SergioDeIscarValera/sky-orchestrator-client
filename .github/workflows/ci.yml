@@ -186,7 +186,7 @@ jobs:
           if [ -n "$BASE_REF" ]; then
             changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
           fi
-          if [ -z "$BASE_REF" ] || grep -qE '^(database/|infra/(check|compose|e2e|migrate)/|libs/|services/|contracts/(broadcast|catalogue|config|geometry|sky-orchestrator)/|apps/soc-web/(Dockerfile|nginx/|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)|\.dockerignore$|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)' <<< "$changed"; then
+          if [ -z "$BASE_REF" ] || grep -qE '^(database/|infra/(check|compose|e2e|migrate)/|libs/|services/|contracts/(broadcast|catalogue|config|geometry|recordings|sky-orchestrator)/|apps/soc-web/(Dockerfile|nginx/|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)|\.dockerignore$|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)' <<< "$changed"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -217,7 +217,7 @@ jobs:
           if [ -n "$BASE_REF" ]; then
             changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
           fi
-          if [ -z "$BASE_REF" ] || grep -qE '^(apps/soc-web/|contracts/(config|broadcast|geometry|site|sky-orchestrator)/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
+          if [ -z "$BASE_REF" ] || grep -qE '^(apps/soc-web/|contracts/(config|broadcast|geometry|recordings|site|sky-orchestrator)/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"

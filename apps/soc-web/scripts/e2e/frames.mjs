@@ -38,8 +38,9 @@ function textSample(text) {
 }
 
 /**
- * The telemetry sample a frame carries, with its topic, or null for any other frame:
- * Playwright hands a text frame as a string and a binary one as a Buffer.
+ * The telemetry sample a frame carries, with its topic and the payload as broadcast, or
+ * null for any other frame: Playwright hands a text frame as a string and a binary one
+ * as a Buffer.
  */
 export function sampleOf(frame) {
   const found =
@@ -49,7 +50,7 @@ export function sampleOf(frame) {
   if (found === null) return null
   const { taken_at_ms: takenAtMs, sent_at_ms: sentAtMs, aircraft_sn: aircraftSn } = found.payload
   if (!Number.isFinite(takenAtMs) || !Number.isFinite(sentAtMs)) return null
-  return { topic: found.topic, aircraftSn, takenAtMs, sentAtMs }
+  return { topic: found.topic, aircraftSn, takenAtMs, sentAtMs, payload: found.payload }
 }
 
 /** The nearest rank of the `fraction` percentile, as soc-cloud's latency.py takes it. */

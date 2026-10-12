@@ -23,6 +23,7 @@
     "src",
     "scripts/demo/fake-supabase.test.ts",
     "scripts/measure/path.test.ts",
+    "scripts/measure/memory.test.ts",
     "scripts/e2e/frames.test.ts"
   ]
 }

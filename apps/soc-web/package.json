@@ -11,6 +11,7 @@
     "dev": "vite",
     "demo": "node scripts/demo/run.mjs",
     "measure": "node scripts/measure/run.mjs",
+    "measure:memory": "node scripts/measure/run.mjs --memory",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "format": "prettier --write .",

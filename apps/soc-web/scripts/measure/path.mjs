@@ -4,6 +4,8 @@
 import { existsSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 
+import { GPU_BUDGET_BYTES, inMegabytes } from './memory.mjs'
+
 /** NFR-PERF-06: frame time at p95, in milliseconds. */
 export const BUDGET_MS = 20
 /** NFR-PERF-06's viewport. */
@@ -82,12 +84,14 @@ const OPTIONS = new Map([
   ['--chrome', 'chrome'],
   ['--theme', 'theme'],
   ['--shots', 'shots'],
+  ['--minutes', 'minutes'],
 ])
 
 /**
  * `pnpm measure`'s arguments: `--site <dir>`, `--chrome <path>`, `--theme light|dark`,
  * `--shots <dir>` (a screenshot after each step, which costs the frames it is taken in),
- * `--headed` and `--serve`.
+ * `--headed`, `--serve`, and `--memory` with `--minutes <n>` (NFR-RES-02's session,
+ * 70 minutes unless told otherwise).
  */
 export function parseArguments(argv) {
   const parsed = {
@@ -97,10 +101,12 @@ export function parseArguments(argv) {
     shots: null,
     headed: false,
     serve: false,
+    memory: false,
+    minutes: '70',
   }
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index]
-    if (argument === '--headed' || argument === '--serve') {
+    if (argument === '--headed' || argument === '--serve' || argument === '--memory') {
       parsed[argument.slice(2)] = true
       continue
     }
@@ -114,7 +120,11 @@ export function parseArguments(argv) {
   if (parsed.theme !== 'light' && parsed.theme !== 'dark') {
     throw new Error(`--theme is light or dark, not ${parsed.theme}`)
   }
-  return parsed
+  const minutes = Number(parsed.minutes)
+  if (!Number.isInteger(minutes) || minutes < 1) {
+    throw new Error(`--minutes is a whole number of minutes, not ${parsed.minutes}`)
+  }
+  return { ...parsed, minutes }
 }
 
 const CHROMES = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']
@@ -140,14 +150,19 @@ export function verdict(run, context) {
     return { ok: false, report: 'No frame was measured: the scene did not move.' }
   }
   const perSecond = run.frames / context.seconds
-  const ok = run.p95Ms <= BUDGET_MS
+  const gpuBytes = context.gpuBytes ?? null
+  const gpuOk = gpuBytes !== null && gpuBytes <= GPU_BUDGET_BYTES
+  const ok = run.p95Ms <= BUDGET_MS && gpuOk
   const lines = [
     ...(context.shots
       ? ['Screenshots were taken along the path: the figures include their cost.']
       : []),
     `NFR-PERF-06: the scripted ${String(context.seconds)} s camera path, ${String(AIRCRAFT)} aircraft at 5 Hz, ${String(VIEWPORT.width)}×${String(VIEWPORT.height)}, ${context.theme} theme, ${context.site}`,
     `GPU: ${context.gpu}`,
-    `${String(run.frames)} frames (${perSecond.toFixed(1)} per second), p95 ${run.p95Ms.toFixed(1)} ms, worst ${(run.worstMs ?? run.p95Ms).toFixed(1)} ms: ${ok ? 'within' : 'over'} the ${String(BUDGET_MS)} ms budget`,
+    `${String(run.frames)} frames (${perSecond.toFixed(1)} per second), p95 ${run.p95Ms.toFixed(1)} ms, worst ${(run.worstMs ?? run.p95Ms).toFixed(1)} ms: ${run.p95Ms <= BUDGET_MS ? 'within' : 'over'} the ${String(BUDGET_MS)} ms budget`,
+    gpuBytes === null
+      ? 'GPU memory (NFR-RES-03): not measured'
+      : `GPU memory (NFR-RES-03): ${inMegabytes(gpuBytes)}: ${gpuOk ? 'within' : 'over'} the ${inMegabytes(GPU_BUDGET_BYTES)} budget`,
   ]
   return { ok, report: lines.join('\n') }
 }
