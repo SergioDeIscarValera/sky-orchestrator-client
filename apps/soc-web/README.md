@@ -66,9 +66,10 @@ The console: one persistent 3D scene of the farm with floating panels
   keys nudge it a metre (ten with Shift) and Ctrl or ⌘ Z undoes a step. The
   area and perimeter follow every step; edges that meet show in the danger
   colour, and Save names every reason the geofence is not valid yet. Generate
-  grows one round the waylines chosen, by a margin from 5 to 100 m, previewed
-  as the slider moves, within `geofence_max_vertices`; reshaped by hand, it is
-  saved as drawn. Each vertex is placed and measured on the scene's frame
+  grows one round the waylines chosen in the Waylines picker
+  (`src/plans/WaylinePicker.tsx`), by a margin from 5 to 100 m, previewed as the
+  slider moves, within `geofence_max_vertices`; reshaped by hand, it is saved as
+  drawn. Each vertex is placed and measured on the scene's frame
   (`src/scene/siteFrame.ts`), so it is measured where it is drawn. The open
   geofence outlives the panel: closing it puts the drawing away, opening it
   brings it back. The stack's envelope reaches the console with the operations
