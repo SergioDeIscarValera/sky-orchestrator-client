@@ -266,8 +266,9 @@ Sign in with any email and any password; the demo has no secret. Finca Norte (ow
 aircraft on stack `lab`: one online in a fleet, one online in no fleet, and one whose stack is
 `unreachable`. It has one fleet, which can be edited and retired, and the aircraft in no fleet can
 be registered. Almendral (viewer) has no aircraft and no fleets. Fleets change in memory, and a
-restart resets them. Realtime is not faked: there is no live telemetry, and a change made elsewhere
-shows once the console reads again; `http://localhost:5199/?replay` flies the development replay
+restart resets them. Realtime answers the console's joins and heartbeats, so the link reads up, but
+it sends nothing live: there is no live telemetry, and a change made elsewhere shows once the console
+reads again; `http://localhost:5199/?replay` flies the development replay
 around Finca Norte, idle for 2 s, then taking off and circling, listed in the fleet panel as
 REPLAYUAV, to select, follow or register; `?replay=2` flies two, both listed there. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.
 
