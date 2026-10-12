@@ -8,7 +8,7 @@ is built from, the two XML texts inside the KMZ, and the KMZ's own hashes.
 
 | Case | Flight | Wayline name in the file |
 | --- | --- | --- |
-| `route-return-home/` | The route example's bake, from `contracts/geometry/examples/design.route.json`, flown from its takeoff at 20 m and 5 m/s: four waypoints, one height above the rest, `return_home` | Route return home |
+| `route-return-home/` | The route example's bake, from `contracts/geometry/examples/design.route.json`, flown from its takeoff at 20 m and 5 m/s: the climb right above the takeoff and four waypoints, one height above the rest, `return_home` | Route return home |
 | `six-waypoints-land/` | Six waypoints, a speed into two of them (waypoints 1 and 3), `land` | Six waypoints land |
 
 Each case holds:
