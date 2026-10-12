@@ -31,6 +31,22 @@ describe('the view in the URL (NFR-UX-03)', () => {
     expect(readView({ ...aircraft, aircraft: 'SOTEST/../UAV' })).toEqual({})
   })
 
+  it('reads a geofence, after a fleet and before an aircraft', () => {
+    const fleet = '11111111-1111-4111-8111-111111111111'
+    const geofence = '22222222-2222-4222-8222-222222222222'
+    const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
+    expect(readView({ panel: 'geofences', geofence })).toEqual({ panel: 'geofences', geofence })
+    expect(readView({ geofence, fleet })).toEqual({ fleet })
+    expect(readView({ ...aircraft, geofence })).toEqual({ geofence })
+    expect(readView({ geofence: 'North field' })).toEqual({})
+    const selection = { kind: 'geofence', geofenceId: geofence } as const
+    expect(select({ panel: 'geofences', fleet }, selection)).toEqual({
+      panel: 'geofences',
+      geofence,
+    })
+    expect(selectionOf(select({}, selection))).toEqual(selection)
+  })
+
   it("reads a selection's open form, and no form without a selection", () => {
     const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
     expect(readView({ ...aircraft, form: 'register' })).toEqual({ ...aircraft, form: 'register' })

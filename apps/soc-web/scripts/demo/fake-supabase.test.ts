@@ -161,6 +161,46 @@ describe('the demo Supabase, read through the console backend', () => {
   })
 })
 
+describe("the demo's geofences and waylines, read through the console backend", () => {
+  const SQUARE = [
+    { latitudeDeg: 41.6523, longitudeDeg: -4.7245 },
+    { latitudeDeg: 41.6523, longitudeDeg: -4.7235 },
+    { latitudeDeg: 41.6531, longitudeDeg: -4.7235 },
+  ]
+
+  it('answers the north corridor of Finca Norte, to generate a geofence round, and none for Almendral', async () => {
+    const [corridor, ...others] = await backend.waylines(NORTH)
+    expect(others).toEqual([])
+    expect(corridor).toMatchObject({ name: 'North corridor', speedMs: 5 })
+    expect(corridor?.takeoff.latitudeDeg).toBeCloseTo(41.6523, 9)
+    expect(corridor?.takeoff.longitudeDeg).toBeCloseTo(-4.7245, 9)
+    expect(corridor?.waypoints.map(({ index }) => index)).toEqual([0, 1, 2, 3])
+    expect(await backend.waylines(ALMENDRAL)).toEqual([])
+    expect(await backend.geofences(NORTH)).toEqual([])
+  })
+
+  it('saves, renames and retires a geofence, its ring read back as written', async () => {
+    const saved = await backend.createGeofence(NORTH, {
+      name: 'Trial plot',
+      polygon: SQUARE,
+      maxHeightM: 45,
+      origin: 'drawn',
+      marginM: null,
+    })
+    expect(saved).toMatchObject({ name: 'Trial plot', polygon: SQUARE, maxHeightM: 45 })
+    expect(await backend.changeGeofence(saved.id, { name: 'Trial plot, west' })).toMatchObject({
+      id: saved.id,
+      name: 'Trial plot, west',
+      polygon: SQUARE,
+    })
+    await backend.retireGeofence(saved.id)
+    expect(await backend.geofences(NORTH)).toEqual([])
+    await expect(backend.changeGeofence(saved.id, { name: 'Back' })).rejects.toThrow(
+      'Nothing changed',
+    )
+  })
+})
+
 describe('signing in to the demo', () => {
   const token = async (grant: string, body: Readonly<Record<string, string>>) => {
     const response = await fetch(`${fake.url}/auth/v1/token?grant_type=${grant}`, {
