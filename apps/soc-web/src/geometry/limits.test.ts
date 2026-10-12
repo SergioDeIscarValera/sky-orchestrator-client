@@ -7,29 +7,26 @@ import { distanceM } from './sphere'
 /** A stored position: [longitude, latitude], GeoJSON order. */
 type Position = readonly [number, number]
 
-const BAKED = (
-  JSON.parse(
-    readFileSync(
-      new URL('../../../../contracts/geometry/examples/design.route.json', import.meta.url),
-      'utf8',
-    ),
-  ) as {
-    baked: {
-      reference_point: Position
-      takeoff_security_height_m: number
-      speed_ms: number
-      waypoints: { index: number; position: Position; height_m: number }[]
-    }
-  }
-).baked
+/** contracts/flight-files' route, a wayline flown by an operation (FR-WAY-11). */
+const FLIGHT = JSON.parse(
+  readFileSync(
+    new URL('../../../../contracts/flight-files/route-return-home/flight.json', import.meta.url),
+    'utf8',
+  ),
+) as {
+  reference_point: Position
+  takeoff_security_height_m: number
+  speed_ms: number
+  waypoints: { index: number; position: Position; height_m: number }[]
+}
 
 const geodetic = ([longitudeDeg, latitudeDeg]: Position) => ({ latitudeDeg, longitudeDeg })
 
 const PLAN: Plan = {
-  referencePoint: geodetic(BAKED.reference_point),
-  takeoffSecurityHeightM: BAKED.takeoff_security_height_m,
-  speedMs: BAKED.speed_ms,
-  waypoints: BAKED.waypoints.map((w) => ({
+  referencePoint: geodetic(FLIGHT.reference_point),
+  takeoffSecurityHeightM: FLIGHT.takeoff_security_height_m,
+  speedMs: FLIGHT.speed_ms,
+  waypoints: FLIGHT.waypoints.map((w) => ({
     index: w.index,
     position: geodetic(w.position),
     heightM: w.height_m,

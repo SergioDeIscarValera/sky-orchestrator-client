@@ -39,7 +39,6 @@ const WAYPOINT_ROW = z.object({
   index: z.number(),
   position: z.unknown(),
   height_m: numeric,
-  speed_ms: z.nullish(numeric),
 })
 
 const WAYLINE_ROW = z.object({
@@ -47,10 +46,9 @@ const WAYLINE_ROW = z.object({
   name: z.string(),
   takeoff: z.unknown(),
   default_height_m: numeric,
-  speed_ms: numeric,
   design: z.record(z.string(), z.unknown()),
   waypoints: z.array(WAYPOINT_ROW).check(z.minLength(1)),
-  metrics: z.object({ waypoint_count: z.number(), distance_m: numeric, duration_s: numeric }),
+  metrics: z.object({ waypoint_count: z.number(), distance_m: numeric }),
   bake_version: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -84,7 +82,6 @@ const REFUSALS = {
     field: 'defaultHeightM',
     message: "A wayline's default height must be above zero.",
   },
-  wayline_speed_positive: { field: 'speedMs', message: "A wayline's speed must be above zero." },
   wayline_design_object: { field: 'design', message: 'The design must be an object.' },
   wayline_waypoints_baked: {
     field: 'waypoints',
@@ -92,8 +89,7 @@ const REFUSALS = {
   },
   wayline_metrics_object: {
     field: 'metrics',
-    message:
-      'The metrics of the bake need a waypoint count, a distance and a duration, as numbers.',
+    message: 'The metrics of the bake need a waypoint count and a distance, as numbers.',
   },
   wayline_bake_version_given: {
     field: 'bakeVersion',
@@ -176,9 +172,6 @@ function waypointOf(row: z.infer<typeof WAYPOINT_ROW>): Waypoint {
     index: row.index,
     position: positionFromStorage(row.position),
     heightM: Number(row.height_m),
-    ...(row.speed_ms === undefined || row.speed_ms === null
-      ? {}
-      : { speedMs: Number(row.speed_ms) }),
   }
 }
 
@@ -188,13 +181,11 @@ function waylineOf(row: z.infer<typeof WAYLINE_ROW>): Wayline {
     name: row.name,
     takeoff: positionFromStorage(row.takeoff),
     defaultHeightM: Number(row.default_height_m),
-    speedMs: Number(row.speed_ms),
     design: row.design,
     waypoints: row.waypoints.map((waypoint) => waypointOf(waypoint)),
     metrics: {
       waypointCount: row.metrics.waypoint_count,
       distanceM: Number(row.metrics.distance_m),
-      durationS: Number(row.metrics.duration_s),
     },
     bakeVersion: row.bake_version,
     createdAt: row.created_at,
@@ -222,7 +213,6 @@ function waypointColumns(waypoint: Waypoint): Record<string, unknown> {
     index: waypoint.index,
     position: positionToStorage(waypoint.position),
     height_m: waypoint.heightM,
-    speed_ms: waypoint.speedMs,
   })
 }
 
@@ -230,7 +220,6 @@ function metricsColumns(metrics: WaylineMetrics): Record<string, unknown> {
   return {
     waypoint_count: metrics.waypointCount,
     distance_m: metrics.distanceM,
-    duration_s: metrics.durationS,
   }
 }
 
@@ -239,7 +228,6 @@ function waylineColumns(changes: WaylineChanges): Record<string, unknown> {
     name: changes.name,
     takeoff: changes.takeoff === undefined ? undefined : positionToStorage(changes.takeoff),
     default_height_m: changes.defaultHeightM,
-    speed_ms: changes.speedMs,
     design: changes.design,
     waypoints: changes.waypoints?.map((waypoint) => waypointColumns(waypoint)),
     metrics: changes.metrics === undefined ? undefined : metricsColumns(changes.metrics),

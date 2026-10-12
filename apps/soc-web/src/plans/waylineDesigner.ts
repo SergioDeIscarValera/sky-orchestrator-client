@@ -20,12 +20,8 @@ export interface Designing {
   /** The next grid's spacings, between its lines and between the points along them. */
   readonly lineSpacingM: number | null
   readonly pointSpacingM: number | null
-  /** The geofence the wayline is designed for, which its points must keep inside. */
-  readonly geofenceId: string | null
   /** The sketches before each step, the latest last. */
   readonly past: readonly WaylineSketch[]
-  /** The last click refused, and why: a takeoff outside the geofence (FR-WAY-01). */
-  readonly refused: 'takeoff_outside_geofence' | null
 }
 
 /** Steps undo can go back. */
@@ -43,9 +39,7 @@ export function startedDesign(
     clockwise: true,
     lineSpacingM: null,
     pointSpacingM: null,
-    geofenceId: null,
     past: [],
-    refused: null,
   }
 }
 
@@ -54,7 +48,6 @@ function stepped(designing: Designing, sketch: WaylineSketch): Designing {
     ...designing,
     sketch,
     past: [...designing.past, designing.sketch].slice(-UNDO_STEPS),
-    refused: null,
   }
 }
 
@@ -70,25 +63,18 @@ function bearingDeg(from: Geodetic, to: Geodetic): number {
 }
 
 /**
- * A click on the ground: the takeoff moves there, unless `admits` refuses the place, the
- * geofence the wayline is designed for (FR-WAY-01); a route, points or a grid's area
- * gains a point; a circle takes its centre, then its radius and its start from the
- * second click.
+ * A click on the ground: the takeoff moves there; a route, points or a grid's area gains a
+ * point; a circle takes its centre, then its radius and its start from the second click.
  */
-export function clicked(
-  designing: Designing,
-  at: Geodetic,
-  admits: (at: Geodetic) => boolean = () => true,
-): Designing {
+export function clicked(designing: Designing, at: Geodetic): Designing {
   switch (designing.tool) {
     case null:
       return designing
     case 'takeoff':
-      if (!admits(at)) return { ...designing, refused: 'takeoff_outside_geofence' }
       return stepped(designing, { ...designing.sketch, takeoff: at })
     case 'circle': {
       const [centre] = designing.pending
-      if (centre === undefined) return { ...designing, pending: [at], refused: null }
+      if (centre === undefined) return { ...designing, pending: [at] }
       const { eastM, northM } = eastNorth(centre, at)
       const radiusM = Math.hypot(eastM, northM)
       if (radiusM === 0) return designing
@@ -108,7 +94,7 @@ export function clicked(
       }
     }
     default:
-      return { ...designing, pending: [...designing.pending, at], refused: null }
+      return { ...designing, pending: [...designing.pending, at] }
   }
 }
 
@@ -229,12 +215,7 @@ export function undone(designing: Designing): Designing {
 /** The figures typed into the form, which undo leaves alone, as the fields keep their own. */
 export function figured(
   designing: Designing,
-  figures: Partial<
-    Pick<
-      WaylineSketch,
-      'name' | 'defaultHeightM' | 'speedMs' | 'takeoffSecurityHeightM' | 'finishAction'
-    >
-  >,
+  figures: Partial<Pick<WaylineSketch, 'name' | 'defaultHeightM'>>,
 ): Designing {
   return { ...designing, sketch: { ...designing.sketch, ...figures } }
 }
@@ -248,10 +229,6 @@ export function gridSpaced(
 
 export function turned(designing: Designing, clockwise: boolean): Designing {
   return { ...designing, clockwise }
-}
-
-export function fenced(designing: Designing, geofenceId: string | null): Designing {
-  return { ...designing, geofenceId }
 }
 
 interface WaylineDesigner {

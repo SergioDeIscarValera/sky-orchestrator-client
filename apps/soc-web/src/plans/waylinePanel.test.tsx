@@ -1,6 +1,5 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 
-import type { GeofenceDraft } from '../backend/backend'
 import { geodeticAt, type Geodetic } from '../geometry/projection'
 import { FakeBackend, NEIGHBOUR, NORTH } from '../test/FakeBackend'
 import { renderApp } from '../test/render'
@@ -8,14 +7,6 @@ import { clicked, toolChosen, useWaylineDesigner, type Tool } from './waylineDes
 
 const FARM: Geodetic = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
 const at = (east: number, north: number) => geodeticAt(FARM, { eastM: east, northM: north })
-
-const FIELD: GeofenceDraft = {
-  name: 'North field',
-  polygon: [at(-50, -50), at(150, -50), at(150, 150), at(-50, 150)],
-  maxHeightM: 40,
-  origin: 'drawn',
-  marginM: null,
-}
 
 async function openAt(backend: FakeBackend, search: string) {
   window.history.replaceState(null, '', `/${search}`)
@@ -43,8 +34,6 @@ async function corridor(user: ReturnType<typeof renderApp>['user']) {
   await screen.findByRole('form', { name: 'New wayline' })
   await user.type(screen.getByLabelText('Name'), 'North corridor')
   await user.type(screen.getByLabelText('Height'), '30')
-  await user.type(screen.getByLabelText('Speed'), '5')
-  await user.type(screen.getByLabelText('Climb'), '20')
   draw('takeoff', [0, 0])
   draw('route', [0, 50], [100, 50])
   await user.click(screen.getByRole('button', { name: 'Finish' }))
@@ -62,7 +51,6 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-09)', () => {
     await corridor(user)
     const tiles = within(screen.getByRole('form', { name: 'New wayline' }))
     expect(tiles.getByText('150 m')).toBeVisible()
-    expect(tiles.getByText('30 s')).toBeVisible()
     expect(
       within(screen.getByRole('list', { name: 'Drawn' })).getByText('Route · 2 points'),
     ).toBeVisible()
@@ -74,15 +62,16 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-09)', () => {
     expect(saved).toMatchObject({
       name: 'North corridor',
       defaultHeightM: 30,
-      speedMs: 5,
       metrics: { waypointCount: 2 },
-      bakeVersion: '1.0.0',
+      bakeVersion: '2.0.0',
     })
     expect(saved?.waypoints.map(({ heightM }) => heightM)).toEqual([30, 30])
-    expect(saved?.design).toMatchObject({
-      takeoff_security_height_m: 20,
-      finish_action: 'return_home',
-    })
+    expect(Object.keys(saved?.design ?? {}).sort()).toEqual([
+      'default_height_m',
+      'primitives',
+      'schema_version',
+      'takeoff',
+    ])
     expect(search().get('wayline')).toBe(saved?.id)
     expect(
       await within(inspector()).findByRole('heading', { name: 'North corridor' }),
@@ -97,32 +86,7 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-09)', () => {
     const reasons = within(screen.getByRole('list', { name: 'Cannot be saved' }))
       .getAllByRole('listitem')
       .map((item) => item.textContent)
-    expect(reasons).toEqual([
-      'Name missing',
-      'Takeoff missing',
-      'Height missing',
-      'Speed missing',
-      'Climb missing',
-    ])
-    expect(await backend.waylines(NORTH.id)).toEqual([])
-  })
-
-  it('names each waypoint its geofence refuses, by its rule, and saves nothing', async () => {
-    const backend = new FakeBackend(NEIGHBOUR)
-    await backend.createGeofence(NORTH.id, FIELD)
-    const { user } = await openAt(backend, '?panel=waylines')
-    await corridor(user)
-    await user.selectOptions(screen.getByLabelText('Geofence'), 'North field')
-    draw('points', [300, 300])
-    await user.click(screen.getByRole('button', { name: 'Finish' }))
-    const refused = within(screen.getByRole('list', { name: 'Cannot be saved' }))
-    expect(refused.getByText('waypoint 2 is outside the geofence')).toBeVisible()
-    await user.clear(screen.getByLabelText('Height'))
-    await user.type(screen.getByLabelText('Height'), '45')
-    // Emptied, the height bakes nothing and the list goes; typed again, it is a new list.
-    const again = within(screen.getByRole('list', { name: 'Cannot be saved' }))
-    expect(again.getByText("waypoint 0 is above the geofence's ceiling of 40 m")).toBeVisible()
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(reasons).toEqual(['Name missing', 'Takeoff missing', 'Height missing', 'Nothing drawn'])
     expect(await backend.waylines(NORTH.id)).toEqual([])
   })
 

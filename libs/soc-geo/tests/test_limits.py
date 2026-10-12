@@ -13,14 +13,15 @@ from soc_geo.limits import Envelope, Plan, Waypoint, plan_of, violations
 from soc_geo.projection import Geodetic
 from soc_geo.sphere import distance_m
 
+#: contracts/flight-files' route: the route example's wayline, flown by an operation.
 ROUTE = (
     Path(__file__).resolve().parents[3]
     / "contracts"
-    / "geometry"
-    / "examples"
-    / "design.route.json"
+    / "flight-files"
+    / "route-return-home"
+    / "flight.json"
 )
-PLAN = plan_of(json.loads(ROUTE.read_text(encoding="utf-8"))["baked"])
+PLAN = plan_of(json.loads(ROUTE.read_text(encoding="utf-8")))
 FARM = Geodetic(41.6523, -4.7245)
 ROOMY = Envelope(
     geofence_center=FARM,

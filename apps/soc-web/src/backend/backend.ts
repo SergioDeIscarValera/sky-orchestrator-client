@@ -140,27 +140,28 @@ export type GeofenceChanges = Partial<GeofenceDraft>
 
 export type GeofenceField = keyof GeofenceDraft
 
-/** One baked waypoint: where, how high above takeoff, and how fast when the bake set a speed. */
+/** One baked waypoint: where, and how high above the takeoff point. */
 export interface Waypoint {
   readonly index: number
   readonly position: Geodetic
   readonly heightM: number
-  readonly speedMs?: number
 }
 
+/** A wayline's bake in figures: its waypoints and its distance. Its duration is its flight's. */
 export interface WaylineMetrics {
   readonly waypointCount: number
   readonly distanceM: number
-  readonly durationS: number
 }
 
-/** A wayline: its design as drawn and the baked result that flies, stored together (IR-WAY-01). */
+/**
+ * A wayline: its design as drawn and its bake, stored together (IR-WAY-01). A wayline is
+ * geometry: its speed, its climb, its finish and its geofence are the operation's (M4).
+ */
 export interface Wayline {
   readonly id: string
   readonly name: string
   readonly takeoff: Geodetic
   readonly defaultHeightM: number
-  readonly speedMs: number
   readonly design: Readonly<Record<string, unknown>>
   readonly waypoints: readonly Waypoint[]
   readonly metrics: WaylineMetrics
@@ -174,7 +175,6 @@ export interface WaylineDraft {
   readonly name: string
   readonly takeoff: Geodetic
   readonly defaultHeightM: number
-  readonly speedMs: number
   readonly design: Readonly<Record<string, unknown>>
   readonly waypoints: readonly Waypoint[]
   readonly metrics: WaylineMetrics

@@ -2,7 +2,6 @@
 import { eastNorth, geodeticAt, type Geodetic } from '../geometry/projection'
 import {
   clicked,
-  fenced,
   figured,
   finished,
   gridSpaced,
@@ -42,15 +41,6 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-05)', () => {
       tool: null,
       sketch,
     })
-  })
-
-  it('refuses a takeoff outside the geofence at placement, and keeps the one placed', () => {
-    const placed = drawn('takeoff', [0, 0])
-    const outside = clicked(placed, at(500, 500), () => false)
-    expect(outside.sketch.takeoff).toEqual(at(0, 0))
-    expect(outside.refused).toBe('takeoff_outside_geofence')
-    expect(outside.past).toBe(placed.past)
-    expect(clicked(outside, at(5, 5), () => true).refused).toBeNull()
   })
 
   it('places the takeoff where the ground is clicked, and moves it with the next click', () => {
@@ -150,13 +140,12 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-05)', () => {
   })
 
   it('keeps the figures typed out of undo, and a bounded history', () => {
-    const named = figured(drawn('takeoff', [0, 0]), { name: 'North corridor', speedMs: 5 })
+    const named = figured(drawn('takeoff', [0, 0]), { name: 'North corridor', defaultHeightM: 30 })
     expect(undone(named).sketch).toMatchObject({
       takeoff: null,
       name: 'North corridor',
-      speedMs: 5,
+      defaultHeightM: 30,
     })
-    expect(fenced(named, 'g1').geofenceId).toBe('g1')
     let many = toolChosen(startedDesign(), 'takeoff')
     for (let step = 0; step < UNDO_STEPS + 10; step += 1) many = clicked(many, at(step, 0))
     expect(many.past).toHaveLength(UNDO_STEPS)

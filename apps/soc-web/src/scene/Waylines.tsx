@@ -6,7 +6,6 @@ import { useSelect, useSelection, useView } from '../app/router'
 import type { Geodetic } from '../geometry/projection'
 import { useWaylines } from '../plans/data'
 import { useWaylineDesigner } from '../plans/waylineDesigner'
-import { climbOf } from '../plans/waylines'
 import { Dots } from './Dots'
 import { usePalette } from './palette'
 import type { Site } from './site'
@@ -46,7 +45,7 @@ export function Waylines({ site, origin }: Props) {
         const path = flownPath(
           {
             referencePoint: wayline.takeoff,
-            takeoffSecurityHeightM: climbOf(wayline),
+            takeoffSecurityHeightM: null,
             waypoints: wayline.waypoints.map(({ position, heightM }) => ({ ...position, heightM })),
           },
           origin,
