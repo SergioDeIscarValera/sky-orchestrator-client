@@ -8,6 +8,7 @@ import {
 import { z } from '../schema'
 
 import type { RuntimeConfiguration } from '../config/runtime'
+import { createLinkTracker, HEARTBEAT_MS, reporting } from './link'
 import { fleetOperations, type ChannelFactory } from './supabaseFleets'
 import { loadSite } from '../scene/siteModel'
 import { telemetryOperations } from './supabaseTelemetry'
@@ -51,12 +52,15 @@ export interface SupabaseOptions {
   readonly fetch?: typeof fetch
   readonly autoRefreshToken?: boolean
   readonly channel?: ChannelFactory
+  /** Where the browser says it went offline or came back: the window. */
+  readonly network?: EventTarget
 }
 
 export function supabaseBackend(
   configuration: Pick<RuntimeConfiguration, 'supabaseUrl' | 'supabaseKey'>,
   options: SupabaseOptions = {},
 ): Backend {
+  const link = createLinkTracker()
   const client = createClient(configuration.supabaseUrl, configuration.supabaseKey, {
     auth: {
       storageKey: SESSION_STORAGE_KEY,
@@ -65,16 +69,56 @@ export function supabaseBackend(
       detectSessionInUrl: false,
     },
     global: options.fetch === undefined ? {} : { fetch: options.fetch },
+    realtime: {
+      heartbeatIntervalMs: HEARTBEAT_MS,
+      // A heartbeat unanswered: the socket is torn down and rebuilt, each channel rejoined.
+      heartbeatCallback: (status) => {
+        if (status === 'timeout' || status === 'disconnected') link.lost()
+      },
+    },
   })
 
-  const channel: ChannelFactory =
-    options.channel ?? ((topic) => client.channel(topic, { config: { private: true } }))
+  const channel: ChannelFactory = reporting(
+    options.channel ?? ((topic) => client.channel(topic, { config: { private: true } })),
+    link,
+  )
+  // The browser going offline is a loss at once, not a heartbeat later. Coming back, a
+  // socket the cut killed reconnects now rather than after Phoenix's backoff; one that
+  // outlived it carries on. React Query refetches what the console shows on its own.
+  const offline = () => {
+    link.network(false)
+  }
+  const online = () => {
+    link.network(true)
+    client.realtime.connect()
+  }
+  const network = options.network ?? (typeof window === 'undefined' ? new EventTarget() : window)
+  let watchers = 0
 
   return {
     address: configuration.supabaseUrl,
     ...fleetOperations(client, channel),
     ...telemetryOperations(channel),
     siteModel: (organizationId: string) => loadSite(organizationId),
+
+    link: () => link.current(),
+
+    onLink(listener) {
+      const stop = link.subscribe(listener)
+      watchers += 1
+      if (watchers === 1) {
+        network.addEventListener('offline', offline)
+        network.addEventListener('online', online)
+      }
+      return () => {
+        stop()
+        watchers -= 1
+        if (watchers === 0) {
+          network.removeEventListener('offline', offline)
+          network.removeEventListener('online', online)
+        }
+      }
+    },
 
     onAccountChange(listener) {
       const { data } = client.auth.onAuthStateChange((_event, session) => {

@@ -62,13 +62,17 @@ class FakeChannel implements StateChannel {
   }
 }
 
-async function signedIn(channels: Map<string, FakeChannel> = new Map()) {
+async function signedIn(
+  channels: Map<string, FakeChannel> = new Map(),
+  network: EventTarget = new EventTarget(),
+) {
   const supabase = new FakeSupabase()
   const backend: Backend = supabaseBackend(
     { supabaseUrl: ADDRESS, supabaseKey: jwtFor('anon') },
     {
       fetch: supabase.fetch,
       autoRefreshToken: false,
+      network,
       channel: (topic) => {
         const made = new FakeChannel()
         channels.set(topic, made)
@@ -314,5 +318,22 @@ describe("the organization's state topic", () => {
     for (const status of ['SUBSCRIBED', 'CHANNEL_ERROR', 'TIMED_OUT', 'SUBSCRIBED'])
       joined?.(status)
     expect(seen).toEqual(['joined', 'joined'])
+  })
+
+  it('tells the console its link is down while the browser is offline (NFR-REL-07)', async () => {
+    const network = new EventTarget()
+    const { backend, channels } = await signedIn(new Map(), network)
+    const seen: string[] = []
+    const stopLink = backend.onLink((link) => seen.push(link))
+    const stop = backend.onState(ORGANIZATION, () => undefined)
+    const joined = channels.get(`org:${ORGANIZATION}:soc:state`)?.joined
+    joined?.('SUBSCRIBED')
+    network.dispatchEvent(new Event('offline'))
+    network.dispatchEvent(new Event('online'))
+    stop()
+    stopLink()
+    // Nobody listening any more, so going offline is nobody's news.
+    network.dispatchEvent(new Event('offline'))
+    expect(seen).toEqual(['up', 'down', 'up', 'connecting'])
   })
 })

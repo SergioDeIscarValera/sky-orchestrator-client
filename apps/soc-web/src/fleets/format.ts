@@ -1,13 +1,15 @@
 import type { AircraftModel, Device, LinkState } from '../backend/backend'
+import type { Link } from '../backend/link'
 
 export type Presence = 'online' | 'offline' | 'unknown'
 
 /**
  * A device keeps the last presence its stack reported, so it says something about
- * now only while that stack is connected (FR-LNK-02).
+ * now only while that stack is connected (FR-LNK-02), and while the console's own
+ * link is up: cut off, the console knows the presence as of the cut (NFR-REL-07).
  */
-export function presenceOf(device: Device): Presence {
-  if (device.stack.linkState !== 'connected') return 'unknown'
+export function presenceOf(device: Device, link: Link = 'up'): Presence {
+  if (link === 'down' || device.stack.linkState !== 'connected') return 'unknown'
   return device.online ? 'online' : 'offline'
 }
 
@@ -25,14 +27,14 @@ const STACK_LONG: Readonly<Record<LinkState, string>> = {
   unreachable: 'unreachable',
 }
 
-export function presenceLabel(device: Device): string {
-  switch (presenceOf(device)) {
+export function presenceLabel(device: Device, link: Link = 'up'): string {
+  switch (presenceOf(device, link)) {
     case 'online':
       return 'Online'
     case 'offline':
       return 'Offline'
     case 'unknown':
-      return STACK_SHORT[device.stack.linkState]
+      return link === 'down' ? 'Unknown' : STACK_SHORT[device.stack.linkState]
   }
 }
 
