@@ -24,6 +24,8 @@ EXTERNAL_SCHEMES = ("http://", "https://", "mailto:", "tel:", "ftp://")
 SKIPPED_DIRECTORIES = frozenset(
     {".git", "node_modules", ".venv", "venv", "build", "dist", ".pnpm-store", ".pytest_cache"}
 )
+#: Another repository's files, kept byte for byte: their links point into that one.
+VENDORED = ("contracts", "sky-orchestrator")
 
 
 @dataclass(frozen=True)
@@ -34,7 +36,9 @@ class BrokenLink:
 
 def markdown_files(root: Path) -> Iterator[Path]:
     for path in sorted(root.rglob("*.md")):
-        if not SKIPPED_DIRECTORIES.intersection(path.relative_to(root).parts):
+        parts = path.relative_to(root).parts
+        vendored = parts[: len(VENDORED)] == VENDORED and len(parts) > len(VENDORED) + 1
+        if not SKIPPED_DIRECTORIES.intersection(parts) and not vendored:
             yield path
 
 

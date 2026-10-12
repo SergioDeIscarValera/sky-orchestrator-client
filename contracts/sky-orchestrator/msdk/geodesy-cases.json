@@ -1,0 +1,138 @@
+{
+  "description": "Distances every implementation of the project's geodesy must reproduce to within 1e-6 m: core/geo/Geodesy.kt in the application and so_wayline/geodesy.py on the server. A plan is checked on both sides against the same limits, so the two must measure alike (FR-WAY-06, FR-SAF-01). Spherical Earth, radius 6371008.8 m, haversine.",
+  "tolerance_m": 1e-06,
+  "cases": [
+    {
+      "what": "the same point",
+      "a": {
+        "latitude_deg": 45.0,
+        "longitude_deg": 7.0
+      },
+      "b": {
+        "latitude_deg": 45.0,
+        "longitude_deg": 7.0
+      },
+      "distance_m": 0.0
+    },
+    {
+      "what": "15 m north at the test site",
+      "a": {
+        "latitude_deg": 45.0,
+        "longitude_deg": 7.0
+      },
+      "b": {
+        "latitude_deg": 45.0001349,
+        "longitude_deg": 7.0
+      },
+      "distance_m": 15.000216323682203
+    },
+    {
+      "what": "15 m east at the test site",
+      "a": {
+        "latitude_deg": 45.0,
+        "longitude_deg": 7.0
+      },
+      "b": {
+        "latitude_deg": 45.0,
+        "longitude_deg": 7.0001908
+      },
+      "distance_m": 15.001992537106087
+    },
+    {
+      "what": "a square's diagonal",
+      "a": {
+        "latitude_deg": 45.0,
+        "longitude_deg": 7.0
+      },
+      "b": {
+        "latitude_deg": 45.0001349,
+        "longitude_deg": 7.0001908
+      },
+      "distance_m": 21.214752884453368
+    },
+    {
+      "what": "one degree of latitude at the equator",
+      "a": {
+        "latitude_deg": 0.0,
+        "longitude_deg": 0.0
+      },
+      "b": {
+        "latitude_deg": 1.0,
+        "longitude_deg": 0.0
+      },
+      "distance_m": 111195.0802335329
+    },
+    {
+      "what": "a thousandth of a degree east at 60 N",
+      "a": {
+        "latitude_deg": 60.0,
+        "longitude_deg": 0.0
+      },
+      "b": {
+        "latitude_deg": 60.0,
+        "longitude_deg": 0.001
+      },
+      "distance_m": 55.59754011623723
+    },
+    {
+      "what": "across the antimeridian",
+      "a": {
+        "latitude_deg": 10.0,
+        "longitude_deg": 179.9999
+      },
+      "b": {
+        "latitude_deg": 10.0,
+        "longitude_deg": -179.9999
+      },
+      "distance_m": 21.901155422886255
+    },
+    {
+      "what": "half the world round the equator",
+      "a": {
+        "latitude_deg": 0.0,
+        "longitude_deg": 0.0
+      },
+      "b": {
+        "latitude_deg": 0.0,
+        "longitude_deg": 180.0
+      },
+      "distance_m": 20015114.442035925
+    },
+    {
+      "what": "pole to pole",
+      "a": {
+        "latitude_deg": 90.0,
+        "longitude_deg": 0.0
+      },
+      "b": {
+        "latitude_deg": -90.0,
+        "longitude_deg": 0.0
+      },
+      "distance_m": 20015114.442035925
+    },
+    {
+      "what": "a geofence edge, 50 m away",
+      "a": {
+        "latitude_deg": 45.0,
+        "longitude_deg": 7.0
+      },
+      "b": {
+        "latitude_deg": 45.00044966,
+        "longitude_deg": 7.0
+      },
+      "distance_m": 49.999979777855856
+    },
+    {
+      "what": "south-west, southern hemisphere",
+      "a": {
+        "latitude_deg": -33.8688,
+        "longitude_deg": 151.2093
+      },
+      "b": {
+        "latitude_deg": -33.8698,
+        "longitude_deg": 151.2083
+      },
+      "distance_m": 144.5286423229256
+    }
+  ]
+}
