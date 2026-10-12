@@ -1,0 +1,299 @@
+// @vitest-environment node
+import { readFileSync, writeFileSync } from 'node:fs'
+
+import { bake, MERGE_M, SPLIT_SLACK, type Baked, type Design, type Primitive } from './bake'
+import type { Envelope } from './limits'
+import { eastNorth, type Geodetic } from './projection'
+import { distanceM } from './sphere'
+
+/** contracts/geometry/bake.json: designs and their bakes, which libs/soc-geo checks. */
+const VECTORS = new URL('../../../../contracts/geometry/bake.json', import.meta.url)
+const FARM: Geodetic = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
+
+/** A position `east` and `north` metres from the farm, as a design would hold it. */
+function near(east: number, north: number) {
+  return {
+    latitude_deg: FARM.latitudeDeg + north / 111_045,
+    longitude_deg: FARM.longitudeDeg + east / 83_330,
+  }
+}
+
+const ROOMY = {
+  geofence_center: { latitude_deg: FARM.latitudeDeg, longitude_deg: FARM.longitudeDeg },
+  geofence_radius_m: 1000,
+  max_height_m: 120,
+  max_home_distance_m: 1000,
+  max_leg_m: 300,
+  max_transit_m: 300,
+  max_total_distance_m: 5000,
+  max_waypoints: 200,
+  max_horizontal_speed_ms: 15,
+}
+
+const BASE = {
+  schema_version: '1.0.0',
+  takeoff: near(0, 0),
+  default_height_m: 30,
+  takeoff_security_height_m: 20,
+  speed_ms: 5,
+  finish_action: 'return_home',
+}
+
+type Json = Record<string, unknown>
+
+const CASES: readonly { name: string; design: Json; envelope: Json }[] = [
+  {
+    name: 'a route and a point of interest',
+    design: {
+      ...BASE,
+      primitives: [
+        { kind: 'route', points: [near(0, 28), near(37, 28), { ...near(37, 0), height_m: 35 }] },
+        { kind: 'points', points: [near(17, 0)] },
+      ],
+    },
+    envelope: ROOMY,
+  },
+  {
+    name: 'twenty points of interest, ordered by the heuristic',
+    design: {
+      ...BASE,
+      primitives: [
+        {
+          kind: 'points',
+          points: Array.from({ length: 20 }, (_, i) =>
+            near(((i * 37) % 200) - 100, ((i * 53) % 160) - 80),
+          ),
+        },
+      ],
+    },
+    envelope: ROOMY,
+  },
+  {
+    name: 'a route, a circle and a grid, ordered exactly',
+    design: {
+      ...BASE,
+      primitives: [
+        {
+          kind: 'grid',
+          area: [near(100, 100), near(160, 100), near(160, 140), near(100, 140)],
+          line_spacing_m: 10,
+          point_spacing_m: 15,
+          height_m: 25,
+        },
+        {
+          kind: 'circle',
+          centre: near(-80, 60),
+          radius_m: 30,
+          clockwise: true,
+          start_bearing_deg: 0,
+        },
+        { kind: 'route', points: [near(20, -40), near(60, -40)] },
+      ],
+    },
+    envelope: ROOMY,
+  },
+  {
+    name: 'legs longer than the stack allows, split',
+    design: { ...BASE, primitives: [{ kind: 'route', points: [near(0, 100), near(250, 100)] }] },
+    envelope: { ...ROOMY, max_leg_m: 60 },
+  },
+  {
+    name: 'a point above the ceiling, reported not fixed',
+    design: {
+      ...BASE,
+      primitives: [{ kind: 'route', points: [near(0, 50), { ...near(50, 50), height_m: 150 }] }],
+    },
+    envelope: ROOMY,
+  },
+  {
+    name: 'points closer than half a metre, merged',
+    design: {
+      ...BASE,
+      primitives: [{ kind: 'route', points: [near(10, 10), near(10.3, 10), near(40, 10)] }],
+    },
+    envelope: ROOMY,
+  },
+  { name: 'nothing drawn', design: { ...BASE, primitives: [] }, envelope: ROOMY },
+]
+
+const geodetic = (raw: unknown): Geodetic => {
+  const { latitude_deg: latitudeDeg, longitude_deg: longitudeDeg } = raw as {
+    latitude_deg: number
+    longitude_deg: number
+  }
+  return { latitudeDeg, longitudeDeg }
+}
+
+function designOf(raw: Json): Design {
+  const primitive = (p: Json): Primitive => {
+    const height = p.height_m === undefined ? {} : { heightM: p.height_m as number }
+    switch (p.kind) {
+      case 'route':
+      case 'points':
+        return {
+          kind: p.kind,
+          points: (p.points as Json[]).map((point) => ({
+            ...geodetic(point),
+            ...(point.height_m === undefined ? {} : { heightM: point.height_m as number }),
+          })),
+        }
+      case 'circle':
+        return {
+          kind: 'circle',
+          centre: geodetic(p.centre),
+          radiusM: p.radius_m as number,
+          clockwise: p.clockwise as boolean,
+          startBearingDeg: p.start_bearing_deg as number,
+          ...height,
+        }
+      default:
+        return {
+          kind: 'grid',
+          area: (p.area as Json[]).map(geodetic),
+          lineSpacingM: p.line_spacing_m as number,
+          pointSpacingM: p.point_spacing_m as number,
+          ...height,
+        }
+    }
+  }
+  return {
+    takeoff: geodetic(raw.takeoff),
+    defaultHeightM: raw.default_height_m as number,
+    takeoffSecurityHeightM: raw.takeoff_security_height_m as number,
+    speedMs: raw.speed_ms as number,
+    finishAction: raw.finish_action as Design['finishAction'],
+    primitives: (raw.primitives as Json[]).map(primitive),
+  }
+}
+
+function envelopeOf(raw: Json): Envelope {
+  return {
+    geofenceCenter: geodetic(raw.geofence_center),
+    geofenceRadiusM: raw.geofence_radius_m as number,
+    maxHeightM: raw.max_height_m as number,
+    maxHomeDistanceM: raw.max_home_distance_m as number,
+    maxLegM: raw.max_leg_m as number,
+    maxTransitM: raw.max_transit_m as number,
+    maxTotalDistanceM: raw.max_total_distance_m as number,
+    maxWaypoints: raw.max_waypoints as number,
+    maxHorizontalSpeedMs: raw.max_horizontal_speed_ms as number,
+  }
+}
+
+/** The bake as design.schema.json writes it. */
+function written(baked: Baked) {
+  return {
+    schema_version: '1.0.0',
+    takeoff_security_height_m: baked.takeoffSecurityHeightM,
+    reference_point: {
+      latitude_deg: baked.referencePoint.latitudeDeg,
+      longitude_deg: baked.referencePoint.longitudeDeg,
+    },
+    speed_ms: baked.speedMs,
+    finish_action: baked.finishAction,
+    waypoints: baked.waypoints.map((w) => ({
+      index: w.index,
+      latitude_deg: w.latitudeDeg,
+      longitude_deg: w.longitudeDeg,
+      height_m: w.heightM,
+    })),
+    distance_m: baked.distanceM,
+    duration_s: baked.durationS,
+    violations: baked.violations.map((v) => ({
+      rule: v.rule,
+      message: v.message,
+      ...(v.waypointIndex === undefined ? {} : { waypoint_index: v.waypointIndex }),
+    })),
+  }
+}
+
+const baked = (input: (typeof CASES)[number]) =>
+  bake(designOf(input.design), {
+    origin: FARM,
+    maxArcSpacingM: 10,
+    envelope: envelopeOf(input.envelope),
+  })
+
+const local = (point: Geodetic) => {
+  const placed = eastNorth(FARM, point)
+  return [placed.eastM, placed.northM] as const
+}
+
+describe('the bake (FR-WAY-07)', () => {
+  it('bakes the same design to the same wayline, every time', () => {
+    for (const input of CASES) expect(baked(input)).toEqual(baked(input))
+  })
+
+  it('flies a route in the order drawn and every point of interest once', () => {
+    const input = CASES[0] as (typeof CASES)[number]
+    const { waypoints, violations } = baked(input)
+    expect(violations).toEqual([])
+    const where = waypoints.map(local)
+    const [route, poi] = designOf(input.design).primitives
+    const indexOf = (point: Geodetic) => {
+      const [east, north] = local(point)
+      return where.findIndex((w) => Math.hypot(w[0] - east, w[1] - north) < 1e-6)
+    }
+    const found = route?.kind === 'route' ? route.points.map(indexOf) : []
+    expect(found).toHaveLength(3)
+    expect(found.every((index) => index >= 0)).toBe(true)
+    expect([...found].sort((a, b) => a - b)).toEqual(found)
+    expect(waypoints.find((w) => w.heightM === 35)).toBeDefined()
+    const visits = poi?.kind === 'points' ? poi.points.map(indexOf) : []
+    expect(visits.filter((index) => index >= 0)).toHaveLength(1)
+  })
+
+  it('splits a leg longer than the stack allows, with 1 % to spare', () => {
+    const input = CASES[3] as (typeof CASES)[number]
+    const { waypoints, violations } = baked(input)
+    expect(violations).toEqual([])
+    let before: Geodetic = FARM
+    for (const waypoint of waypoints) {
+      expect(distanceM(before, waypoint)).toBeLessThanOrEqual(60 * (1 - SPLIT_SLACK) + 1e-9)
+      before = waypoint
+    }
+  })
+
+  it('reports a point above the ceiling with its index, never moves it', () => {
+    const { waypoints, violations } = baked(CASES[4] as (typeof CASES)[number])
+    expect(violations.map((v) => [v.rule, v.waypointIndex])).toEqual([['height_above_max', 1]])
+    expect(waypoints[1]?.heightM).toBe(150)
+  })
+
+  it('merges points closer than half a metre into the first', () => {
+    const { waypoints } = baked(CASES[5] as (typeof CASES)[number])
+    expect(waypoints).toHaveLength(2)
+    const where = waypoints.map(local)
+    for (const [index, w] of where.slice(1).entries()) {
+      const prior = where[index] ?? w
+      expect(Math.hypot(w[0] - prior[0], w[1] - prior[1])).toBeGreaterThanOrEqual(MERGE_M)
+    }
+  })
+
+  it('says when nothing is drawn', () => {
+    expect(baked(CASES[6] as (typeof CASES)[number]).violations[0]?.rule).toBe('no_waypoints')
+  })
+
+  it('keeps contracts/geometry/bake.json, which libs/soc-geo checks, its output', () => {
+    const cases = CASES.map((input) => ({ ...input, baked: written(baked(input)) }))
+    if (process.env.WRITE_VECTORS === '1') {
+      writeFileSync(
+        VECTORS,
+        `${JSON.stringify(
+          {
+            description:
+              "Designs and the waylines the console's bake gives them (FR-WAY-07), at origin with max_arc_spacing_m, against each case's envelope. libs/soc-geo holds every bake to the design schema and to the requirement: its violations are exactly what the Python validator finds, its distance is Sky Orchestrator's, no leg is longer than the envelope's and no two points are closer than half a metre.",
+            'x-version': '1.0.0',
+            origin: { latitude_deg: FARM.latitudeDeg, longitude_deg: FARM.longitudeDeg },
+            max_arc_spacing_m: 10,
+            cases,
+          },
+          null,
+          2,
+        )}\n`,
+      )
+    }
+    const kept = JSON.parse(readFileSync(VECTORS, 'utf8')) as { cases: typeof cases }
+    expect(kept.cases).toEqual(JSON.parse(JSON.stringify(cases)))
+  })
+})
