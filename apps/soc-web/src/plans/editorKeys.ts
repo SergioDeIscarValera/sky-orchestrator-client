@@ -3,13 +3,13 @@ import { useEffect } from 'react'
 import { closed, deleted, undone, useGeofenceEditor } from './geofenceEditor'
 
 /** Where a key is the user's text, not the editor's command. */
-function typing(target: EventTarget | null): boolean {
+export function typing(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
 /** Where Enter presses what has the focus, a button or a link, rather than closing the ring. */
-function pressable(target: EventTarget | null): boolean {
+export function pressable(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && ['BUTTON', 'A'].includes(target.tagName)
 }
 
