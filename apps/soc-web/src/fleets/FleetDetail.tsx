@@ -56,7 +56,7 @@ export function FleetDetail({ fleetId }: { readonly fleetId: string }) {
   const writes = changesFleets(organization.role)
   const zone = organization.timeZone
 
-  // Editing lives in the URL, so the fleet panel's Edit opens it here.
+  // Editing lives in the URL: the Edit button opens the form here.
   if (form === 'edit' && writes) {
     const before = readValues(valuesOf(fleet))
     return (

@@ -135,7 +135,9 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-09)', () => {
       expect(designing()).toBeNull()
     })
     const changed = vi.spyOn(backend, 'changeWayline')
+    const [kept] = await backend.waylines(NORTH.id)
     await user.click(await within(inspector()).findByRole('button', { name: 'Edit' }))
+    expect([search().get('panel'), search().get('wayline')]).toEqual(['waylines', kept?.id])
     expect(await screen.findByRole('form', { name: 'Edit North corridor' })).toBeVisible()
     expect(designing()?.sketch.primitives).toEqual([
       { kind: 'route', points: [at(0, 50), at(100, 50)] },

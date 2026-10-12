@@ -53,10 +53,10 @@ The console: one persistent 3D scene of the farm with floating panels
 - **The view in the URL** (`NFR-UX-03`): the rail opens and closes a panel
   beside it, kept as `?panel=` with the selection (`?fleet=<id>`, a geofence as
   `?geofence=<id>`, or an aircraft as `?gateway=<sn>&aircraft=<sn>`), so a link
-  shared on the LAN opens
-  the same view; a value the console cannot read is left out, and Escape
-  closes the open panel (`NFR-UX-04`). The panels' content arrives with their
-  milestones, each saying when.
+  shared on the LAN opens the same view; a value the console cannot read is left
+  out, and Escape closes the open panel (`NFR-UX-04`). Opening or closing a panel
+  from the rail, or closing it with its X, drops the selection, so the inspector
+  closes. The panels' content arrives with their milestones, each saying when.
 - **Geofences** (`FR-GEO-01` to `FR-GEO-04`): the geofence panel lists the
   organization's geofences, each with how it was made and its ceiling; one
   selected shows its figures in the inspector, with Edit, Duplicate and Retire.
@@ -115,10 +115,9 @@ The console: one persistent 3D scene of the farm with floating panels
   and a retired row changes no more.
 - **The fleet panel** (`FR-FLE-02`): the organization's aircraft in one list,
   each with its colour: its fleets first, with their model and presence, then the
-  aircraft its stacks announced that are in no fleet, marked _Not registered_. An
-  editor's actions are on the row: _Register_ opens an aircraft's registration
-  and the pencil a fleet's edit, in the inspector, the form kept in the URL. A
-  row selects, a second click lets go. An
+  aircraft its stacks announced that are in no fleet, marked _Not registered_. A
+  row only selects, and a second click lets go; an editor registers an aircraft or
+  edits a fleet from the inspector, the form kept in the URL. An
   aircraft is _Online_ or _Offline_ only while its stack is connected: otherwise
   it reads as the stack's state, since a stack out of reach says nothing about
   now (`FR-LNK-02`).

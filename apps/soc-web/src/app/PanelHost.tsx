@@ -4,7 +4,7 @@ import { lazy, Suspense, useId } from 'react'
 import { Waiting } from '../fleets/Details'
 import { FleetPanel } from '../fleets/FleetPanel'
 import { DESTINATIONS } from './destinations'
-import { useChangeView, useView } from './router'
+import { useChangeView, useView, withPanel } from './router'
 import { CARD, QUIET_BUTTON } from './styles'
 
 // The plans' panels and their geometry load when first opened, outside the first load
@@ -38,7 +38,7 @@ export function PanelHost() {
           aria-label={`Close ${destination.label}`}
           className={QUIET_BUTTON}
           onClick={() => {
-            change((view) => ({ ...view, panel: undefined }))
+            change(() => withPanel(undefined))
           }}
         >
           <X size={16} aria-hidden />

@@ -185,7 +185,7 @@ describe("a geofence's changes (FR-GEO-02)", () => {
     const changed = vi.spyOn(backend, 'changeGeofence')
     const { user } = await openAt(backend, `?geofence=${square.id}`)
     await user.click(await within(inspector()).findByRole('button', { name: 'Edit' }))
-    expect(search().get('panel')).toBe('geofences')
+    expect([search().get('panel'), search().get('geofence')]).toEqual(['geofences', square.id])
     expect(await screen.findByRole('form', { name: 'Edit North field' })).toBeVisible()
     const name = screen.getByLabelText('Name')
     await user.clear(name)
