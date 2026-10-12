@@ -49,7 +49,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-TEL-04 | MUST | soc-cloud, database | M4 | — | Planned |
 | FR-TEL-05 | MUST | soc-web | M4 | — | Planned |
 | FR-GEO-01 | MUST | soc-web, libs, database | M3 | — | Planned |
-| FR-GEO-02 | MUST | soc-web, libs, database | M3 | — | Planned |
+| FR-GEO-02 | MUST | soc-web, libs, database | M3 | `database/tests/test_geofences_and_waylines.py` | Partial: the database holds geofences listed, renamed and retired, each reusable by any operation; the flight's snapshot arrives with the flights (M4) |
 | FR-GEO-03 | MUST | soc-web, libs, database | M3 | — | Planned |
 | FR-GEO-04 | MUST | soc-web, libs, database | M3 | — | Planned |
 | FR-WAY-01 | MUST | soc-web, libs | M3 | — | Planned |
@@ -60,7 +60,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-WAY-06 | MUST | soc-web, libs | M3 | — | Planned |
 | FR-WAY-07 | MUST | soc-web, libs | M3 | — | Planned |
 | FR-WAY-08 | MUST | soc-web, libs, soc-cloud | M3, M4 | — | Planned |
-| FR-WAY-09 | MUST | soc-web, libs | M3 | — | Planned |
+| FR-WAY-09 | MUST | soc-web, libs | M3 | `database/tests/test_geofences_and_waylines.py` | Partial: the database holds a wayline's design and its baked waypoints saved together, loaded as saved and never baked again; the designer arrives next |
 | FR-WAY-10 | MUST | soc-web, libs | M3 | — | Planned |
 | FR-WAY-11 | MUST | soc-operations | M3 | — | Planned |
 | FR-WAY-12 | COULD | soc-operations, soc-web | M7 | — | Planned |
