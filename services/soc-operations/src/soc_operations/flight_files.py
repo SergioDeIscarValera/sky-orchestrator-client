@@ -6,10 +6,12 @@ is the planning file, which Sky Orchestrator reads for its name and template typ
 is in Sky Orchestrator's accepted subset (``contracts/sky-orchestrator/wpml/supported-subset.md``),
 and the tests hold the output to that page's own tables.
 
-The same bake and name always give the same bytes: a fixed entry order and timestamp, a fixed
-deflate level and attributes, no comment and no extra fields. A bake's positions are
-``[longitude, latitude]``. DJI's order, latitude first in ``takeOffRefPoint``, is translated
-here and nowhere else.
+The same bake and name always give the same bytes, on any machine: a fixed entry order,
+timestamp and attributes, no comment and no extra fields, and the entries stored rather than
+deflated, so no zlib release can move a byte. A flight file is a few kilobytes.
+
+A bake's positions are ``[longitude, latitude]``. DJI's order, latitude first in
+``takeOffRefPoint``, is translated here and nowhere else.
 """
 
 from __future__ import annotations
@@ -45,7 +47,6 @@ DJI_FINISH_ACTIONS = {dji: bake for bake, dji in FINISH_ACTIONS.items()}
 ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 ZIP_CREATE_SYSTEM = 3  # Unix, whichever platform builds the file
 ZIP_ATTRIBUTES = 0o644 << 16
-ZIP_COMPRESSION_LEVEL = 9
 
 INDENT = "  "
 DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>'
@@ -374,20 +375,13 @@ def _number(value: float) -> str:
 
 def _archive(members: Sequence[tuple[str, str]]) -> bytes:
     buffer = io.BytesIO()
-    with zipfile.ZipFile(
-        buffer, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=ZIP_COMPRESSION_LEVEL
-    ) as archive:
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_STORED) as archive:
         for path, text in members:
             info = zipfile.ZipInfo(path, date_time=ZIP_TIMESTAMP)
-            info.compress_type = zipfile.ZIP_DEFLATED
+            info.compress_type = zipfile.ZIP_STORED
             info.create_system = ZIP_CREATE_SYSTEM
             info.external_attr = ZIP_ATTRIBUTES
-            archive.writestr(
-                info,
-                text.encode("utf-8"),
-                compress_type=zipfile.ZIP_DEFLATED,
-                compresslevel=ZIP_COMPRESSION_LEVEL,
-            )
+            archive.writestr(info, text.encode("utf-8"), compress_type=zipfile.ZIP_STORED)
     return buffer.getvalue()
 
 

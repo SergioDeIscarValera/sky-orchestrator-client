@@ -46,6 +46,6 @@ with zipfile.ZipFile(io.BytesIO(kmz)) as archive:
 PY
 ```
 
-Swap the case path and the name for the other case. The hashes depend on zlib's deflate output
-at level 9: a zlib release that changes that output moves the hashes but not the texts. Then the
-texts are still the reviewed truth, and only `kmz.sha256` is regenerated, deliberately.
+Swap the case path and the name for the other case. The KMZ's entries are stored, not
+deflated, so its bytes depend on the builder and on nothing installed: the same hashes on any
+machine, in any Python with the same `zipfile` layout.

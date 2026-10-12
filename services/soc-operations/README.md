@@ -65,8 +65,9 @@ Every element is in the subset Sky Orchestrator accepts
   notation, so `float(text)` gives back the value exactly.
 
 **Determinism.** The same bake and name give the same bytes. The entries are in a
-fixed order with a fixed timestamp (1980-01-01 00:00:00), deflated at level 9, with
-fixed attributes, and no comment and no extra fields.
+fixed order with a fixed timestamp (1980-01-01 00:00:00), with fixed attributes, and
+no comment and no extra fields. They are stored rather than deflated: no zlib release
+can move a byte, and a flight file is a few kilobytes.
 
 **Refused, nothing written** (`ValueError`, naming the problem): no waypoint; an
 index out of order; a position that is not two finite numbers in range; a height
@@ -124,5 +125,4 @@ service comes up ready on the production Postgres image as `soc_operations`.
 | SIGTERM | The link closes and the process exits with status 0 |
 | A bake the subset cannot fly | `flight_files.build` raises `ValueError` naming it; no file is made |
 | A change to the builder moves a byte of a flight file | The golden tests fail; a deliberate change regenerates the golden case in the same commit |
-| zlib changes its deflate output | The golden hashes fail while the texts still match; `kmz.sha256` is regenerated deliberately |
 | A bake with violations | `flight_files.build` refuses it, naming each rule and waypoint; no file is made |

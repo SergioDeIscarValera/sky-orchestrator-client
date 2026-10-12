@@ -16,7 +16,6 @@ import re
 import struct
 import xml.etree.ElementTree as ET
 import zipfile
-import zlib
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -225,7 +224,7 @@ def test_the_archive_holds_the_two_files_in_order_with_fixed_metadata() -> None:
     assert [info.filename for info in infos] == [TEMPLATE, WAYLINES]
     for info in infos:
         assert info.date_time == (1980, 1, 1, 0, 0, 0)
-        assert info.compress_type == zipfile.ZIP_DEFLATED
+        assert info.compress_type == zipfile.ZIP_STORED
         assert info.external_attr == 0o644 << 16
         assert info.create_system == 3
         assert info.comment == b""
@@ -233,7 +232,7 @@ def test_the_archive_holds_the_two_files_in_order_with_fixed_metadata() -> None:
         assert info.flag_bits == 0
 
 
-def test_each_entry_is_deflated_at_level_nine() -> None:
+def test_each_entry_is_stored_as_written_so_no_zlib_moves_a_byte() -> None:
     kmz = flight_files.build(bake(), name=NAME)
     contents = members(kmz)
     with zipfile.ZipFile(io.BytesIO(kmz)) as archive:
@@ -242,9 +241,8 @@ def test_each_entry_is_deflated_at_level_nine() -> None:
         start = info.header_offset
         name_length, extra_length = struct.unpack("<HH", kmz[start + 26 : start + 30])
         begin = start + 30 + name_length + extra_length
-        stored = kmz[begin : begin + info.compress_size]
-        compressor = zlib.compressobj(9, zlib.DEFLATED, -15)
-        assert stored == compressor.compress(contents[info.filename]) + compressor.flush()
+        assert kmz[begin : begin + info.compress_size] == contents[info.filename]
+        assert info.compress_size == info.file_size
 
 
 def test_the_fingerprint_is_the_md5_hex_digest_of_the_bytes() -> None:
