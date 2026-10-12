@@ -235,7 +235,11 @@ async function main() {
     ])
     emit({ event: 'stale', after_last_ms: staleAtMs - (samples.at(-1)?.receivedAtMs ?? staleAtMs) })
 
-    // The map tools sit bottom right whether or not a panel is open (the design system).
+    // The map tools sit bottom right whether or not a panel is open (the design system). The
+    // panel's close drops the selection too, so the inspector closes first: only the panel's
+    // close is measured.
+    await page.getByRole('button', { name: 'Close the inspector' }).click()
+    await page.getByRole('complementary', { name: 'Inspector' }).waitFor({ state: 'detached' })
     const tools = page.getByRole('toolbar', { name: 'Map tools' })
     const open = await tools.boundingBox()
     await page.getByRole('button', { name: 'Close Fleet' }).click()
@@ -249,8 +253,6 @@ async function main() {
 
     // The search: with nothing selected, `/`, a piece of the aircraft's serial and Enter
     // select its fleet, which the inspector shows and the scene follows.
-    await page.keyboard.press('Escape')
-    await page.getByRole('complementary', { name: 'Inspector' }).waitFor({ state: 'detached' })
     await page.keyboard.press('/')
     await page.keyboard.type(aircraft.slice(-6))
     await page

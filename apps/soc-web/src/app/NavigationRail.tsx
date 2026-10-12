@@ -1,5 +1,5 @@
 import { DESTINATIONS } from './destinations'
-import { useChangeView, useView } from './router'
+import { useChangeView, useView, withPanel } from './router'
 import { CARD } from './styles'
 
 export function NavigationRail() {
@@ -15,7 +15,7 @@ export function NavigationRail() {
           aria-label={label}
           aria-pressed={panel === destination}
           onClick={() => {
-            change((view) => ({ ...view, panel: panel === destination ? undefined : destination }))
+            change(() => withPanel(panel === destination ? undefined : destination))
           }}
           className="text-muted hover:bg-primary-subtle hover:text-primary-emphasis aria-pressed:bg-primary-subtle aria-pressed:text-primary-emphasis grid size-11 place-items-center rounded-xl transition-colors duration-200"
         >
