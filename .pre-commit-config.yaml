@@ -176,7 +176,7 @@ repos:
         language: system
         pass_filenames: false
         # The web's tests read these contracts and hold its mirrors equal to them.
-        files: ^(apps/soc-web/|contracts/(config|broadcast|geometry|site)/)
+        files: ^(apps/soc-web/|contracts/(config|broadcast|geometry|site|sky-orchestrator)/)
 
       - id: soc-geo-gate
         name: soc-geo gate
