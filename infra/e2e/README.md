@@ -61,6 +61,13 @@ user created through its admin API, with a profile, and owns Finca Norte.
 8. Escape clears the selection; `/`, the last six characters of the aircraft's
    serial and Enter in the top bar's search select its fleet again, and the
    scene follows it (`FR-SCN-05`).
+9. The dock flies again and the browser's network is cut for **10 s**, while the
+   fleet is renamed in the database (`NFR-REL-07`). Nothing reaches the page;
+   the top bar says Reconnecting within a second, every presence reads unknown,
+   and the inspector is no longer live. Back, the link, a live aircraft and the
+   new name must each show within 10 s: 1,078, 1,168 and 30 ms on 2026-10-12.
+   Chrome holds an open socket's frames while offline rather than closing it,
+   as a network that drops packets would.
 
 Both latencies come from this machine's one clock: the dock stamps each OSD with
 it, and the driver reads it as Chrome hands it each frame.

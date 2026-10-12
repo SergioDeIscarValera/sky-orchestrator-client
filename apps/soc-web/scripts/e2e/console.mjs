@@ -12,6 +12,11 @@
 //   ← {"stopped": true}                        the dock has gone quiet
 //   → {"event": "stale", "after_last_ms"}      the inspector says Stale
 //   → {"event": "layout", "map_tools_moved_px"} the map tools with the panel open and shut
+//   → {"event": "search", "selected", "following"} the fleet found from the top bar
+//   ← {"flying_again": true}                   the dock flies again
+//   → {"event": "cut"}                         the browser's network is cut
+//   ← {"renamed_to": <name>}                   the fleet renamed in the database
+//   → {"event": "reconnected", ...}            the network back for CUT_MS, timed
 //
 // Each sample's latency is the browser's receipt, the frame as Playwright hands it
 // over, against the dock's publish (its taken_at_ms) and against soc-cloud's
@@ -28,6 +33,8 @@ import { sampleOf, summary } from './frames.mjs'
 // The catalogue's identifier, as contracts/catalogue/aircraft-models.json names the Mavic Air 2.
 const FLEET = { name: 'Norte 1', model: 'mavic-air-2', airframeSerial: '1WNBH9' }
 const WAIT_MS = 30_000
+/** NFR-REL-07: how long the browser's network is cut. */
+const CUT_MS = 10_000
 
 function required(name) {
   const value = process.env[name]
@@ -65,19 +72,22 @@ async function overlayMs(page, label) {
   return Number.isFinite(value) ? value : null
 }
 
-/** Runs in the page, where globalThis is its window: the wall clock when the Live card's pill first reads Stale. */
-function staleAt() {
-  const stale = () =>
+/**
+ * Runs in the page: the wall clock when some span's text first starts with `text`
+ * (`present`), or when none does any more.
+ */
+function whenText({ text, present }) {
+  const shown = () =>
     Array.from(globalThis.document.querySelectorAll('span')).some((node) =>
-      node.textContent.startsWith('Stale,'),
+      node.textContent.startsWith(text),
     )
   return new Promise((resolve) => {
-    if (stale()) {
+    if (shown() === present) {
       resolve(Date.now())
       return
     }
     const observer = new globalThis.MutationObserver(() => {
-      if (!stale()) return
+      if (shown() !== present) return
       observer.disconnect()
       resolve(Date.now())
     })
@@ -87,6 +97,11 @@ function staleAt() {
       characterData: true,
     })
   })
+}
+
+/** `promise`'s value, or null once `ms` have passed without one. */
+function within(promise, ms) {
+  return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(null), ms))])
 }
 
 async function main() {
@@ -199,7 +214,7 @@ async function main() {
     trace(`the dock is silent after ${String(samples.length)} samples`)
     // Timed in the page as the pill changes: a locator's wait polls every half second.
     const staleAtMs = await Promise.race([
-      page.evaluate(staleAt),
+      page.evaluate(whenText, { text: 'Stale, ', present: true }),
       page.waitForTimeout(WAIT_MS).then(() => {
         throw new Error('the inspector never said Stale')
       }),
@@ -236,6 +251,47 @@ async function main() {
         (await page
           .getByRole('button', { name: 'Following', exact: true, pressed: true })
           .count()) === 1,
+    })
+
+    // NFR-REL-07: the dock flies again, and the browser's network is cut for CUT_MS.
+    // Meanwhile the harness renames the fleet: what the console shows changes while it
+    // cannot hear of it. Each change on screen is timed in the page as it happens.
+    await nextLine()
+    trace('the dock flies again')
+    await page.getByText(/^Live, /).waitFor({ timeout: WAIT_MS })
+    const sockets = []
+    page.on('websocket', () => sockets.push(Date.now()))
+    const reconnecting = page.evaluate(whenText, { text: 'Reconnecting', present: true })
+    const framesAtCut = samples.length
+    const cutAtMs = Date.now()
+    await page.context().setOffline(true)
+    emit({ event: 'cut' })
+    const { renamed_to: renamed } = await nextLine()
+    await page.waitForTimeout(Math.max(0, cutAtMs + CUT_MS - Date.now()))
+    const framesDuringCut = samples.length - framesAtCut
+    const inspector = page.getByRole('complementary', { name: 'Inspector' })
+    const freshnessAtRestore = await inspector.getByText(/^(Live|Stale|Lost), /).textContent()
+    const presenceDuringCut = await inspector.getByText('Unknown', { exact: true }).count()
+    const linkBack = page.evaluate(whenText, { text: 'Reconnecting', present: false })
+    const liveAgain = page.evaluate(whenText, { text: 'Live, ', present: true })
+    const restoredAtMs = Date.now()
+    await page.context().setOffline(false)
+    trace('the network is back')
+    const renamedAtMs = await page
+      .getByRole('heading', { name: renamed })
+      .waitFor({ timeout: WAIT_MS })
+      .then(() => Date.now())
+    const after = (at) => (at === null ? null : at - restoredAtMs)
+    emit({
+      event: 'reconnected',
+      frames_during_cut: framesDuringCut,
+      reconnecting_after_ms: (await within(reconnecting, WAIT_MS)) - cutAtMs,
+      freshness_at_restore: freshnessAtRestore,
+      presence_unknown_during_cut: presenceDuringCut > 0,
+      link_back_after_ms: after(await within(linkBack, WAIT_MS)),
+      live_after_ms: after(await within(liveAgain, WAIT_MS)),
+      renamed_after_ms: after(renamedAtMs),
+      sockets_opened_after_restore: sockets.filter((at) => at >= restoredAtMs).length,
     })
   } finally {
     await browser.close()
