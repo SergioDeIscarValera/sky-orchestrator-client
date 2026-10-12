@@ -98,6 +98,7 @@ The console: one persistent 3D scene of the farm with floating panels
   bakes again at once (`FR-WAY-07`): the path climbs straight up from the
   takeoff to the default height, its height named at the top as soon as both
   are given (`FR-WAY-01`), then flies at its heights above the takeoff's ground,
+  every change of height straight up or down, never on a slant,
   and its waypoints and distance follow. A wayline saves its
   design and its bake together. The operation makes a flight of it
   (`src/geometry/flight.ts`): legs longer than the stack allows split, the

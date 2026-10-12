@@ -12,8 +12,9 @@ import { distanceM } from './sphere'
  * interest are visited once each in the order that does. Units are ordered exactly by
  * Held-Karp up to EXACT_UNITS, above that by nearest neighbour improved by 2-opt. Points
  * closer than MERGE_M merge. The first waypoint is right above the takeoff, at the default
- * height: the aircraft climbs straight up and descends straight down, never on a slant,
- * which costs it more energy. A wayline is geometry: the operation that flies it gives its
+ * height, and every leg after it is level or straight up or down, never on a slant, which
+ * costs the aircraft more energy: going up it climbs where it is, then flies level; going
+ * down it flies level, then descends where it is going. A wayline is geometry: the operation that flies it gives its
  * speed, its climb and its finish, splits a leg longer than its stack allows, and judges it
  * against its envelope and geofence (flight.ts). The same design always bakes the same.
  */
@@ -71,7 +72,7 @@ export interface Baked {
  * The version of this bake, saved with every wayline it bakes (IR-WAY-01): a change to
  * how it orders or merges bumps it, so a saved wayline says what made it.
  */
-export const BAKE_VERSION = '2.1.0'
+export const BAKE_VERSION = '2.2.0'
 
 /** Points closer than this merge into the first of them (FR-WAY-07). */
 export const MERGE_M = 0.5
@@ -295,6 +296,46 @@ function merged(stops: readonly Stop[]): Stop[] {
   return kept
 }
 
+const samePlace = (a: Point, b: Point) => a[0] === b[0] && a[1] === b[1]
+
+/**
+ * The stops with every height change made straight up or down where it is safest: going
+ * up, before leaving; going down, on arriving. A stop in the middle of one straight run up
+ * or down, from the takeoff's ground on, goes: the aircraft does not stop there.
+ */
+function levelOrVertical(stops: readonly Stop[], start: Point): Stop[] {
+  const ground: Stop = { at: start, heightM: 0 }
+  const out: Stop[] = []
+  const push = (stop: Stop) => {
+    const last = out.at(-1)
+    const prior = out.at(-2) ?? ground
+    const through =
+      last !== undefined &&
+      samePlace(prior.at, last.at) &&
+      samePlace(last.at, stop.at) &&
+      (last.heightM - prior.heightM) * (stop.heightM - last.heightM) > 0
+    if (through) out.pop()
+    out.push(stop)
+  }
+  let previous: Stop | null = null
+  for (const stop of stops) {
+    if (
+      previous !== null &&
+      !samePlace(previous.at, stop.at) &&
+      stop.heightM !== previous.heightM
+    ) {
+      push(
+        stop.heightM > previous.heightM
+          ? { at: previous.at, heightM: stop.heightM }
+          : { at: stop.at, heightM: previous.heightM },
+      )
+    }
+    push(stop)
+    previous = stop
+  }
+  return out
+}
+
 /** The design baked into its waypoints in the order flown, and their distance. */
 export function bake(design: Design, settings: BakeSettings): Baked {
   const takeoffPlaced = eastNorth(settings.origin, design.takeoff)
@@ -308,12 +349,11 @@ export function bake(design: Design, settings: BakeSettings): Baked {
   const [first] = flown
   const climbs = first !== undefined && distance(first.at, start) >= MERGE_M
   const stops = climbs ? [{ at: start, heightM: design.defaultHeightM }, ...flown] : flown
-  const waypoints = merged(stops).map((stop, index): BakedWaypoint => {
-    // The climb is at the takeoff itself, not at its image through the local frame.
-    const place =
-      climbs && index === 0
-        ? { latitudeDeg: design.takeoff.latitudeDeg, longitudeDeg: design.takeoff.longitudeDeg }
-        : geodeticAt(settings.origin, { eastM: stop.at[0], northM: stop.at[1] })
+  const waypoints = levelOrVertical(merged(stops), start).map((stop, index): BakedWaypoint => {
+    // Above the takeoff is above the takeoff itself, not its image through the local frame.
+    const place = samePlace(stop.at, start)
+      ? { latitudeDeg: design.takeoff.latitudeDeg, longitudeDeg: design.takeoff.longitudeDeg }
+      : geodeticAt(settings.origin, { eastM: stop.at[0], northM: stop.at[1] })
     return { index, ...place, heightM: stop.heightM }
   })
   return { waypoints, distanceM: pathLengthM(design.takeoff, waypoints) }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.1.0",
+  "schema_version": "2.2.0",
   "takeoff_security_height_m": 20.0,
   "reference_point": [
     -4.7245,
@@ -36,12 +36,28 @@
       "index": 3,
       "position": [
         -4.72405,
-        41.6523
+        41.65255
       ],
       "height_m": 35.0
     },
     {
       "index": 4,
+      "position": [
+        -4.72405,
+        41.6523
+      ],
+      "height_m": 35.0
+    },
+    {
+      "index": 5,
+      "position": [
+        -4.7243,
+        41.6523
+      ],
+      "height_m": 35.0
+    },
+    {
+      "index": 6,
       "position": [
         -4.7243,
         41.6523

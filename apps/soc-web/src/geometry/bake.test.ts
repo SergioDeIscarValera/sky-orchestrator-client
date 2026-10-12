@@ -39,7 +39,7 @@ const ROOMY = {
 }
 
 const BASE = {
-  schema_version: '2.1.0',
+  schema_version: '2.2.0',
   takeoff: near(0, 0),
   default_height_m: 30,
 }
@@ -236,8 +236,12 @@ describe('the bake (FR-WAY-07) and the flight made of it (FR-WAY-08, FR-WAY-11)'
 
   it('reports a point above the ceiling with its index, never moves it', () => {
     const { waypoints, violations } = baked(CASES[4] as (typeof CASES)[number])
-    expect(violations.map((v) => [v.rule, v.waypointIndex])).toEqual([['height_above_max', 2]])
-    expect(waypoints[2]?.heightM).toBe(150)
+    // Straight up to 150 m where it is, then level to the point: above the ceiling at both.
+    expect(violations.map((v) => [v.rule, v.waypointIndex])).toEqual([
+      ['height_above_max', 2],
+      ['height_above_max', 3],
+    ])
+    expect(waypoints[3]?.heightM).toBe(150)
   })
 
   it('merges points closer than half a metre into the first', () => {
@@ -282,14 +286,77 @@ describe('the bake (FR-WAY-07) and the flight made of it (FR-WAY-08, FR-WAY-11)'
       ],
     }
     const { waypoints } = bake(design, { origin: FARM, maxArcSpacingM: 10 })
-    expect(waypoints).toHaveLength(2)
-    expect(waypoints[0]?.heightM).toBe(50)
+    // At 50 m, then level to the next point and straight down to its 30 m.
+    expect(waypoints.map(({ heightM }) => heightM)).toEqual([50, 50, 30])
     expect(local(waypoints[0] ?? FARM)[0]).toBeCloseTo(0.2, 6)
     // Nothing drawn: no wayline, and no climb on its own.
     expect(bake({ ...design, primitives: [] }, { origin: FARM, maxArcSpacingM: 10 })).toEqual({
       waypoints: [],
       distanceM: 0,
     })
+  })
+
+  it('never flies on a slant: every leg level, or straight up or down', () => {
+    for (const input of CASES) {
+      const design = designFromJson(input.design)
+      const { waypoints } = wayline(input)
+      for (const [index, w] of waypoints.entries()) {
+        const before = waypoints[index - 1]
+        if (before === undefined) continue
+        const level = w.heightM === before.heightM
+        const vertical =
+          w.latitudeDeg === before.latitudeDeg && w.longitudeDeg === before.longitudeDeg
+        expect(level || vertical, `${input.name}, into waypoint ${String(index)}`).toBe(true)
+      }
+      if (waypoints[0] !== undefined) {
+        expect(distanceM(design.takeoff, waypoints[0])).toBeLessThan(MERGE_M)
+      }
+    }
+  })
+
+  it('climbs where it is before going up, and descends where it arrives going down', () => {
+    const p = (east: number, north: number, heightM?: number) => ({
+      ...geodeticAt(FARM, { eastM: east, northM: north }),
+      ...(heightM === undefined ? {} : { heightM }),
+    })
+    const design: Design = {
+      takeoff: FARM,
+      defaultHeightM: 30,
+      primitives: [
+        { kind: 'route', points: [p(0, 50), p(0, 100)] },
+        { kind: 'route', points: [p(50, 100, 60), p(100, 100, 60), p(100, 50, 20)] },
+      ],
+    }
+    const { waypoints } = bake(design, { origin: FARM, maxArcSpacingM: 10 })
+    const where = waypoints.map((w) => [...local(w).map((m) => Math.round(m) + 0), w.heightM])
+    expect(where).toEqual([
+      [0, 0, 30],
+      [0, 50, 30],
+      [0, 100, 30],
+      // Up: straight up where it is, then level.
+      [0, 100, 60],
+      [50, 100, 60],
+      [100, 100, 60],
+      // Down: level to where it goes, then straight down.
+      [100, 50, 60],
+      [100, 50, 20],
+    ])
+  })
+
+  it('goes straight up to the first height without stopping at the default one below it', () => {
+    const design: Design = {
+      takeoff: FARM,
+      defaultHeightM: 30,
+      primitives: [
+        {
+          kind: 'points',
+          points: [{ ...geodeticAt(FARM, { eastM: 0, northM: 80 }), heightM: 60 }],
+        },
+      ],
+    }
+    const { waypoints } = bake(design, { origin: FARM, maxArcSpacingM: 10 })
+    expect(waypoints.map(({ heightM }) => heightM)).toEqual([60, 60])
+    expect(waypoints[0]).toMatchObject({ ...FARM, heightM: 60 })
   })
 
   it('says when nothing is drawn', () => {
@@ -310,7 +377,7 @@ describe('the bake (FR-WAY-07) and the flight made of it (FR-WAY-08, FR-WAY-11)'
           {
             description:
               "Designs, the waylines the console's bake gives them (FR-WAY-07) at origin with max_arc_spacing_m, and the flight an operation makes of each with its climb, speed and finish against the case's envelope (FR-WAY-08). A design with nothing drawn bakes to no wayline (null). libs/soc-geo holds every bake and flight to the design schema and to the requirement: a flight's violations are exactly what the Python validator finds, its distance is Sky Orchestrator's, no leg is longer than the envelope's and no two points are closer than half a metre.",
-            'x-version': '2.1.0',
+            'x-version': '2.2.0',
             origin: [FARM.longitudeDeg, FARM.latitudeDeg],
             max_arc_spacing_m: 10,
             cases,

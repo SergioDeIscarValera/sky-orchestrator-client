@@ -55,13 +55,23 @@ describe("Sky Orchestrator's envelope, as libs/soc-geo checks it (FR-WAY-08)", (
 
   it.each([
     ['max_waypoints', { maxWaypoints: 3 }, [['too_many_waypoints', undefined]]],
-    ['max_height_m', { maxHeightM: 32 }, [['height_above_max', 3]]],
+    [
+      'max_height_m',
+      { maxHeightM: 32 },
+      // Up to 35 m above the second point, at the third, and level above the fourth.
+      [
+        ['height_above_max', 3],
+        ['height_above_max', 4],
+        ['height_above_max', 5],
+      ],
+    ],
     [
       'geofence',
       { geofenceRadiusM: 30 },
       [
         ['outside_geofence', 2],
         ['outside_geofence', 3],
+        ['outside_geofence', 4],
       ],
     ],
     ['max_leg_m', { maxLegM: 30 }, [['leg_too_long', 2]]],

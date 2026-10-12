@@ -1,6 +1,6 @@
 {
   "description": "Designs, the waylines the console's bake gives them (FR-WAY-07) at origin with max_arc_spacing_m, and the flight an operation makes of each with its climb, speed and finish against the case's envelope (FR-WAY-08). A design with nothing drawn bakes to no wayline (null). libs/soc-geo holds every bake and flight to the design schema and to the requirement: a flight's violations are exactly what the Python validator finds, its distance is Sky Orchestrator's, no leg is longer than the envelope's and no two points are closer than half a metre.",
-  "x-version": "2.1.0",
+  "x-version": "2.2.0",
   "origin": [
     -4.7245,
     41.6523
@@ -10,7 +10,7 @@
     {
       "name": "a route and a point of interest",
       "design": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff": [
           -4.7245,
           41.6523
@@ -69,7 +69,7 @@
         "max_horizontal_speed_ms": 15
       },
       "baked": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "waypoints": [
           {
             "index": 0,
@@ -98,13 +98,29 @@
           {
             "index": 3,
             "position": [
+              -4.724055982239292,
+              41.65255215002928
+            ],
+            "height_m": 35
+          },
+          {
+            "index": 4,
+            "position": [
               -4.7240559822392845,
               41.6523
             ],
             "height_m": 35
           },
           {
-            "index": 4,
+            "index": 5,
+            "position": [
+              -4.724295991839673,
+              41.65229999999999
+            ],
+            "height_m": 35
+          },
+          {
+            "index": 6,
             "position": [
               -4.724295991839673,
               41.65229999999999
@@ -120,7 +136,7 @@
         "finish_action": "return_home"
       },
       "flight": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff_security_height_m": 20,
         "reference_point": [
           -4.7245,
@@ -156,13 +172,29 @@
           {
             "index": 3,
             "position": [
+              -4.724055982239292,
+              41.65255215002928
+            ],
+            "height_m": 35
+          },
+          {
+            "index": 4,
+            "position": [
               -4.7240559822392845,
               41.6523
             ],
             "height_m": 35
           },
           {
-            "index": 4,
+            "index": 5,
+            "position": [
+              -4.724295991839673,
+              41.65229999999999
+            ],
+            "height_m": 35
+          },
+          {
+            "index": 6,
             "position": [
               -4.724295991839673,
               41.65229999999999
@@ -178,7 +210,7 @@
     {
       "name": "twenty points of interest, ordered by the heuristic",
       "design": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff": [
           -4.7245,
           41.6523
@@ -327,7 +359,7 @@
         "max_horizontal_speed_ms": 15
       },
       "baked": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "waypoints": [
           {
             "index": 0,
@@ -506,7 +538,7 @@
         "finish_action": "return_home"
       },
       "flight": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff_security_height_m": 20,
         "reference_point": [
           -4.7245,
@@ -692,7 +724,7 @@
     {
       "name": "a route, a circle and a grid, ordered exactly",
       "design": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff": [
           -4.7245,
           41.6523
@@ -767,7 +799,7 @@
         "max_horizontal_speed_ms": 15
       },
       "baked": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "waypoints": [
           {
             "index": 0,
@@ -959,10 +991,18 @@
               -4.723209915002394,
               41.653200571023966
             ],
-            "height_m": 25
+            "height_m": 30
           },
           {
             "index": 24,
+            "position": [
+              -4.723209915002394,
+              41.653200571023966
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 25,
             "position": [
               -4.723029930065849,
               41.65320057130585
@@ -970,7 +1010,7 @@
             "height_m": 25
           },
           {
-            "index": 25,
+            "index": 26,
             "position": [
               -4.722849945129277,
               41.653200571305916
@@ -978,7 +1018,7 @@
             "height_m": 25
           },
           {
-            "index": 26,
+            "index": 27,
             "position": [
               -4.722669960192674,
               41.65320057102417
@@ -986,7 +1026,7 @@
             "height_m": 25
           },
           {
-            "index": 27,
+            "index": 28,
             "position": [
               -4.722669960318136,
               41.65329060712909
@@ -994,7 +1034,7 @@
             "height_m": 25
           },
           {
-            "index": 28,
+            "index": 29,
             "position": [
               -4.722849945171143,
               41.65329060741083
@@ -1002,7 +1042,7 @@
             "height_m": 25
           },
           {
-            "index": 29,
+            "index": 30,
             "position": [
               -4.72302993002412,
               41.65329060741076
@@ -1010,7 +1050,7 @@
             "height_m": 25
           },
           {
-            "index": 30,
+            "index": 31,
             "position": [
               -4.723209914877068,
               41.65329060712887
@@ -1018,7 +1058,7 @@
             "height_m": 25
           },
           {
-            "index": 31,
+            "index": 32,
             "position": [
               -4.723209914751745,
               41.65338064323236
@@ -1026,7 +1066,7 @@
             "height_m": 25
           },
           {
-            "index": 32,
+            "index": 33,
             "position": [
               -4.723029929982394,
               41.65338064351426
@@ -1034,7 +1074,7 @@
             "height_m": 25
           },
           {
-            "index": 33,
+            "index": 34,
             "position": [
               -4.722849945213012,
               41.65338064351435
@@ -1042,7 +1082,7 @@
             "height_m": 25
           },
           {
-            "index": 34,
+            "index": 35,
             "position": [
               -4.722669960443602,
               41.653380643232616
@@ -1050,7 +1090,7 @@
             "height_m": 25
           },
           {
-            "index": 35,
+            "index": 36,
             "position": [
               -4.722669960569071,
               41.65347067933472
@@ -1058,7 +1098,7 @@
             "height_m": 25
           },
           {
-            "index": 36,
+            "index": 37,
             "position": [
               -4.722849945254884,
               41.65347067961644
@@ -1066,7 +1106,7 @@
             "height_m": 25
           },
           {
-            "index": 37,
+            "index": 38,
             "position": [
               -4.723029929940669,
               41.653470679616355
@@ -1074,7 +1114,7 @@
             "height_m": 25
           },
           {
-            "index": 38,
+            "index": 39,
             "position": [
               -4.723209914626423,
               41.65347067933444
@@ -1082,7 +1122,7 @@
             "height_m": 25
           },
           {
-            "index": 39,
+            "index": 40,
             "position": [
               -4.723209914501105,
               41.65356071543512
@@ -1090,7 +1130,7 @@
             "height_m": 25
           },
           {
-            "index": 40,
+            "index": 41,
             "position": [
               -4.723029929898946,
               41.65356071571702
@@ -1098,7 +1138,7 @@
             "height_m": 25
           },
           {
-            "index": 41,
+            "index": 42,
             "position": [
               -4.722849945296759,
               41.65356071571713
@@ -1106,7 +1146,7 @@
             "height_m": 25
           },
           {
-            "index": 42,
+            "index": 43,
             "position": [
               -4.722669960694542,
               41.6535607154354
@@ -1122,7 +1162,7 @@
         "finish_action": "return_home"
       },
       "flight": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff_security_height_m": 20,
         "reference_point": [
           -4.7245,
@@ -1321,10 +1361,18 @@
               -4.723209915002394,
               41.653200571023966
             ],
-            "height_m": 25
+            "height_m": 30
           },
           {
             "index": 24,
+            "position": [
+              -4.723209915002394,
+              41.653200571023966
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 25,
             "position": [
               -4.723029930065849,
               41.65320057130585
@@ -1332,7 +1380,7 @@
             "height_m": 25
           },
           {
-            "index": 25,
+            "index": 26,
             "position": [
               -4.722849945129277,
               41.653200571305916
@@ -1340,7 +1388,7 @@
             "height_m": 25
           },
           {
-            "index": 26,
+            "index": 27,
             "position": [
               -4.722669960192674,
               41.65320057102417
@@ -1348,7 +1396,7 @@
             "height_m": 25
           },
           {
-            "index": 27,
+            "index": 28,
             "position": [
               -4.722669960318136,
               41.65329060712909
@@ -1356,7 +1404,7 @@
             "height_m": 25
           },
           {
-            "index": 28,
+            "index": 29,
             "position": [
               -4.722849945171143,
               41.65329060741083
@@ -1364,7 +1412,7 @@
             "height_m": 25
           },
           {
-            "index": 29,
+            "index": 30,
             "position": [
               -4.72302993002412,
               41.65329060741076
@@ -1372,7 +1420,7 @@
             "height_m": 25
           },
           {
-            "index": 30,
+            "index": 31,
             "position": [
               -4.723209914877068,
               41.65329060712887
@@ -1380,7 +1428,7 @@
             "height_m": 25
           },
           {
-            "index": 31,
+            "index": 32,
             "position": [
               -4.723209914751745,
               41.65338064323236
@@ -1388,7 +1436,7 @@
             "height_m": 25
           },
           {
-            "index": 32,
+            "index": 33,
             "position": [
               -4.723029929982394,
               41.65338064351426
@@ -1396,7 +1444,7 @@
             "height_m": 25
           },
           {
-            "index": 33,
+            "index": 34,
             "position": [
               -4.722849945213012,
               41.65338064351435
@@ -1404,7 +1452,7 @@
             "height_m": 25
           },
           {
-            "index": 34,
+            "index": 35,
             "position": [
               -4.722669960443602,
               41.653380643232616
@@ -1412,7 +1460,7 @@
             "height_m": 25
           },
           {
-            "index": 35,
+            "index": 36,
             "position": [
               -4.722669960569071,
               41.65347067933472
@@ -1420,7 +1468,7 @@
             "height_m": 25
           },
           {
-            "index": 36,
+            "index": 37,
             "position": [
               -4.722849945254884,
               41.65347067961644
@@ -1428,7 +1476,7 @@
             "height_m": 25
           },
           {
-            "index": 37,
+            "index": 38,
             "position": [
               -4.723029929940669,
               41.653470679616355
@@ -1436,7 +1484,7 @@
             "height_m": 25
           },
           {
-            "index": 38,
+            "index": 39,
             "position": [
               -4.723209914626423,
               41.65347067933444
@@ -1444,7 +1492,7 @@
             "height_m": 25
           },
           {
-            "index": 39,
+            "index": 40,
             "position": [
               -4.723209914501105,
               41.65356071543512
@@ -1452,7 +1500,7 @@
             "height_m": 25
           },
           {
-            "index": 40,
+            "index": 41,
             "position": [
               -4.723029929898946,
               41.65356071571702
@@ -1460,7 +1508,7 @@
             "height_m": 25
           },
           {
-            "index": 41,
+            "index": 42,
             "position": [
               -4.722849945296759,
               41.65356071571713
@@ -1468,7 +1516,7 @@
             "height_m": 25
           },
           {
-            "index": 42,
+            "index": 43,
             "position": [
               -4.722669960694542,
               41.6535607154354
@@ -1484,7 +1532,7 @@
     {
       "name": "legs longer than the stack allows, split",
       "design": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff": [
           -4.7245,
           41.6523
@@ -1525,7 +1573,7 @@
         "max_horizontal_speed_ms": 15
       },
       "baked": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "waypoints": [
           {
             "index": 0,
@@ -1560,7 +1608,7 @@
         "finish_action": "return_home"
       },
       "flight": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff_security_height_m": 20,
         "reference_point": [
           -4.7245,
@@ -1642,7 +1690,7 @@
     {
       "name": "a point above the ceiling, reported not fixed",
       "design": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff": [
           -4.7245,
           41.6523
@@ -1684,7 +1732,7 @@
         "max_horizontal_speed_ms": 15
       },
       "baked": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "waypoints": [
           {
             "index": 0,
@@ -1705,6 +1753,14 @@
           {
             "index": 2,
             "position": [
+              -4.724499999999999,
+              41.6527502679094
+            ],
+            "height_m": 150
+          },
+          {
+            "index": 3,
+            "position": [
               -4.723899975999055,
               41.65275026790943
             ],
@@ -1719,7 +1775,7 @@
         "finish_action": "return_home"
       },
       "flight": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff_security_height_m": 20,
         "reference_point": [
           -4.7245,
@@ -1747,6 +1803,14 @@
           {
             "index": 2,
             "position": [
+              -4.724499999999999,
+              41.6527502679094
+            ],
+            "height_m": 150
+          },
+          {
+            "index": 3,
+            "position": [
               -4.723899975999055,
               41.65275026790943
             ],
@@ -1760,6 +1824,11 @@
             "rule": "height_above_max",
             "message": "waypoint 2 is at 150.0 m, above max_height_m 120.0 m",
             "waypoint_index": 2
+          },
+          {
+            "rule": "height_above_max",
+            "message": "waypoint 3 is at 150.0 m, above max_height_m 120.0 m",
+            "waypoint_index": 3
           }
         ]
       }
@@ -1767,7 +1836,7 @@
     {
       "name": "points closer than half a metre, merged",
       "design": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff": [
           -4.7245,
           41.6523
@@ -1814,7 +1883,7 @@
         "max_horizontal_speed_ms": 15
       },
       "baked": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "waypoints": [
           {
             "index": 0,
@@ -1849,7 +1918,7 @@
         "finish_action": "return_home"
       },
       "flight": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff_security_height_m": 20,
         "reference_point": [
           -4.7245,
@@ -1891,7 +1960,7 @@
     {
       "name": "nothing drawn",
       "design": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff": [
           -4.7245,
           41.6523
@@ -1920,7 +1989,7 @@
         "finish_action": "return_home"
       },
       "flight": {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "takeoff_security_height_m": 20,
         "reference_point": [
           -4.7245,

@@ -221,14 +221,14 @@ function seedWaylines() {
       default_height_m: 30,
       // Its design as the designer saves it: one route through the waypoints, baked to them.
       design: {
-        schema_version: '2.1.0',
+        schema_version: '2.2.0',
         takeoff,
         default_height_m: 30,
         primitives: [{ kind: 'route', points: route.map((position) => ({ position })) }],
       },
       waypoints,
       metrics: { waypoint_count: 5, distance_m: 499.4 },
-      bake_version: '2.1.0',
+      bake_version: '2.2.0',
       created_at: '2026-10-11T08:10:00+00:00',
       updated_at: '2026-10-11T08:10:00+00:00',
       deleted_at: null,
