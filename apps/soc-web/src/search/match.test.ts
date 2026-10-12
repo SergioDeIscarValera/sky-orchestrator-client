@@ -1,7 +1,7 @@
 // @vitest-environment node
 import type { Fleet } from '../backend/backend'
 import { device, MAVIC_AIR_2, MINI_2 } from '../test/FakeBackend'
-import { marked, MAX_FOUND, normalise, rank, search, searchables } from './match'
+import { marked, matching, MAX_FOUND, normalise, rank, search, searchables } from './match'
 
 function fleet(id: string, name: string, aircraftSn: string, changes: Partial<Fleet> = {}): Fleet {
   return {
@@ -107,5 +107,40 @@ describe('the search over the organization (FR-SCN-05, NFR-UX-03)', () => {
     // A title written with a combining accent marks the accent with its letter.
     expect(marked('Peñas', 'pen')).toEqual(['', 'Peñ', 'as'])
     expect(normalise('Peñas')).toBe('penas')
+  })
+})
+
+describe('the matching over any named entries (FR-GEO-03)', () => {
+  const named = (names: readonly string[]) =>
+    names.map((name) => ({ name, words: [normalise(name)] }))
+  type Named = ReturnType<typeof named>[number]
+  const names = (query: string, entries: readonly Named[]) =>
+    matching(entries, query).map(({ name }) => name)
+
+  it('keeps every match, where search stops at the cap, and ranks them as search does', () => {
+    const rows = named(
+      Array.from(
+        { length: 3 * MAX_FOUND },
+        (_, index) => `Row ${String(index + 1).padStart(2, '0')}`,
+      ),
+    )
+    expect(matching(rows, 'row')).toHaveLength(3 * MAX_FOUND)
+    expect(matching(rows, '')).toHaveLength(3 * MAX_FOUND)
+    expect(names('ridge', named(['Ridge 2', 'Corridor 1', 'Ridge']))).toEqual(['Ridge', 'Ridge 2'])
+  })
+
+  it('finds by the folded name, and finds nothing when a word of the query is in no name', () => {
+    const entries = named(['Peñas Altas', 'Norte 1'])
+    expect(names('PENAS  altas', entries)).toEqual(['Peñas Altas'])
+    expect(names('norte sur', entries)).toEqual([])
+    expect(names('   ', entries)).toEqual(['Peñas Altas', 'Norte 1'])
+  })
+
+  it('leaves the entries it is given as they were', () => {
+    const entries = named(['Norte 1', 'Peñas Altas'])
+    const before = [...entries]
+    matching(entries, 'norte')
+    matching(entries, '')
+    expect(entries).toEqual(before)
   })
 })
