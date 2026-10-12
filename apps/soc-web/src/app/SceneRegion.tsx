@@ -1,11 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 
-import { useBackend } from '../backend/context'
 import { useOrganization } from '../organizations/context'
-import { organizationKey } from '../organizations/scope'
-import { siteOf } from '../scene/site'
 import { SceneBoundary, SceneMessage } from '../scene/SceneBoundary'
+import { useSiteFrame } from '../scene/siteFrame'
 import { StatsOverlay } from '../scene/StatsOverlay'
 import { supportsWebGl2, wantsStats } from '../scene/webgl'
 
@@ -14,29 +11,10 @@ const Scene = lazy(() => import('../scene/Scene'))
 /** The scene stays mounted for the whole session; the panels float over it (FR-SCN-01). */
 export function SceneRegion() {
   const { organization } = useOrganization()
-  const backend = useBackend()
   const [drawable] = useState(supportsWebGl2)
   const [stats] = useState(() => wantsStats())
   const { position } = organization
-  const siteModel = useQuery({
-    queryKey: organizationKey(organization.id, 'site-model'),
-    queryFn: () => backend.siteModel(organization.id),
-    enabled: position !== null,
-    staleTime: Infinity,
-  })
-  const terrain = siteModel.data ?? null
-  // With a site model the scene's origin is the model's, so the terrain and the
-  // aircraft share one frame even if the organization has moved since the bake.
-  const origin = useMemo(() => {
-    if (terrain !== null) {
-      const { latitude_deg: latitudeDeg, longitude_deg: longitudeDeg } = terrain.model.origin
-      return { latitudeDeg, longitudeDeg }
-    }
-    return position === null
-      ? null
-      : { latitudeDeg: position.latitude, longitudeDeg: position.longitude }
-  }, [terrain, position])
-  const site = useMemo(() => siteOf(terrain), [terrain])
+  const { siteModel, terrain, origin, site } = useSiteFrame()
 
   const note =
     position === null
@@ -47,8 +25,10 @@ export function SceneRegion() {
           ? `No site model for ${organization.name} yet: the ground is flat.`
           : null
 
+  // Its own stacking context: what the scene lays over the canvas, labels and handles,
+  // stays under the panels whatever its z-index.
   return (
-    <main aria-label="Scene" className="absolute inset-0">
+    <main aria-label="Scene" className="absolute inset-0 isolate">
       {drawable ? (
         <SceneBoundary>
           <Suspense fallback={null}>

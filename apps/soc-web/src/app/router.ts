@@ -12,8 +12,8 @@ import { PANELS, type Panel } from './destinations'
 
 /**
  * What the console shows lives in the URL (NFR-UX-03): the open panel and the
- * selection, a fleet or an aircraft seen on the wire, so a view can be shared on
- * the LAN. A value that does not read is left out rather than refused: a stale
+ * selection, a fleet, an aircraft seen on the wire, a geofence or a wayline, so a view
+ * can be shared on the LAN. A value that does not read is left out rather than refused: a stale
  * link opens the console as it can.
  */
 export interface View {
@@ -21,6 +21,8 @@ export interface View {
   readonly fleet?: string
   readonly gateway?: string
   readonly aircraft?: string
+  readonly geofence?: string
+  readonly wayline?: string
   /** The selection's form open in the inspector: registering an aircraft, editing a fleet. */
   readonly form?: Form
 }
@@ -30,23 +32,38 @@ export type Form = 'register' | 'edit'
 export type Selection =
   | { readonly kind: 'fleet'; readonly fleetId: string }
   | { readonly kind: 'device'; readonly gatewaySn: string; readonly aircraftSn: string }
+  | { readonly kind: 'geofence'; readonly geofenceId: string }
+  | { readonly kind: 'wayline'; readonly waylineId: string }
 
 const FIELDS = {
   panel: z.enum(PANELS),
   form: z.enum(['register', 'edit']),
   fleet: z.uuid(),
+  geofence: z.uuid(),
+  wayline: z.uuid(),
   serial: z.string().check(z.regex(/^[A-Za-z0-9]{1,64}$/)),
 }
 
 export function readView(search: Record<string, unknown>): View {
-  const view: { panel?: Panel; fleet?: string; gateway?: string; aircraft?: string; form?: Form } =
-    {}
+  const view: {
+    panel?: Panel
+    fleet?: string
+    gateway?: string
+    aircraft?: string
+    geofence?: string
+    wayline?: string
+    form?: Form
+  } = {}
   const panel = FIELDS.panel.safeParse(search.panel)
   if (panel.success) view.panel = panel.data
   const fleet = FIELDS.fleet.safeParse(search.fleet)
   const gateway = FIELDS.serial.safeParse(search.gateway)
   const aircraft = FIELDS.serial.safeParse(search.aircraft)
+  const geofence = FIELDS.geofence.safeParse(search.geofence)
+  const wayline = FIELDS.wayline.safeParse(search.wayline)
   if (fleet.success) view.fleet = fleet.data
+  else if (geofence.success) view.geofence = geofence.data
+  else if (wayline.success) view.wayline = wayline.data
   else if (gateway.success && aircraft.success) {
     view.gateway = gateway.data
     view.aircraft = aircraft.data
@@ -59,6 +76,8 @@ export function readView(search: Record<string, unknown>): View {
 
 export function selectionOf(view: View): Selection | null {
   if (view.fleet !== undefined) return { kind: 'fleet', fleetId: view.fleet }
+  if (view.geofence !== undefined) return { kind: 'geofence', geofenceId: view.geofence }
+  if (view.wayline !== undefined) return { kind: 'wayline', waylineId: view.wayline }
   if (view.gateway !== undefined && view.aircraft !== undefined) {
     return { kind: 'device', gatewaySn: view.gateway, aircraftSn: view.aircraft }
   }
@@ -70,6 +89,8 @@ export function select(view: View, selection: Selection | null): View {
   const { panel } = view
   if (selection === null) return { panel }
   if (selection.kind === 'fleet') return { panel, fleet: selection.fleetId }
+  if (selection.kind === 'geofence') return { panel, geofence: selection.geofenceId }
+  if (selection.kind === 'wayline') return { panel, wayline: selection.waylineId }
   return { panel, gateway: selection.gatewaySn, aircraft: selection.aircraftSn }
 }
 

@@ -1,0 +1,1164 @@
+{
+  "description": "The circle tool's points (FR-WAY-04), every implementation within tolerance_m on the local frame at origin: at the radius from the centre, the first at the start bearing, the rest in the circle's direction, three at least and as many as keep each arc within max_arc_spacing_m, the last back at the first. Written by libs/soc-geo/tests/circle_oracle.py; pyproj's geodesic checks every point.",
+  "x-version": "1.0.0",
+  "tolerance_m": 1e-06,
+  "origin": {
+    "latitude_deg": 41.6523,
+    "longitude_deg": -4.7245
+  },
+  "cases": [
+    {
+      "name": "small clockwise",
+      "centre": {
+        "latitude_deg": 41.6519,
+        "longitude_deg": -4.724
+      },
+      "radius_m": 30.0,
+      "clockwise": true,
+      "start_bearing_deg": 0.0,
+      "max_arc_spacing_m": 10.0,
+      "points": [
+        {
+          "latitude_deg": 41.652170108371706,
+          "longitude_deg": -4.7239999979112515
+        },
+        {
+          "latitude_deg": 41.65215547258726,
+          "longitude_deg": -4.723883060055641
+        },
+        {
+          "latitude_deg": 41.65211315228403,
+          "longitude_deg": -4.7237787946022936
+        },
+        {
+          "latitude_deg": 41.65204773357106,
+          "longitude_deg": -4.723698500414648
+        },
+        {
+          "latitude_deg": 41.65196630563753,
+          "longitude_deg": -4.72365087860119
+        },
+        {
+          "latitude_deg": 41.65187769250529,
+          "longitude_deg": -4.723641089620662
+        },
+        {
+          "latitude_deg": 41.65179149679152,
+          "longitude_deg": -4.723670194110004
+        },
+        {
+          "latitude_deg": 41.65171705911227,
+          "longitude_deg": -4.72373503801157
+        },
+        {
+          "latitude_deg": 41.65166244589313,
+          "longitude_deg": -4.72382859442098
+        },
+        {
+          "latitude_deg": 41.65163357526878,
+          "longitude_deg": -4.723940725087171
+        },
+        {
+          "latitude_deg": 41.65163357578449,
+          "longitude_deg": -4.724059279033375
+        },
+        {
+          "latitude_deg": 41.65166244738436,
+          "longitude_deg": -4.7241714092530405
+        },
+        {
+          "latitude_deg": 41.65171706141744,
+          "longitude_deg": -4.724264964817786
+        },
+        {
+          "latitude_deg": 41.65179149966081,
+          "longitude_deg": -4.724329807568088
+        },
+        {
+          "latitude_deg": 41.651877695627775,
+          "longitude_deg": -4.724358910724318
+        },
+        {
+          "latitude_deg": 41.651966308674844,
+          "longitude_deg": -4.724349120373295
+        },
+        {
+          "latitude_deg": 41.652047736194056,
+          "longitude_deg": -4.724301497300477
+        },
+        {
+          "latitude_deg": 41.65211315420847,
+          "longitude_deg": -4.7242212021010745
+        },
+        {
+          "latitude_deg": 41.6521554736046,
+          "longitude_deg": -4.7241169359932105
+        },
+        {
+          "latitude_deg": 41.652170108371706,
+          "longitude_deg": -4.7239999979112515
+        }
+      ]
+    },
+    {
+      "name": "small counter-clockwise from east",
+      "centre": {
+        "latitude_deg": 41.6519,
+        "longitude_deg": -4.724
+      },
+      "radius_m": 30.0,
+      "clockwise": false,
+      "start_bearing_deg": 90.0,
+      "max_arc_spacing_m": 10.0,
+      "points": [
+        {
+          "latitude_deg": 41.6518999978692,
+          "longitude_deg": -4.723639859261146
+        },
+        {
+          "latitude_deg": 41.65198770205989,
+          "longitude_deg": -4.7236593715394966
+        },
+        {
+          "latitude_deg": 41.65206590240959,
+          "longitude_deg": -4.723715796341721
+        },
+        {
+          "latitude_deg": 41.65212612464953,
+          "longitude_deg": -4.7238030192487
+        },
+        {
+          "latitude_deg": 41.65216184270897,
+          "longitude_deg": -4.7239115882924185
+        },
+        {
+          "latitude_deg": 41.65216918594021,
+          "longitude_deg": -4.724029738228694
+        },
+        {
+          "latitude_deg": 41.652147358580855,
+          "longitude_deg": -4.724144665527655
+        },
+        {
+          "latitude_deg": 41.652098725991,
+          "longitude_deg": -4.724243915898554
+        },
+        {
+          "latitude_deg": 41.652028558318314,
+          "longitude_deg": -4.724316733962184
+        },
+        {
+          "latitude_deg": 41.65194445937396,
+          "longitude_deg": -4.724355228789044
+        },
+        {
+          "latitude_deg": 41.651855542618314,
+          "longitude_deg": -4.7243552289881325
+        },
+        {
+          "latitude_deg": 41.65177144356155,
+          "longitude_deg": -4.72431673469095
+        },
+        {
+          "latitude_deg": 41.65170127560653,
+          "longitude_deg": -4.724243917472694
+        },
+        {
+          "latitude_deg": 41.65165264248494,
+          "longitude_deg": -4.724144668246417
+        },
+        {
+          "latitude_deg": 41.65163081429816,
+          "longitude_deg": -4.724029742144304
+        },
+        {
+          "latitude_deg": 41.65163815644188,
+          "longitude_deg": -4.7239115930581566
+        },
+        {
+          "latitude_deg": 41.651673873290264,
+          "longitude_deg": -4.723803024123744
+        },
+        {
+          "latitude_deg": 41.651734094410344,
+          "longitude_deg": -4.723715800366055
+        },
+        {
+          "latitude_deg": 41.651812293965904,
+          "longitude_deg": -4.72365937382001
+        },
+        {
+          "latitude_deg": 41.6518999978692,
+          "longitude_deg": -4.723639859261146
+        }
+      ]
+    },
+    {
+      "name": "tighter than three points",
+      "centre": {
+        "latitude_deg": 41.6525,
+        "longitude_deg": -4.725
+      },
+      "radius_m": 1.0,
+      "clockwise": true,
+      "start_bearing_deg": 45.0,
+      "max_arc_spacing_m": 10.0,
+      "points": [
+        {
+          "latitude_deg": 41.65250636655148,
+          "longitude_deg": -4.724991511371007
+        },
+        {
+          "latitude_deg": 41.65249130319245,
+          "longitude_deg": -4.724996892861597
+        },
+        {
+          "latitude_deg": 41.65250233025517,
+          "longitude_deg": -4.725011595767405
+        },
+        {
+          "latitude_deg": 41.65250636655148,
+          "longitude_deg": -4.724991511371007
+        }
+      ]
+    },
+    {
+      "name": "wide, fine spacing",
+      "centre": {
+        "latitude_deg": 41.654,
+        "longitude_deg": -4.72
+      },
+      "radius_m": 250.0,
+      "clockwise": true,
+      "start_bearing_deg": 333.0,
+      "max_arc_spacing_m": 7.5,
+      "points": [
+        {
+          "latitude_deg": 41.656005613572404,
+          "longitude_deg": -4.721362450875956
+        },
+        {
+          "latitude_deg": 41.65603528396973,
+          "longitude_deg": -4.721281838579289
+        },
+        {
+          "latitude_deg": 41.656063132461504,
+          "longitude_deg": -4.721200078755149
+        },
+        {
+          "latitude_deg": 41.65608913411719,
+          "longitude_deg": -4.721117244595175
+        },
+        {
+          "latitude_deg": 41.65611326565958,
+          "longitude_deg": -4.721033410253048
+        },
+        {
+          "latitude_deg": 41.656135505485594,
+          "longitude_deg": -4.720948650778095
+        },
+        {
+          "latitude_deg": 41.65615583368564,
+          "longitude_deg": -4.72086304204809
+        },
+        {
+          "latitude_deg": 41.656174232061424,
+          "longitude_deg": -4.720776660701301
+        },
+        {
+          "latitude_deg": 41.65619068414228,
+          "longitude_deg": -4.720689584067873
+        },
+        {
+          "latitude_deg": 41.65620517519989,
+          "longitude_deg": -4.720601890100577
+        },
+        {
+          "latitude_deg": 41.656217692261485,
+          "longitude_deg": -4.720513657305005
+        },
+        {
+          "latitude_deg": 41.65622822412146,
+          "longitude_deg": -4.720424964669271
+        },
+        {
+          "latitude_deg": 41.656236761351416,
+          "longitude_deg": -4.720335891593279
+        },
+        {
+          "latitude_deg": 41.656243296308624,
+          "longitude_deg": -4.720246517817619
+        },
+        {
+          "latitude_deg": 41.656247823142756,
+          "longitude_deg": -4.720156923352157
+        },
+        {
+          "latitude_deg": 41.65625033780131,
+          "longitude_deg": -4.720067188404392
+        },
+        {
+          "latitude_deg": 41.65625083803307,
+          "longitude_deg": -4.719977393307623
+        },
+        {
+          "latitude_deg": 41.65624932339022,
+          "longitude_deg": -4.7198876184490155
+        },
+        {
+          "latitude_deg": 41.656245795228706,
+          "longitude_deg": -4.719797944197611
+        },
+        {
+          "latitude_deg": 41.65624025670705,
+          "longitude_deg": -4.719708450832355
+        },
+        {
+          "latitude_deg": 41.65623271278347,
+          "longitude_deg": -4.719619218470209
+        },
+        {
+          "latitude_deg": 41.656223170211504,
+          "longitude_deg": -4.719530326994403
+        },
+        {
+          "latitude_deg": 41.65621163753393,
+          "longitude_deg": -4.719441855982904
+        },
+        {
+          "latitude_deg": 41.65619812507508,
+          "longitude_deg": -4.719353884637151
+        },
+        {
+          "latitude_deg": 41.656182644931675,
+          "longitude_deg": -4.719266491711126
+        },
+        {
+          "latitude_deg": 41.65616521096194,
+          "longitude_deg": -4.71917975544084
+        },
+        {
+          "latitude_deg": 41.65614583877318,
+          "longitude_deg": -4.719093753474271
+        },
+        {
+          "latitude_deg": 41.65612454570784,
+          "longitude_deg": -4.71900856280183
+        },
+        {
+          "latitude_deg": 41.65610135082796,
+          "longitude_deg": -4.7189242596874195
+        },
+        {
+          "latitude_deg": 41.65607627489815,
+          "longitude_deg": -4.718840919600146
+        },
+        {
+          "latitude_deg": 41.65604934036685,
+          "longitude_deg": -4.71875861714674
+        },
+        {
+          "latitude_deg": 41.65602057134645,
+          "longitude_deg": -4.718677426004753
+        },
+        {
+          "latitude_deg": 41.65598999359151,
+          "longitude_deg": -4.71859741885658
+        },
+        {
+          "latitude_deg": 41.65595763447576,
+          "longitude_deg": -4.7185186673243855
+        },
+        {
+          "latitude_deg": 41.655923522967626,
+          "longitude_deg": -4.7184412419059765
+        },
+        {
+          "latitude_deg": 41.655887689604256,
+          "longitude_deg": -4.718365211911671
+        },
+        {
+          "latitude_deg": 41.65585016646414,
+          "longitude_deg": -4.718290645402253
+        },
+        {
+          "latitude_deg": 41.65581098713847,
+          "longitude_deg": -4.718217609128027
+        },
+        {
+          "latitude_deg": 41.65577018670099,
+          "longitude_deg": -4.718146168469063
+        },
+        {
+          "latitude_deg": 41.65572780167663,
+          "longitude_deg": -4.718076387376657
+        },
+        {
+          "latitude_deg": 41.655683870008744,
+          "longitude_deg": -4.718008328316078
+        },
+        {
+          "latitude_deg": 41.65563843102521,
+          "longitude_deg": -4.717942052210654
+        },
+        {
+          "latitude_deg": 41.65559152540319,
+          "longitude_deg": -4.717877618387227
+        },
+        {
+          "latitude_deg": 41.65554319513266,
+          "longitude_deg": -4.717815084523044
+        },
+        {
+          "latitude_deg": 41.65549348347886,
+          "longitude_deg": -4.71775450659413
+        },
+        {
+          "latitude_deg": 41.65544243494356,
+          "longitude_deg": -4.71769593882518
+        },
+        {
+          "latitude_deg": 41.6553900952252,
+          "longitude_deg": -4.717639433641029
+        },
+        {
+          "latitude_deg": 41.65533651117794,
+          "longitude_deg": -4.717585041619723
+        },
+        {
+          "latitude_deg": 41.655281730769794,
+          "longitude_deg": -4.717532811447253
+        },
+        {
+          "latitude_deg": 41.655225803039556,
+          "longitude_deg": -4.717482789873982
+        },
+        {
+          "latitude_deg": 41.65516877805302,
+          "longitude_deg": -4.7174350216728085
+        },
+        {
+          "latitude_deg": 41.655110706858046,
+          "longitude_deg": -4.717389549599102
+        },
+        {
+          "latitude_deg": 41.65505164143895,
+          "longitude_deg": -4.717346414352435
+        },
+        {
+          "latitude_deg": 41.65499163466992,
+          "longitude_deg": -4.717305654540176
+        },
+        {
+          "latitude_deg": 41.654930740267645,
+          "longitude_deg": -4.717267306642945
+        },
+        {
+          "latitude_deg": 41.65486901274326,
+          "longitude_deg": -4.717231404981972
+        },
+        {
+          "latitude_deg": 41.65480650735354,
+          "longitude_deg": -4.717197981688396
+        },
+        {
+          "latitude_deg": 41.65474328005144,
+          "longitude_deg": -4.717167066674524
+        },
+        {
+          "latitude_deg": 41.65467938743595,
+          "longitude_deg": -4.717138687607078
+        },
+        {
+          "latitude_deg": 41.65461488670149,
+          "longitude_deg": -4.71711286988245
+        },
+        {
+          "latitude_deg": 41.654549835586664,
+          "longitude_deg": -4.717089636603997
+        },
+        {
+          "latitude_deg": 41.654484292322586,
+          "longitude_deg": -4.717069008561381
+        },
+        {
+          "latitude_deg": 41.65441831558075,
+          "longitude_deg": -4.717051004211986
+        },
+        {
+          "latitude_deg": 41.654351964420485,
+          "longitude_deg": -4.717035639664428
+        },
+        {
+          "latitude_deg": 41.65428529823611,
+          "longitude_deg": -4.717022928664157
+        },
+        {
+          "latitude_deg": 41.65421837670379,
+          "longitude_deg": -4.717012882581183
+        },
+        {
+          "latitude_deg": 41.654151259728025,
+          "longitude_deg": -4.717005510399931
+        },
+        {
+          "latitude_deg": 41.654084007388114,
+          "longitude_deg": -4.717000818711219
+        },
+        {
+          "latitude_deg": 41.65401667988434,
+          "longitude_deg": -4.716998811706402
+        },
+        {
+          "latitude_deg": 41.653949337484086,
+          "longitude_deg": -4.716999491173639
+        },
+        {
+          "latitude_deg": 41.653882040467835,
+          "longitude_deg": -4.717002856496319
+        },
+        {
+          "latitude_deg": 41.65381484907535,
+          "longitude_deg": -4.717008904653659
+        },
+        {
+          "latitude_deg": 41.653747823451546,
+          "longitude_deg": -4.717017630223421
+        },
+        {
+          "latitude_deg": 41.653681023592895,
+          "longitude_deg": -4.7170290253868075
+        },
+        {
+          "latitude_deg": 41.6536145092935,
+          "longitude_deg": -4.717043079935481
+        },
+        {
+          "latitude_deg": 41.65354834009171,
+          "longitude_deg": -4.717059781280737
+        },
+        {
+          "latitude_deg": 41.653482575216785,
+          "longitude_deg": -4.717079114464799
+        },
+        {
+          "latitude_deg": 41.65341727353589,
+          "longitude_deg": -4.717101062174239
+        },
+        {
+          "latitude_deg": 41.65335249350138,
+          "longitude_deg": -4.717125604755493
+        },
+        {
+          "latitude_deg": 41.653288293098555,
+          "longitude_deg": -4.71715272023249
+        },
+        {
+          "latitude_deg": 41.65322472979367,
+          "longitude_deg": -4.717182384326344
+        },
+        {
+          "latitude_deg": 41.653161860482534,
+          "longitude_deg": -4.7172145704771165
+        },
+        {
+          "latitude_deg": 41.653099741439625,
+          "longitude_deg": -4.717249249867607
+        },
+        {
+          "latitude_deg": 41.653038428267685,
+          "longitude_deg": -4.717286391449178
+        },
+        {
+          "latitude_deg": 41.65297797584795,
+          "longitude_deg": -4.717325961969562
+        },
+        {
+          "latitude_deg": 41.65291843829108,
+          "longitude_deg": -4.717367926002654
+        },
+        {
+          "latitude_deg": 41.652859868888655,
+          "longitude_deg": -4.717412245980238
+        },
+        {
+          "latitude_deg": 41.6528023200656,
+          "longitude_deg": -4.717458882225626
+        },
+        {
+          "latitude_deg": 41.65274584333309,
+          "longitude_deg": -4.717507792989199
+        },
+        {
+          "latitude_deg": 41.65269048924263,
+          "longitude_deg": -4.71755893448579
+        },
+        {
+          "latitude_deg": 41.65263630734072,
+          "longitude_deg": -4.717612260933884
+        },
+        {
+          "latitude_deg": 41.652583346124516,
+          "longitude_deg": -4.717667724596619
+        },
+        {
+          "latitude_deg": 41.652531652998476,
+          "longitude_deg": -4.717725275824515
+        },
+        {
+          "latitude_deg": 41.65248127423185,
+          "longitude_deg": -4.717784863099933
+        },
+        {
+          "latitude_deg": 41.65243225491741,
+          "longitude_deg": -4.717846433083191
+        },
+        {
+          "latitude_deg": 41.65238463893096,
+          "longitude_deg": -4.717909930660316
+        },
+        {
+          "latitude_deg": 41.652338468892125,
+          "longitude_deg": -4.7179752989923776
+        },
+        {
+          "latitude_deg": 41.652293786126265,
+          "longitude_deg": -4.718042479566369
+        },
+        {
+          "latitude_deg": 41.65225063062741,
+          "longitude_deg": -4.718111412247583
+        },
+        {
+          "latitude_deg": 41.652209041022516,
+          "longitude_deg": -4.718182035333432
+        },
+        {
+          "latitude_deg": 41.652169054536884,
+          "longitude_deg": -4.718254285608681
+        },
+        {
+          "latitude_deg": 41.65213070696086,
+          "longitude_deg": -4.71832809840202
+        },
+        {
+          "latitude_deg": 41.65209403261781,
+          "longitude_deg": -4.718403407643959
+        },
+        {
+          "latitude_deg": 41.65205906433342,
+          "longitude_deg": -4.718480145925936
+        },
+        {
+          "latitude_deg": 41.65202583340623,
+          "longitude_deg": -4.718558244560664
+        },
+        {
+          "latitude_deg": 41.65199436957979,
+          "longitude_deg": -4.718637633643589
+        },
+        {
+          "latitude_deg": 41.65196470101589,
+          "longitude_deg": -4.718718242115462
+        },
+        {
+          "latitude_deg": 41.65193685426947,
+          "longitude_deg": -4.718799997825916
+        },
+        {
+          "latitude_deg": 41.6519108542648,
+          "longitude_deg": -4.71888282759804
+        },
+        {
+          "latitude_deg": 41.65188672427317,
+          "longitude_deg": -4.718966657293858
+        },
+        {
+          "latitude_deg": 41.65186448589212,
+          "longitude_deg": -4.719051411880675
+        },
+        {
+          "latitude_deg": 41.651844159026076,
+          "longitude_deg": -4.7191370154982195
+        },
+        {
+          "latitude_deg": 41.65182576186855,
+          "longitude_deg": -4.719223391526523
+        },
+        {
+          "latitude_deg": 41.65180931088583,
+          "longitude_deg": -4.719310462654477
+        },
+        {
+          "latitude_deg": 41.651794820802344,
+          "longitude_deg": -4.719398150949021
+        },
+        {
+          "latitude_deg": 41.651782304587314,
+          "longitude_deg": -4.719486377924869
+        },
+        {
+          "latitude_deg": 41.65177177344336,
+          "longitude_deg": -4.719575064614741
+        },
+        {
+          "latitude_deg": 41.651763236796306,
+          "longitude_deg": -4.719664131640016
+        },
+        {
+          "latitude_deg": 41.651756702286804,
+          "longitude_deg": -4.719753499281767
+        },
+        {
+          "latitude_deg": 41.651752175763555,
+          "longitude_deg": -4.719843087552083
+        },
+        {
+          "latitude_deg": 41.65174966127798,
+          "longitude_deg": -4.719932816265643
+        },
+        {
+          "latitude_deg": 41.651749161080666,
+          "longitude_deg": -4.720022605111464
+        },
+        {
+          "latitude_deg": 41.651750675619276,
+          "longitude_deg": -4.720112373724759
+        },
+        {
+          "latitude_deg": 41.65175420353827,
+          "longitude_deg": -4.720202041758841
+        },
+        {
+          "latitude_deg": 41.65175974167998,
+          "longitude_deg": -4.7202915289570235
+        },
+        {
+          "latitude_deg": 41.651767285087544,
+          "longitude_deg": -4.72038075522442
+        },
+        {
+          "latitude_deg": 41.651776827009286,
+          "longitude_deg": -4.7204696406996165
+        },
+        {
+          "latitude_deg": 41.65178835890476,
+          "longitude_deg": -4.72055810582613
+        },
+        {
+          "latitude_deg": 41.65180187045242,
+          "longitude_deg": -4.720646071423586
+        },
+        {
+          "latitude_deg": 41.65181734955879,
+          "longitude_deg": -4.720733458758581
+        },
+        {
+          "latitude_deg": 41.6518347823694,
+          "longitude_deg": -4.720820189615116
+        },
+        {
+          "latitude_deg": 41.65185415328107,
+          "longitude_deg": -4.720906186364596
+        },
+        {
+          "latitude_deg": 41.65187544495591,
+          "longitude_deg": -4.720991372035285
+        },
+        {
+          "latitude_deg": 41.651898638336874,
+          "longitude_deg": -4.721075670381184
+        },
+        {
+          "latitude_deg": 41.65192371266475,
+          "longitude_deg": -4.721159005950257
+        },
+        {
+          "latitude_deg": 41.65195064549676,
+          "longitude_deg": -4.721241304151948
+        },
+        {
+          "latitude_deg": 41.65197941272666,
+          "longitude_deg": -4.721322491323928
+        },
+        {
+          "latitude_deg": 41.652009988606295,
+          "longitude_deg": -4.72140249479801
+        },
+        {
+          "latitude_deg": 41.6520423457686,
+          "longitude_deg": -4.721481242965181
+        },
+        {
+          "latitude_deg": 41.652076455252185,
+          "longitude_deg": -4.721558665339685
+        },
+        {
+          "latitude_deg": 41.65211228652715,
+          "longitude_deg": -4.721634692622094
+        },
+        {
+          "latitude_deg": 41.65214980752245,
+          "longitude_deg": -4.721709256761338
+        },
+        {
+          "latitude_deg": 41.652188984654586,
+          "longitude_deg": -4.72178229101559
+        },
+        {
+          "latitude_deg": 41.65222978285769,
+          "longitude_deg": -4.721853730012019
+        },
+        {
+          "latitude_deg": 41.65227216561478,
+          "longitude_deg": -4.721923509804127
+        },
+        {
+          "latitude_deg": 41.6523160949907,
+          "longitude_deg": -4.721991567933682
+        },
+        {
+          "latitude_deg": 41.65236153166573,
+          "longitude_deg": -4.7220578434794485
+        },
+        {
+          "latitude_deg": 41.65240843497097,
+          "longitude_deg": -4.722122277116587
+        },
+        {
+          "latitude_deg": 41.65245676292473,
+          "longitude_deg": -4.722184811168521
+        },
+        {
+          "latitude_deg": 41.65250647227005,
+          "longitude_deg": -4.722245389658552
+        },
+        {
+          "latitude_deg": 41.65255751851344,
+          "longitude_deg": -4.722303958359975
+        },
+        {
+          "latitude_deg": 41.65260985596467,
+          "longitude_deg": -4.722360464844622
+        },
+        {
+          "latitude_deg": 41.652663437777676,
+          "longitude_deg": -4.722414858529788
+        },
+        {
+          "latitude_deg": 41.6527182159925,
+          "longitude_deg": -4.72246709072353
+        },
+        {
+          "latitude_deg": 41.65277414157813,
+          "longitude_deg": -4.722517114668248
+        },
+        {
+          "latitude_deg": 41.65283116447649,
+          "longitude_deg": -4.722564885582554
+        },
+        {
+          "latitude_deg": 41.652889233647166,
+          "longitude_deg": -4.7226103607013705
+        },
+        {
+          "latitude_deg": 41.65294829711309,
+          "longitude_deg": -4.7226534993142195
+        },
+        {
+          "latitude_deg": 41.653008302007095,
+          "longitude_deg": -4.722694262801684
+        },
+        {
+          "latitude_deg": 41.65306919461919,
+          "longitude_deg": -4.72273261466999
+        },
+        {
+          "latitude_deg": 41.65313092044464,
+          "longitude_deg": -4.722768520583694
+        },
+        {
+          "latitude_deg": 41.65319342423277,
+          "longitude_deg": -4.722801948396431
+        },
+        {
+          "latitude_deg": 41.653256650036354,
+          "longitude_deg": -4.722832868179718
+        },
+        {
+          "latitude_deg": 41.65332054126174,
+          "longitude_deg": -4.72286125224976
+        },
+        {
+          "latitude_deg": 41.65338504071952,
+          "longitude_deg": -4.722887075192255
+        },
+        {
+          "latitude_deg": 41.65345009067565,
+          "longitude_deg": -4.722910313885172
+        },
+        {
+          "latitude_deg": 41.65351563290315,
+          "longitude_deg": -4.722930947519465
+        },
+        {
+          "latitude_deg": 41.65358160873425,
+          "longitude_deg": -4.722948957617734
+        },
+        {
+          "latitude_deg": 41.65364795911287,
+          "longitude_deg": -4.722964328050784
+        },
+        {
+          "latitude_deg": 41.6537146246475,
+          "longitude_deg": -4.722977045052097
+        },
+        {
+          "latitude_deg": 41.653781545664295,
+          "longitude_deg": -4.722987097230182
+        },
+        {
+          "latitude_deg": 41.65384866226061,
+          "longitude_deg": -4.722994475578795
+        },
+        {
+          "latitude_deg": 41.65391591435849,
+          "longitude_deg": -4.722999173485039
+        },
+        {
+          "latitude_deg": 41.65398324175854,
+          "longitude_deg": -4.723001186735306
+        },
+        {
+          "latitude_deg": 41.65405058419375,
+          "longitude_deg": -4.723000513519082
+        },
+        {
+          "latitude_deg": 41.65411788138291,
+          "longitude_deg": -4.722997154429642
+        },
+        {
+          "latitude_deg": 41.654185073086786,
+          "longitude_deg": -4.722991112467273
+        },
+        {
+          "latitude_deg": 41.65425209915874,
+          "longitude_deg": -4.722982393031168
+        },
+        {
+          "latitude_deg": 41.65431889960077,
+          "longitude_deg": -4.72297100391817
+        },
+        {
+          "latitude_deg": 41.65438541461666,
+          "longitude_deg": -4.722956955314953
+        },
+        {
+          "latitude_deg": 41.65445158466548,
+          "longitude_deg": -4.722940259788943
+        },
+        {
+          "latitude_deg": 41.65451735051495,
+          "longitude_deg": -4.722920932277082
+        },
+        {
+          "latitude_deg": 41.65458265329442,
+          "longitude_deg": -4.722898990072497
+        },
+        {
+          "latitude_deg": 41.65464743454757,
+          "longitude_deg": -4.722874452809044
+        },
+        {
+          "latitude_deg": 41.654711636284794,
+          "longitude_deg": -4.722847342443756
+        },
+        {
+          "latitude_deg": 41.65477520103503,
+          "longitude_deg": -4.722817683237221
+        },
+        {
+          "latitude_deg": 41.654838071897295,
+          "longitude_deg": -4.7227855017318845
+        },
+        {
+          "latitude_deg": 41.654900192591555,
+          "longitude_deg": -4.722750826728313
+        },
+        {
+          "latitude_deg": 41.65496150750917,
+          "longitude_deg": -4.722713689259445
+        },
+        {
+          "latitude_deg": 41.65502196176262,
+          "longitude_deg": -4.722674122562822
+        },
+        {
+          "latitude_deg": 41.655081501234726,
+          "longitude_deg": -4.722632162050861
+        },
+        {
+          "latitude_deg": 41.65514007262703,
+          "longitude_deg": -4.722587845279178
+        },
+        {
+          "latitude_deg": 41.6551976235075,
+          "longitude_deg": -4.722541211912979
+        },
+        {
+          "latitude_deg": 41.65525410235757,
+          "longitude_deg": -4.722492303691579
+        },
+        {
+          "latitude_deg": 41.65530945861816,
+          "longitude_deg": -4.722441164391045
+        },
+        {
+          "latitude_deg": 41.65536364273502,
+          "longitude_deg": -4.7223878397850285
+        },
+        {
+          "latitude_deg": 41.65541660620305,
+          "longitude_deg": -4.7223323776038
+        },
+        {
+          "latitude_deg": 41.655468301609744,
+          "longitude_deg": -4.7222748274915345
+        },
+        {
+          "latitude_deg": 41.65551868267766,
+          "longitude_deg": -4.7222152409618765
+        },
+        {
+          "latitude_deg": 41.655567704305824,
+          "longitude_deg": -4.72215367135184
+        },
+        {
+          "latitude_deg": 41.65561532261013,
+          "longitude_deg": -4.722090173774062
+        },
+        {
+          "latitude_deg": 41.655661494962644,
+          "longitude_deg": -4.722024805067473
+        },
+        {
+          "latitude_deg": 41.655706180029746,
+          "longitude_deg": -4.721957623746424
+        },
+        {
+          "latitude_deg": 41.655749337809155,
+          "longitude_deg": -4.721888689948296
+        },
+        {
+          "latitude_deg": 41.65579092966577,
+          "longitude_deg": -4.721818065379671
+        },
+        {
+          "latitude_deg": 41.6558309183662,
+          "longitude_deg": -4.721745813261096
+        },
+        {
+          "latitude_deg": 41.65586926811219,
+          "longitude_deg": -4.721671998270475
+        },
+        {
+          "latitude_deg": 41.6559059445726,
+          "longitude_deg": -4.721596686485171
+        },
+        {
+          "latitude_deg": 41.65594091491418,
+          "longitude_deg": -4.721519945322844
+        },
+        {
+          "latitude_deg": 41.655974147831,
+          "longitude_deg": -4.721441843481097
+        },
+        {
+          "latitude_deg": 41.656005613572404,
+          "longitude_deg": -4.721362450875956
+        }
+      ]
+    },
+    {
+      "name": "a kilometre away, coarse",
+      "centre": {
+        "latitude_deg": 41.661,
+        "longitude_deg": -4.73
+      },
+      "radius_m": 120.0,
+      "clockwise": false,
+      "start_bearing_deg": 180.0,
+      "max_arc_spacing_m": 50.0,
+      "points": [
+        {
+          "latitude_deg": 41.659919568093514,
+          "longitude_deg": -4.729999908069074
+        },
+        {
+          "latitude_deg": 41.66000183613792,
+          "longitude_deg": -4.729448566399698
+        },
+        {
+          "latitude_deg": 41.66023606351878,
+          "longitude_deg": -4.728981171805639
+        },
+        {
+          "latitude_deg": 41.66058659260916,
+          "longitude_deg": -4.728668879348294
+        },
+        {
+          "latitude_deg": 41.66100005990096,
+          "longitude_deg": -4.728559234252653
+        },
+        {
+          "latitude_deg": 41.66141351931383,
+          "longitude_deg": -4.728668932682094
+        },
+        {
+          "latitude_deg": 41.66176402483323,
+          "longitude_deg": -4.728981277736498
+        },
+        {
+          "latitude_deg": 41.66199821380259,
+          "longitude_deg": -4.729448719241524
+        },
+        {
+          "latitude_deg": 41.66208043170578,
+          "longitude_deg": -4.7300000919359295
+        },
+        {
+          "latitude_deg": 41.661998161045645,
+          "longitude_deg": -4.730551450633405
+        },
+        {
+          "latitude_deg": 41.661763927351465,
+          "longitude_deg": -4.7310188522789325
+        },
+        {
+          "latitude_deg": 41.66141339194845,
+          "longitude_deg": -4.731331137680461
+        },
+        {
+          "latitude_deg": 41.66099992204253,
+          "longitude_deg": -4.731440765746201
+        },
+        {
+          "latitude_deg": 41.66058646524538,
+          "longitude_deg": -4.73133105028866
+        },
+        {
+          "latitude_deg": 41.660235966039295,
+          "longitude_deg": -4.731018698182788
+        },
+        {
+          "latitude_deg": 41.66000178338259,
+          "longitude_deg": -4.730551263733579
+        },
+        {
+          "latitude_deg": 41.659919568093514,
+          "longitude_deg": -4.729999908069074
+        }
+      ]
+    }
+  ]
+}

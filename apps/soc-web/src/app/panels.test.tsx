@@ -31,6 +31,38 @@ describe('the view in the URL (NFR-UX-03)', () => {
     expect(readView({ ...aircraft, aircraft: 'SOTEST/../UAV' })).toEqual({})
   })
 
+  it('reads a geofence, after a fleet and before an aircraft', () => {
+    const fleet = '11111111-1111-4111-8111-111111111111'
+    const geofence = '22222222-2222-4222-8222-222222222222'
+    const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
+    expect(readView({ panel: 'geofences', geofence })).toEqual({ panel: 'geofences', geofence })
+    expect(readView({ geofence, fleet })).toEqual({ fleet })
+    expect(readView({ ...aircraft, geofence })).toEqual({ geofence })
+    expect(readView({ geofence: 'North field' })).toEqual({})
+    const selection = { kind: 'geofence', geofenceId: geofence } as const
+    expect(select({ panel: 'geofences', fleet }, selection)).toEqual({
+      panel: 'geofences',
+      geofence,
+    })
+    expect(selectionOf(select({}, selection))).toEqual(selection)
+  })
+
+  it('reads a wayline, after a geofence and before an aircraft', () => {
+    const geofence = '22222222-2222-4222-8222-222222222222'
+    const wayline = '33333333-3333-4333-8333-333333333333'
+    const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
+    expect(readView({ panel: 'waylines', wayline })).toEqual({ panel: 'waylines', wayline })
+    expect(readView({ wayline, geofence })).toEqual({ geofence })
+    expect(readView({ ...aircraft, wayline })).toEqual({ wayline })
+    expect(readView({ wayline: 'Corridor' })).toEqual({})
+    const selection = { kind: 'wayline', waylineId: wayline } as const
+    expect(select({ panel: 'waylines', geofence }, selection)).toEqual({
+      panel: 'waylines',
+      wayline,
+    })
+    expect(selectionOf(select({}, selection))).toEqual(selection)
+  })
+
   it("reads a selection's open form, and no form without a selection", () => {
     const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
     expect(readView({ ...aircraft, form: 'register' })).toEqual({ ...aircraft, form: 'register' })
@@ -68,9 +100,12 @@ describe('the view in the URL (NFR-UX-03)', () => {
   })
 
   it('opens the panel a shared link names, and says when its content arrives', async () => {
-    await openAt('?panel=waylines')
-    expect(await screen.findByText('Waylines arrive in M3.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Waylines' })).toHaveAttribute('aria-pressed', 'true')
+    await openAt('?panel=operations')
+    expect(await screen.findByText('Operations arrive in M4.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Operations' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 
   it('opens nothing for a link it cannot read', async () => {

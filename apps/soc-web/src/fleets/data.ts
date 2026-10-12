@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import type { FleetChanges, FleetDraft, StateEvent } from '../backend/backend'
 import { useBackend } from '../backend/context'
 import { useOrganization } from '../organizations/context'
-import { organizationKey } from '../organizations/scope'
+import { GEOFENCES, WAYLINES, organizationKey } from '../organizations/scope'
 
 /** The catalogue changes only with a migration, so one read lasts the session (IR-MOD). */
 export const AIRCRAFT_MODELS = ['aircraft-models'] as const
@@ -20,6 +20,8 @@ const STALE: Readonly<Record<StateEvent['kind'], readonly string[] | 'all'>> = {
   device: [DEVICES],
   fleet: [FLEETS],
   command_intent: [COMMAND_INTENTS],
+  geofence: [GEOFENCES],
+  wayline: [WAYLINES],
 }
 
 export async function staleAfter(

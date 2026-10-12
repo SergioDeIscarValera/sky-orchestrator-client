@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/msdk/mission-plan.schema.json",
+  "title": "Normalised mission plan",
+  "description": "What so-wayline hands the aircraft application for one wayline (FR-WAY-08). WPML is parsed in Python, never in Kotlin. Positions are WGS84; every height is metres above the takeoff point, because the MVP accepts relativeToStartPoint waylines only (ADR-0017). The aircraft takes off wherever it is, climbs to takeoff_security_height_m, flies straight to the point above reference_point, and flies the waypoints from there (FR-BRG-12).",
+  "x-version": "1.0.0",
+  "x-constraints": [
+    "waypoints[i].index == i",
+    "the aircraft application refuses at load any plan whose waypoints, transit or legs break its own envelope (FR-SAF-01)"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "wayline_id",
+    "fingerprint_md5",
+    "takeoff_security_height_m",
+    "reference_point",
+    "speed_ms",
+    "finish_action",
+    "waypoints"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+      "description": "This schema's version the plan was written for. A consumer accepts any 1.x."
+    },
+    "wayline_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "IR-WAY wayline_id, lowercase UUIDv4."
+    },
+    "fingerprint_md5": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "description": "MD5 of the stored KMZ bytes (FR-WAY-04): ties a flight to the exact file."
+    },
+    "takeoff_security_height_m": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 120,
+      "description": "wpml:takeOffSecurityHeight: the height climbed to before the transit."
+    },
+    "reference_point": {
+      "$ref": "#/$defs/position",
+      "description": "wpml:takeOffRefPoint, horizontally: the transit leg ends above it."
+    },
+    "speed_ms": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 15,
+      "description": "wpml:autoFlightSpeed: the default leg speed. The application clamps it to its own max_horizontal_speed_ms."
+    },
+    "finish_action": {
+      "enum": [
+        "return_home",
+        "hold",
+        "land"
+      ],
+      "description": "What happens after the last waypoint: WPML's goHome, noAction and autoLand."
+    },
+    "waypoints": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {
+        "$ref": "#/$defs/waypoint"
+      }
+    }
+  },
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "latitude_deg",
+        "longitude_deg"
+      ],
+      "properties": {
+        "latitude_deg": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude_deg": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        }
+      }
+    },
+    "waypoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "latitude_deg",
+        "longitude_deg",
+        "height_m"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0, 1, 2 and so on, in flight order, with no gaps."
+        },
+        "latitude_deg": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude_deg": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "height_m": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 120,
+          "description": "Metres above the takeoff point: the canonical relative altitude."
+        },
+        "speed_ms": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 15,
+          "description": "Speed on the leg into this waypoint. Absent: the plan's speed_ms."
+        },
+        "heading_deg": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360,
+          "description": "Heading to face on arrival. Absent: keep the current one."
+        },
+        "actions": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "$ref": "#/$defs/action"
+          },
+          "description": "Done in order on arrival."
+        }
+      }
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "seconds"
+          ],
+          "properties": {
+            "type": {
+              "const": "hover"
+            },
+            "seconds": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 60
+            }
+          },
+          "description": "Hold position for a time."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "heading_deg"
+          ],
+          "properties": {
+            "type": {
+              "const": "rotate"
+            },
+            "heading_deg": {
+              "type": "number",
+              "minimum": 0,
+              "exclusiveMaximum": 360
+            }
+          },
+          "description": "Turn to face a heading, degrees clockwise from true north."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "pitch_deg"
+          ],
+          "properties": {
+            "type": {
+              "const": "gimbal_pitch"
+            },
+            "pitch_deg": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 0
+            }
+          },
+          "description": "Point the gimbal: 0 horizontal, negative downward, as DJI."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "take_photo"
+            }
+          },
+          "description": "Take one photo."
+        }
+      ]
+    }
+  }
+}
