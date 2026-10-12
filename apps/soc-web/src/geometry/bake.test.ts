@@ -243,6 +243,49 @@ describe('the bake (FR-WAY-07)', () => {
     expect(visits.filter((index) => index >= 0)).toHaveLength(1)
   })
 
+  it('orders up to thirteen units exactly: no order of six points flies shorter', () => {
+    const offsets: readonly (readonly [number, number])[] = [
+      [40, -10],
+      [-35, 25],
+      [10, 60],
+      [70, 45],
+      [-60, -40],
+      [5, -70],
+    ]
+    const input = {
+      name: 'six points',
+      design: {
+        ...BASE,
+        primitives: [{ kind: 'points', points: offsets.map(([e, n]) => near(e, n)) }],
+      },
+      envelope: ROOMY,
+    }
+    const flown = [FARM, ...baked(input).waypoints].map(local)
+    const length = (path: readonly (readonly [number, number])[]) =>
+      path.slice(1).reduce((sum, p, i) => {
+        const q = path[i] ?? p
+        return sum + Math.hypot(p[0] - q[0], p[1] - q[1])
+      }, 0)
+    const points = designOf(input.design).primitives.flatMap((p) =>
+      p.kind === 'points' ? p.points.map(local) : [],
+    )
+    const permutations = (items: readonly number[]): number[][] =>
+      items.length <= 1
+        ? [[...items]]
+        : items.flatMap((item, i) =>
+            permutations([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [
+              item,
+              ...rest,
+            ]),
+          )
+    const shortest = Math.min(
+      ...permutations(points.map((_, i) => i)).map((order) =>
+        length([local(FARM), ...order.map((i) => points[i] ?? ([0, 0] as const))]),
+      ),
+    )
+    expect(length(flown)).toBeCloseTo(shortest, 6)
+  })
+
   it('splits a leg longer than the stack allows, with 1 % to spare', () => {
     const input = CASES[3] as (typeof CASES)[number]
     const { waypoints, violations } = baked(input)
