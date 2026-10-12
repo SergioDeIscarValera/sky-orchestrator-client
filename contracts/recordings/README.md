@@ -14,6 +14,15 @@ nothing is drawn past the latest sample or glided across a gap, and no sample is
 called live once its threshold has passed (`FR-TEL-02`, `FR-SAF-02`,
 `NFR-REL-07`).
 
+## A fixture, not a flight record
+
+A recording here is a test input, not the record of a flight (`NFR-MNT-04`: no
+flight records in git). It holds the samples a console received and nothing else:
+no operator, no account, no organization's name. The ones kept so far come from
+the console end to end's simulated dock. A real flight's stream joins only to
+reproduce an incident, cut to the samples that show it and kept under 1 MB; the
+flight's own record stays in the database.
+
 ## Recording one
 
 The console end to end writes one when `SOC_E2E_RECORD` names a file:
