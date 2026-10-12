@@ -44,10 +44,9 @@ const WAYLINE: WaylineDraft = {
   name: 'Ronda',
   takeoff: { latitudeDeg: 41.6523, longitudeDeg: -4.7245 },
   defaultHeightM: 40,
-  speedMs: 5,
   design: { schema_version: '1.0.0', primitives: [] },
   waypoints: [{ index: 0, position: { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }, heightM: 40 }],
-  metrics: { waypointCount: 1, distanceM: 0, durationS: 0 },
+  metrics: { waypointCount: 1, distanceM: 0 },
   bakeVersion: '1.0.0',
 }
 

@@ -224,13 +224,13 @@ describe("the demo's geofences and waylines, read through the console backend", 
   it('answers the north corridor of Finca Norte, to generate a geofence round, and none for Almendral', async () => {
     const [corridor, ...others] = await backend.waylines(NORTH)
     expect(others).toEqual([])
-    expect(corridor).toMatchObject({ name: 'North corridor', speedMs: 5 })
+    expect(corridor).toMatchObject({ name: 'North corridor', defaultHeightM: 30 })
     expect(corridor?.takeoff.latitudeDeg).toBeCloseTo(41.6523, 9)
     expect(corridor?.takeoff.longitudeDeg).toBeCloseTo(-4.7245, 9)
     expect(corridor?.waypoints.map(({ index }) => index)).toEqual([0, 1, 2, 3])
     // Its design reads as the designer reads it, and bakes to its waypoints.
     const design = designFromJson(corridor?.design)
-    const baked = bake(design, { origin: design.takeoff, maxArcSpacingM: 10, envelope: null })
+    const baked = bake(design, { origin: design.takeoff, maxArcSpacingM: 10 })
     expect(baked.waypoints.map(({ heightM }) => heightM)).toEqual([30, 30, 30, 30])
     expect(baked.distanceM).toBeCloseTo(corridor?.metrics.distanceM ?? 0, -1)
     expect(await backend.waylines(ALMENDRAL)).toEqual([])

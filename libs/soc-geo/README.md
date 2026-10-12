@@ -31,7 +31,7 @@ not exist, without a geometry library at run time
   code with its waypoint: too many waypoints, the takeoff security height or a
   waypoint above the ceiling, a point outside the geofence's circle, a leg too
   long, the route too long, a speed above the limit, and given the takeoff
-  position, the transit and the distance from home. The console's bake reports
+  position, the transit and the distance from home. The console's flight reports
   the same violations with the same codes (`src/geometry/limits.ts`).
 
 ## What the console generates, checked here
@@ -48,10 +48,14 @@ generator bug can only make an output the validator refuses:
 - `grid.json`: the grid tool's coverages: every point inside the area, the lines
   parallel at the spacing within 0.1 m, none fewer at any bearing of a half-degree
   sweep.
-- `bake.json`: designs and their bakes: the schema followed, the violations
-  exactly what `soc_geo.limits` finds, the distance in Sky Orchestrator's metric,
-  no leg beyond the envelope unless reported, no two points within half a metre;
-  a bake with no waypoint refused by the schema.
+- `bake.json`: designs, their bakes and the flights an operation makes of them.
+  A bake follows the schema, its distance from the takeoff in Sky Orchestrator's
+  metric. A flight follows the schema too: the bake's waypoints flown as baked
+  and in order, legs split only where the envelope asks, the violations exactly
+  what `soc_geo.limits` finds, the distance and duration in Sky Orchestrator's
+  metric, no leg beyond the envelope unless reported. No two points within half
+  a metre; nothing drawn bakes to no wayline, and its flight is refused by the
+  schema.
 
 ## Golden vectors
 
@@ -85,15 +89,20 @@ within 10⁻⁶ m.
 
 ## The design schema
 
-`contracts/geometry/design.schema.json` (1.0.0) is a wayline as the console's
-designer saves it and as its bake leaves it: the takeoff point, the default
-height, the takeoff security height, the speed, the finish, and the drawn
-primitives (routes, points, circles, grids), each point with its own height if
-it has one; then the baked waypoints, their distance in SO's metric, duration and
-violations. Positions are stored in GeoJSON order, `[longitude, latitude]`, and
-polygons as rings of them, not closed, as the units table says; DJI's order is
-written in one place only, the flight file builder. The bake carries what Sky
-Orchestrator's mission plan needs: a test turns the example's bake into SO's form,
-as the builder will, and holds it, with an identity and a fingerprint, to SO's
-vendored `mission-plan.schema.json`. `contracts/geometry/examples/` holds a route
-and its bake, and a circle and a grid not baked yet.
+`contracts/geometry/design.schema.json` (2.0.0) is a wayline as the console's
+designer saves it and as its bake leaves it. A wayline is geometry: the takeoff
+point, the default height and the drawn primitives (routes, points, circles,
+grids), each point with its own height if it has one; its bake, the waypoints
+and their distance from the takeoff in SO's metric. Its speed, the height it
+climbs to over the takeoff, its finish and its geofence are the operation's
+(M4), and `$defs.flight` is what an operation makes of a bake: the reference
+point, the takeoff security height, the speed, the finish, the waypoints with
+legs split, the distance, the duration and the violations. Positions are stored
+in GeoJSON order, `[longitude, latitude]`, and polygons as rings of them, not
+closed, as the units table says; DJI's order is written in one place only, the
+flight file builder. A flight carries what Sky Orchestrator's mission plan
+needs: a test turns each clean flight of the vectors into SO's form, as the
+builder will, and holds it, with SO's schema version, an identity and a
+fingerprint, to SO's vendored `mission-plan.schema.json`.
+`contracts/geometry/examples/` holds a route and its bake, and a circle and a
+grid not baked yet.

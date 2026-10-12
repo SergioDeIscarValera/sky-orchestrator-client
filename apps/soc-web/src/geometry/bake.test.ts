@@ -1,12 +1,18 @@
 // @vitest-environment node
 import { readFileSync, writeFileSync } from 'node:fs'
 
-import { bake, MERGE_M, SPLIT_SLACK } from './bake'
-import { bakedToJson, designFromJson, envelopeFromSkyOrchestrator } from './designJson'
+import { bake, MERGE_M } from './bake'
+import {
+  bakedToJson,
+  designFromJson,
+  envelopeFromSkyOrchestrator,
+  flightToJson,
+} from './designJson'
+import { planFlight, SPLIT_SLACK } from './flight'
 import { eastNorth, type Geodetic } from './projection'
 import { distanceM } from './sphere'
 
-/** contracts/geometry/bake.json: designs and their bakes, which libs/soc-geo checks. */
+/** contracts/geometry/bake.json: designs, their bakes and the flights made of them, which libs/soc-geo checks. */
 const VECTORS = new URL('../../../../contracts/geometry/bake.json', import.meta.url)
 const FARM: Geodetic = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
 
@@ -33,12 +39,16 @@ const ROOMY = {
 }
 
 const BASE = {
-  schema_version: '1.0.0',
+  schema_version: '2.0.0',
   takeoff: near(0, 0),
   default_height_m: 30,
+}
+
+/** What an operation gives the flight of a wayline (M4): its climb, its speed, its finish. */
+const OPERATION = {
   takeoff_security_height_m: 20,
   speed_ms: 5,
-  finish_action: 'return_home',
+  finish_action: 'return_home' as const,
 }
 
 type Json = Record<string, unknown>
@@ -118,10 +128,16 @@ const CASES: readonly { name: string; design: Json; envelope: Json }[] = [
   { name: 'nothing drawn', design: { ...BASE, primitives: [] }, envelope: ROOMY },
 ]
 
+const wayline = (input: (typeof CASES)[number]) =>
+  bake(designFromJson(input.design), { origin: FARM, maxArcSpacingM: 10 })
+
+/** The wayline flown by an operation, against the case's envelope. */
 const baked = (input: (typeof CASES)[number]) =>
-  bake(designFromJson(input.design), {
+  planFlight(designFromJson(input.design).takeoff, wayline(input), {
     origin: FARM,
-    maxArcSpacingM: 10,
+    takeoffSecurityHeightM: OPERATION.takeoff_security_height_m,
+    speedMs: OPERATION.speed_ms,
+    finishAction: OPERATION.finish_action,
     envelope: envelopeFromSkyOrchestrator(input.envelope),
   })
 
@@ -130,9 +146,19 @@ const local = (point: Geodetic) => {
   return [placed.eastM, placed.northM] as const
 }
 
-describe('the bake (FR-WAY-07)', () => {
-  it('bakes the same design to the same wayline, every time', () => {
-    for (const input of CASES) expect(baked(input)).toEqual(baked(input))
+describe('the bake (FR-WAY-07) and the flight made of it (FR-WAY-08, FR-WAY-11)', () => {
+  it('bakes the same design to the same wayline, and flies it the same, every time', () => {
+    for (const input of CASES) {
+      expect(wayline(input)).toEqual(wayline(input))
+      expect(baked(input)).toEqual(baked(input))
+    }
+  })
+
+  it('keeps the wayline whole when no leg is too long: the flight is its bake', () => {
+    const input = CASES[0] as (typeof CASES)[number]
+    expect(baked(input).waypoints).toEqual(wayline(input).waypoints)
+    expect(baked(input).distanceM).toBeCloseTo(wayline(input).distanceM, 9)
+    expect(baked(input).durationS).toBeCloseTo(wayline(input).distanceM / 5, 9)
   })
 
   it('flies a route in the order drawn and every point of interest once', () => {
@@ -229,15 +255,20 @@ describe('the bake (FR-WAY-07)', () => {
   })
 
   it('keeps contracts/geometry/bake.json, which libs/soc-geo checks, its output', () => {
-    const cases = CASES.map((input) => ({ ...input, baked: bakedToJson(baked(input)) }))
+    const cases = CASES.map((input) => ({
+      ...input,
+      baked: wayline(input).waypoints.length === 0 ? null : bakedToJson(wayline(input)),
+      operation: OPERATION,
+      flight: flightToJson(baked(input)),
+    }))
     if (process.env.WRITE_VECTORS === '1') {
       writeFileSync(
         VECTORS,
         `${JSON.stringify(
           {
             description:
-              "Designs and the waylines the console's bake gives them (FR-WAY-07), at origin with max_arc_spacing_m, against each case's envelope. libs/soc-geo holds every bake to the design schema and to the requirement: its violations are exactly what the Python validator finds, its distance is Sky Orchestrator's, no leg is longer than the envelope's and no two points are closer than half a metre.",
-            'x-version': '1.0.0',
+              "Designs, the waylines the console's bake gives them (FR-WAY-07) at origin with max_arc_spacing_m, and the flight an operation makes of each with its climb, speed and finish against the case's envelope (FR-WAY-08). A design with nothing drawn bakes to no wayline (null). libs/soc-geo holds every bake and flight to the design schema and to the requirement: a flight's violations are exactly what the Python validator finds, its distance is Sky Orchestrator's, no leg is longer than the envelope's and no two points are closer than half a metre.",
+            'x-version': '2.0.0',
             origin: [FARM.longitudeDeg, FARM.latitudeDeg],
             max_arc_spacing_m: 10,
             cases,

@@ -139,7 +139,6 @@ function geofenceRefusal(draft: GeofenceDraft): FieldRefusedError | null {
 function waylineRefusal(draft: WaylineDraft): FieldRefusedError | null {
   if (draft.name.trim() === '') return refusedBy('wayline_name_given')
   if (!(draft.defaultHeightM > 0)) return refusedBy('wayline_default_height_positive')
-  if (!(draft.speedMs > 0)) return refusedBy('wayline_speed_positive')
   const baked = draft.waypoints.length > 0 && draft.waypoints.every(({ heightM }) => heightM > 0)
   if (!baked) return refusedBy('wayline_waypoints_baked')
   if (draft.bakeVersion.trim() === '') return refusedBy('wayline_bake_version_given')
@@ -354,7 +353,6 @@ export class FakeBackend implements Backend {
       name: draft.name,
       takeoff: draft.takeoff,
       defaultHeightM: draft.defaultHeightM,
-      speedMs: draft.speedMs,
       design: draft.design,
       waypoints: [...draft.waypoints],
       metrics: draft.metrics,

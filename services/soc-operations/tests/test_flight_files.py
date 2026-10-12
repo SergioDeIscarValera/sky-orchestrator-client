@@ -35,7 +35,7 @@ WPML = flight_files.WPML_NAMESPACE
 NAME = "Route"
 
 ROUTE: dict[str, Any] = {
-    "schema_version": "1.0.0",
+    "schema_version": "2.0.0",
     "takeoff_security_height_m": 20.0,
     "reference_point": [-4.7245, 41.6523],
     "speed_ms": 5.0,
@@ -52,19 +52,20 @@ ROUTE: dict[str, Any] = {
 }
 
 
-def bake(**changes: Any) -> dict[str, Any]:
+def route(**changes: Any) -> dict[str, Any]:
+    """The route's flight, changed."""
     return {**copy.deepcopy(ROUTE), **changes}
 
 
 def varied() -> dict[str, Any]:
     """Speeds into two waypoints, finish_action land, fractional numbers."""
-    baked = bake(finish_action="land", speed_ms=6.5, takeoff_security_height_m=25.5)
-    baked["waypoints"][1]["speed_ms"] = 4.0
-    baked["waypoints"][3]["speed_ms"] = 9.25
-    return baked
+    flight = route(finish_action="land", speed_ms=6.5, takeoff_security_height_m=25.5)
+    flight["waypoints"][1]["speed_ms"] = 4.0
+    flight["waypoints"][3]["speed_ms"] = 9.25
+    return flight
 
 
-SHAPES = [bake(), bake(finish_action="hold"), varied()]
+SHAPES = [route(), route(finish_action="hold"), varied()]
 SHAPE_IDS = ["route-return-home", "hold", "varied-land"]
 
 
@@ -81,19 +82,19 @@ def archive_of(parts: Mapping[str, bytes]) -> bytes:
     return buffer.getvalue()
 
 
-def parsed(baked: Mapping[str, Any], path: str) -> ET.Element:
-    return ET.fromstring(members(flight_files.build(baked, name=NAME))[path])  # noqa: S314
+def parsed(flight: Mapping[str, Any], path: str) -> ET.Element:
+    return ET.fromstring(members(flight_files.build(flight, name=NAME))[path])  # noqa: S314
 
 
-def expected_fields(baked: Mapping[str, Any]) -> dict[str, Any]:
+def expected_fields(flight: Mapping[str, Any]) -> dict[str, Any]:
     return {
-        "reference_point": baked["reference_point"],
-        "takeoff_security_height_m": baked["takeoff_security_height_m"],
-        "speed_ms": baked["speed_ms"],
-        "finish_action": baked["finish_action"],
+        "reference_point": flight["reference_point"],
+        "takeoff_security_height_m": flight["takeoff_security_height_m"],
+        "speed_ms": flight["speed_ms"],
+        "finish_action": flight["finish_action"],
         "waypoints": [
             {"index": w["index"], "position": w["position"], "height_m": w["height_m"]}
-            for w in baked["waypoints"]
+            for w in flight["waypoints"]
         ],
     }
 
@@ -101,22 +102,22 @@ def expected_fields(baked: Mapping[str, Any]) -> dict[str, Any]:
 # --- the round trip and where each value sits ---------------------------------------------
 
 
-@pytest.mark.parametrize("baked", SHAPES, ids=SHAPE_IDS)
-def test_read_gives_back_the_bake_fields(baked: dict[str, Any]) -> None:
-    kmz = flight_files.build(baked, name=NAME)
-    assert flight_files.read(kmz) == expected_fields(baked)
+@pytest.mark.parametrize("flight", SHAPES, ids=SHAPE_IDS)
+def test_read_gives_back_the_flight_fields(flight: dict[str, Any]) -> None:
+    kmz = flight_files.build(flight, name=NAME)
+    assert flight_files.read(kmz) == expected_fields(flight)
 
 
 def test_the_reference_point_is_latitude_first_in_the_file_only() -> None:
-    text = members(flight_files.build(bake(), name=NAME))[WAYLINES].decode()
+    text = members(flight_files.build(route(), name=NAME))[WAYLINES].decode()
     assert "<wpml:takeOffRefPoint>41.6523,-4.7245,0</wpml:takeOffRefPoint>" in text
-    read_back = flight_files.read(flight_files.build(bake(), name=NAME))
+    read_back = flight_files.read(flight_files.build(route(), name=NAME))
     assert read_back["reference_point"] == [-4.7245, 41.6523]
     assert read_back["reference_point"] != [41.6523, -4.7245]
 
 
 def test_coordinates_are_longitude_then_latitude_with_no_height() -> None:
-    text = members(flight_files.build(bake(), name=NAME))[WAYLINES].decode()
+    text = members(flight_files.build(route(), name=NAME))[WAYLINES].decode()
     assert "<coordinates>-4.7245,41.65255</coordinates>" in text
     assert "<coordinates>-4.7245,41.65255,30.0</coordinates>" not in text
 
@@ -130,19 +131,19 @@ def test_the_wayline_speed_and_each_outgoing_speed_follow_the_convention() -> No
 
 
 def test_the_transit_into_waypoint_zero_flies_at_the_wayline_speed() -> None:
-    baked = bake()
-    baked["waypoints"][0]["speed_ms"] = 5.0  # equal to the wayline's: carried, nothing dropped
-    text = members(flight_files.build(baked, name=NAME))[WAYLINES].decode()
+    flight = route()
+    flight["waypoints"][0]["speed_ms"] = 5.0  # equal to the wayline's: carried, nothing dropped
+    text = members(flight_files.build(flight, name=NAME))[WAYLINES].decode()
     assert "<wpml:autoFlightSpeed>5.0</wpml:autoFlightSpeed>" in text
     assert "<wpml:globalTransitionalSpeed>5.0</wpml:globalTransitionalSpeed>" in text
-    assert flight_files.read(flight_files.build(baked, name=NAME)) == expected_fields(bake())
+    assert flight_files.read(flight_files.build(flight, name=NAME)) == expected_fields(route())
 
 
 def test_a_different_speed_into_waypoint_zero_is_refused_not_dropped() -> None:
-    baked = bake()
-    baked["waypoints"][0]["speed_ms"] = 2.0
+    flight = route()
+    flight["waypoints"][0]["speed_ms"] = 2.0
     with pytest.raises(ValueError, match=r"waypoint 0 speed_ms 2 differs from the wayline's 5"):
-        flight_files.build(baked, name=NAME)
+        flight_files.build(flight, name=NAME)
 
 
 @pytest.mark.parametrize(
@@ -150,7 +151,7 @@ def test_a_different_speed_into_waypoint_zero_is_refused_not_dropped() -> None:
     [("return_home", "goHome"), ("hold", "noAction"), ("land", "autoLand")],
 )
 def test_each_finish_action_is_the_dji_finish_action(finish_action: str, dji: str) -> None:
-    kmz = flight_files.build(bake(finish_action=finish_action), name=NAME)
+    kmz = flight_files.build(route(finish_action=finish_action), name=NAME)
     assert f"<wpml:finishAction>{dji}</wpml:finishAction>" in members(kmz)[WAYLINES].decode()
     assert flight_files.read(kmz)["finish_action"] == finish_action
 
@@ -167,9 +168,9 @@ def test_each_finish_action_is_the_dji_finish_action(finish_action: str, dji: st
 def test_positions_read_back_exactly_and_never_in_scientific_notation(
     position: list[float],
 ) -> None:
-    baked = bake()
-    baked["waypoints"][0]["position"] = position
-    kmz = flight_files.build(baked, name=NAME)
+    flight = route()
+    flight["waypoints"][0]["position"] = position
+    kmz = flight_files.build(flight, name=NAME)
     assert flight_files.read(kmz)["waypoints"][0]["position"] == position
     text = members(kmz)[WAYLINES].decode()
     coordinates = re.search(r"<coordinates>([^<]+)</coordinates>", text)
@@ -180,9 +181,9 @@ def test_positions_read_back_exactly_and_never_in_scientific_notation(
 
 
 def test_a_tiny_height_is_written_in_plain_decimal_and_read_back() -> None:
-    baked = bake()
-    baked["waypoints"][1]["height_m"] = 1e-05
-    kmz = flight_files.build(baked, name=NAME)
+    flight = route()
+    flight["waypoints"][1]["height_m"] = 1e-05
+    kmz = flight_files.build(flight, name=NAME)
     assert "<wpml:executeHeight>0.00001</wpml:executeHeight>" in members(kmz)[WAYLINES].decode()
     assert flight_files.read(kmz)["waypoints"][1]["height_m"] == 1e-05
 
@@ -197,27 +198,27 @@ def test_a_tiny_height_is_written_in_plain_decimal_and_read_back() -> None:
     ],
 )
 def test_the_limits_themselves_are_accepted(change: Callable[[dict[str, Any]], object]) -> None:
-    baked = bake()
-    change(baked)
-    assert flight_files.read(flight_files.build(baked, name=NAME)) == expected_fields(baked)
+    flight = route()
+    change(flight)
+    assert flight_files.read(flight_files.build(flight, name=NAME)) == expected_fields(flight)
 
 
 # --- determinism and the archive ------------------------------------------------------------
 
 
-def test_the_same_bake_and_name_give_the_same_bytes() -> None:
-    assert flight_files.build(bake(), name=NAME) == flight_files.build(bake(), name=NAME)
+def test_the_same_flight_and_name_give_the_same_bytes() -> None:
+    assert flight_files.build(route(), name=NAME) == flight_files.build(route(), name=NAME)
 
 
 def test_the_name_changes_the_template_and_not_the_waylines() -> None:
-    first = members(flight_files.build(bake(), name="Alpha"))
-    second = members(flight_files.build(bake(), name="Beta"))
+    first = members(flight_files.build(route(), name="Alpha"))
+    second = members(flight_files.build(route(), name="Beta"))
     assert first[WAYLINES] == second[WAYLINES]
     assert first[TEMPLATE] != second[TEMPLATE]
 
 
 def test_the_archive_holds_the_two_files_in_order_with_fixed_metadata() -> None:
-    kmz = flight_files.build(bake(), name=NAME)
+    kmz = flight_files.build(route(), name=NAME)
     with zipfile.ZipFile(io.BytesIO(kmz)) as archive:
         infos = archive.infolist()
         assert archive.comment == b""
@@ -233,7 +234,7 @@ def test_the_archive_holds_the_two_files_in_order_with_fixed_metadata() -> None:
 
 
 def test_each_entry_is_stored_as_written_so_no_zlib_moves_a_byte() -> None:
-    kmz = flight_files.build(bake(), name=NAME)
+    kmz = flight_files.build(route(), name=NAME)
     contents = members(kmz)
     with zipfile.ZipFile(io.BytesIO(kmz)) as archive:
         infos = archive.infolist()
@@ -246,12 +247,12 @@ def test_each_entry_is_stored_as_written_so_no_zlib_moves_a_byte() -> None:
 
 
 def test_the_fingerprint_is_the_md5_hex_digest_of_the_bytes() -> None:
-    kmz = flight_files.build(bake(), name=NAME)
+    kmz = flight_files.build(route(), name=NAME)
     expected = hashlib.md5(kmz, usedforsecurity=False).hexdigest()
     assert flight_files.fingerprint(kmz) == expected
     assert len(flight_files.fingerprint(kmz)) == 32
     assert flight_files.fingerprint(kmz) != flight_files.fingerprint(
-        flight_files.build(bake(), name="Other")
+        flight_files.build(route(), name="Other")
     )
 
 
@@ -259,7 +260,7 @@ def test_the_fingerprint_is_the_md5_hex_digest_of_the_bytes() -> None:
 
 
 REFUSALS: list[tuple[Callable[[dict[str, Any]], object], str]] = [
-    (lambda b: b.update(waypoints=[]), r"the bake has no waypoint"),
+    (lambda b: b.update(waypoints=[]), r"the flight has no waypoint"),
     (lambda b: b["waypoints"][1].update(index=2), r"waypoint at position 1 has index 2"),
     (lambda b: b["waypoints"][0].update(index=1), r"waypoint at position 0 has index 1"),
     (lambda b: b["waypoints"][0].update(index=True), r"waypoint at position 0 has index True"),
@@ -325,31 +326,31 @@ REFUSALS: list[tuple[Callable[[dict[str, Any]], object], str]] = [
                 {"rule": "distance_too_long", "message": "..."},
             ]
         ),
-        r"the bake breaks 2 rule\(s\), so it does not fly: leg_too_long at waypoint 2; "
+        r"the flight breaks 2 rule\(s\), so it does not fly: leg_too_long at waypoint 2; "
         r"distance_too_long$",
     ),
     (lambda b: b.update(violations=None), r"violations is not a list"),
-    (lambda b: b.pop("violations"), r"the bake has no violations"),
-    (lambda b: b.pop("speed_ms"), r"the bake has no speed_ms"),
+    (lambda b: b.pop("violations"), r"the flight has no violations"),
+    (lambda b: b.pop("speed_ms"), r"the flight has no speed_ms"),
     (lambda b: b["waypoints"][1].pop("height_m"), r"waypoint 1 has no height_m"),
     (lambda b: b["waypoints"][1].pop("position"), r"waypoint 1 has no position"),
 ]
 
 
 @pytest.mark.parametrize(("change", "message"), REFUSALS)
-def test_a_bake_the_subset_cannot_fly_is_refused_naming_the_problem(
+def test_a_flight_the_subset_cannot_fly_is_refused_naming_the_problem(
     change: Callable[[dict[str, Any]], object], message: str
 ) -> None:
-    baked = bake()
-    change(baked)
+    flight = route()
+    change(flight)
     with pytest.raises(ValueError, match=message):
-        flight_files.build(baked, name=NAME)
+        flight_files.build(flight, name=NAME)
 
 
 def test_empty_actions_are_no_actions_and_are_accepted() -> None:
-    baked = bake()
-    baked["waypoints"][2]["actions"] = []
-    assert flight_files.read(flight_files.build(baked, name=NAME)) == expected_fields(bake())
+    flight = route()
+    flight["waypoints"][2]["actions"] = []
+    assert flight_files.read(flight_files.build(flight, name=NAME)) == expected_fields(route())
 
 
 @pytest.mark.parametrize(
@@ -363,12 +364,12 @@ def test_empty_actions_are_no_actions_and_are_accepted() -> None:
 )
 def test_a_name_xml_cannot_carry_is_refused(name: str, message: str) -> None:
     with pytest.raises(ValueError, match=message):
-        flight_files.build(bake(), name=name)
+        flight_files.build(route(), name=name)
 
 
 def test_the_name_is_escaped_and_reads_back_as_it_was_given() -> None:
     name = "Ridge <A> & \"B\" 'C' ]]> end"
-    kmz = flight_files.build(bake(), name=name)
+    kmz = flight_files.build(route(), name=name)
     template = members(kmz)[TEMPLATE].decode()
     assert "<name>Ridge &lt;A&gt; &amp; \"B\" 'C' ]]&gt; end</name>" in template
     root = ET.fromstring(members(kmz)[TEMPLATE])  # noqa: S314
@@ -385,7 +386,7 @@ def test_the_name_is_escaped_and_reads_back_as_it_was_given() -> None:
     ['<!DOCTYPE kml [<!ENTITY x "y">]>', '<!DOCTYPE kml SYSTEM "file:///etc/passwd">'],
 )
 def test_read_refuses_a_doctype_and_the_entities_it_declares(declaration: str) -> None:
-    waylines = members(flight_files.build(bake(), name=NAME))[WAYLINES].decode()
+    waylines = members(flight_files.build(route(), name=NAME))[WAYLINES].decode()
     doctored = waylines.replace("<kml", f"{declaration}\n<kml", 1)
     kmz = archive_of({TEMPLATE: b"<kml/>", WAYLINES: doctored.encode()})
     with pytest.raises(ValueError, match="DOCTYPE"):
@@ -393,7 +394,7 @@ def test_read_refuses_a_doctype_and_the_entities_it_declares(declaration: str) -
 
 
 def test_read_refuses_an_entity_reference_it_cannot_resolve() -> None:
-    waylines = members(flight_files.build(bake(), name=NAME))[WAYLINES].decode()
+    waylines = members(flight_files.build(route(), name=NAME))[WAYLINES].decode()
     doctored = waylines.replace("<wpml:waylineId>0", "<wpml:waylineId>&bomb;0", 1)
     with pytest.raises(ValueError, match="not well-formed XML"):
         flight_files.read(archive_of({TEMPLATE: b"<kml/>", WAYLINES: doctored.encode()}))
@@ -531,26 +532,26 @@ def test_the_page_names_the_two_things_read_from_the_template() -> None:
     assert "its `Document/name`" in which_file
 
 
-@pytest.mark.parametrize("baked", SHAPES, ids=SHAPE_IDS)
+@pytest.mark.parametrize("flight", SHAPES, ids=SHAPE_IDS)
 @pytest.mark.parametrize("path", [TEMPLATE, WAYLINES])
 def test_every_element_written_is_a_row_of_the_page_for_its_parent(
-    baked: dict[str, Any], path: str
+    flight: dict[str, Any], path: str
 ) -> None:
     rows = subset_rows()
-    for element_path, _ in element_paths(parsed(baked, path)):
+    for element_path, _ in element_paths(parsed(flight, path)):
         if element_path == ROOT:
             assert ROOT in subset_sections()
         elif element_path not in PROSE_ONLY:
             assert element_path in rows, f"{element_path} is not in the subset"
 
 
-@pytest.mark.parametrize("baked", SHAPES, ids=SHAPE_IDS)
+@pytest.mark.parametrize("flight", SHAPES, ids=SHAPE_IDS)
 @pytest.mark.parametrize("path", [TEMPLATE, WAYLINES])
 def test_every_required_row_under_a_written_parent_is_written(
-    baked: dict[str, Any], path: str
+    flight: dict[str, Any], path: str
 ) -> None:
     rows = subset_rows()
-    written = {element_path for element_path, _ in element_paths(parsed(baked, path))}
+    written = {element_path for element_path, _ in element_paths(parsed(flight, path))}
     for parent in written:
         # The template is read for its templateType and name only: its Folder is not held to
         # the execution file's required rows.
@@ -564,11 +565,11 @@ def test_every_required_row_under_a_written_parent_is_written(
         assert not required - written, f"{parent} lacks {sorted(required - written)}"
 
 
-@pytest.mark.parametrize("baked", SHAPES, ids=SHAPE_IDS)
+@pytest.mark.parametrize("flight", SHAPES, ids=SHAPE_IDS)
 @pytest.mark.parametrize("path", [TEMPLATE, WAYLINES])
-def test_every_value_written_is_one_the_page_accepts(baked: dict[str, Any], path: str) -> None:
+def test_every_value_written_is_one_the_page_accepts(flight: dict[str, Any], path: str) -> None:
     rows = subset_rows()
-    for element_path, element in element_paths(parsed(baked, path)):
+    for element_path, element in element_paths(parsed(flight, path)):
         if len(element) or element_path in PROSE_ONLY:
             continue
         value = element.text or ""
@@ -578,22 +579,22 @@ def test_every_value_written_is_one_the_page_accepts(baked: dict[str, Any], path
         accepted_by_the_page(element_path, value, rows[element_path].accepted)
 
 
-@pytest.mark.parametrize("baked", SHAPES, ids=SHAPE_IDS)
-def test_the_placemarks_are_indexed_in_document_order(baked: dict[str, Any]) -> None:
-    folder = parsed(baked, WAYLINES).find(f"{{{KML}}}Document/{{{KML}}}Folder")
+@pytest.mark.parametrize("flight", SHAPES, ids=SHAPE_IDS)
+def test_the_placemarks_are_indexed_in_document_order(flight: dict[str, Any]) -> None:
+    folder = parsed(flight, WAYLINES).find(f"{{{KML}}}Document/{{{KML}}}Folder")
     assert folder is not None
     indexes = []
     for placemark in folder.findall(f"{{{KML}}}Placemark"):
         index = placemark.find(f"{{{WPML}}}index")
         assert index is not None
         indexes.append(int(index.text or ""))
-    assert indexes == list(range(len(baked["waypoints"])))
+    assert indexes == list(range(len(flight["waypoints"])))
 
 
-@pytest.mark.parametrize("baked", SHAPES, ids=SHAPE_IDS)
+@pytest.mark.parametrize("flight", SHAPES, ids=SHAPE_IDS)
 @pytest.mark.parametrize("path", [TEMPLATE, WAYLINES])
-def test_no_element_carries_an_attribute(baked: dict[str, Any], path: str) -> None:
-    for element_path, element in element_paths(parsed(baked, path)):
+def test_no_element_carries_an_attribute(flight: dict[str, Any], path: str) -> None:
+    for element_path, element in element_paths(parsed(flight, path)):
         assert element.attrib == {}, element_path
 
 
@@ -606,13 +607,13 @@ ROUTE_EXAMPLE = REPOSITORY / "contracts" / "geometry" / "examples" / "design.rou
 DESIGN_SCHEMA: dict[str, Any] = json.loads(
     (REPOSITORY / "contracts" / "geometry" / "design.schema.json").read_text(encoding="utf-8")
 )
-#: The bake's own definition, checked on its own: a golden bake must be a bake the schema allows.
-BAKED_SCHEMA = jsonschema_rs.validator_for(
+#: The flight's own definition, checked on its own: a golden flight must be one the schema allows.
+FLIGHT_SCHEMA = jsonschema_rs.validator_for(
     {
         "$schema": DESIGN_SCHEMA["$schema"],
         "$id": DESIGN_SCHEMA["$id"],
         "$defs": DESIGN_SCHEMA["$defs"],
-        "$ref": "#/$defs/baked",
+        "$ref": "#/$defs/flight",
     }
 )
 #: Each case's wayline name, as its golden template.kml carries it.
@@ -620,11 +621,11 @@ GOLDEN_NAMES = {
     "route-return-home": "Route return home",
     "six-waypoints-land": "Six waypoints land",
 }
-GOLDEN_FILES = ("bake.json", "template.kml", "waylines.wpml", "kmz.sha256")
+GOLDEN_FILES = ("flight.json", "template.kml", "waylines.wpml", "kmz.sha256")
 
 
-def golden_bake(case: str) -> dict[str, Any]:
-    loaded: dict[str, Any] = json.loads((GOLDEN / case / "bake.json").read_text(encoding="utf-8"))
+def golden_flight(case: str) -> dict[str, Any]:
+    loaded: dict[str, Any] = json.loads((GOLDEN / case / "flight.json").read_text(encoding="utf-8"))
     return loaded
 
 
@@ -643,14 +644,14 @@ def test_each_golden_case_holds_its_four_files(case: str) -> None:
 
 @pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
 def test_the_builder_writes_the_golden_texts(case: str) -> None:
-    written = members(flight_files.build(golden_bake(case), name=GOLDEN_NAMES[case]))
+    written = members(flight_files.build(golden_flight(case), name=GOLDEN_NAMES[case]))
     assert written[TEMPLATE] == golden_file(case, "template.kml")
     assert written[WAYLINES] == golden_file(case, "waylines.wpml")
 
 
 @pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
 def test_the_kmz_hashes_are_the_golden_hashes(case: str) -> None:
-    kmz = flight_files.build(golden_bake(case), name=GOLDEN_NAMES[case])
+    kmz = flight_files.build(golden_flight(case), name=GOLDEN_NAMES[case])
     recorded = dict(
         line.split(": ", 1) for line in golden_file(case, "kmz.sha256").decode().splitlines()
     )
@@ -662,32 +663,38 @@ def test_the_kmz_hashes_are_the_golden_hashes(case: str) -> None:
 
 @pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
 def test_building_a_golden_case_twice_gives_identical_bytes(case: str) -> None:
-    baked = golden_bake(case)
-    assert flight_files.build(baked, name=GOLDEN_NAMES[case]) == flight_files.build(
-        baked, name=GOLDEN_NAMES[case]
+    flight = golden_flight(case)
+    assert flight_files.build(flight, name=GOLDEN_NAMES[case]) == flight_files.build(
+        flight, name=GOLDEN_NAMES[case]
     )
 
 
 @pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
-def test_each_golden_flight_file_reads_back_as_its_bake(case: str) -> None:
-    baked = golden_bake(case)
-    assert flight_files.read(flight_files.build(baked, name=GOLDEN_NAMES[case])) == (
-        expected_fields(baked)
+def test_each_golden_flight_file_reads_back_as_its_flight(case: str) -> None:
+    flight = golden_flight(case)
+    assert flight_files.read(flight_files.build(flight, name=GOLDEN_NAMES[case])) == (
+        expected_fields(flight)
     )
 
 
 @pytest.mark.parametrize("case", sorted(GOLDEN_NAMES))
-def test_each_golden_bake_follows_the_baked_definition_of_the_design_schema(case: str) -> None:
-    assert list(BAKED_SCHEMA.iter_errors(golden_bake(case))) == []
+def test_each_golden_flight_follows_the_flight_definition_of_the_design_schema(case: str) -> None:
+    assert list(FLIGHT_SCHEMA.iter_errors(golden_flight(case))) == []
 
 
-def test_the_route_case_is_the_route_examples_bake() -> None:
+def test_the_route_case_is_the_route_examples_wayline_flown_by_an_operation() -> None:
     example = json.loads(ROUTE_EXAMPLE.read_text(encoding="utf-8"))
-    assert golden_bake("route-return-home") == example["baked"]
+    flight = golden_flight("route-return-home")
+    assert flight["reference_point"] == example["design"]["takeoff"]
+    assert flight["waypoints"] == example["baked"]["waypoints"]
+    assert flight["distance_m"] == example["baked"]["distance_m"]
+    assert flight["duration_s"] == pytest.approx(
+        flight["distance_m"] / flight["speed_ms"], abs=1e-3
+    )
 
 
 def test_the_six_waypoint_case_has_six_waypoints_speeds_into_two_and_lands() -> None:
-    baked = golden_bake("six-waypoints-land")
-    assert len(baked["waypoints"]) == 6
-    assert [w["index"] for w in baked["waypoints"] if "speed_ms" in w] == [1, 3]
-    assert baked["finish_action"] == "land"
+    flight = golden_flight("six-waypoints-land")
+    assert len(flight["waypoints"]) == 6
+    assert [w["index"] for w in flight["waypoints"] if "speed_ms" in w] == [1, 3]
+    assert flight["finish_action"] == "land"

@@ -23,13 +23,12 @@ const WAYLINE: WaylineDraft = {
   name: 'Ronda',
   takeoff: { latitudeDeg: 41.6523, longitudeDeg: -4.7245 },
   defaultHeightM: 40,
-  speedMs: 5,
   design: { schema_version: '1.0.0', primitives: [] },
   waypoints: [
     { index: 0, position: { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }, heightM: 40 },
-    { index: 1, position: { latitudeDeg: 41.64, longitudeDeg: -4.71 }, heightM: 45, speedMs: 4 },
+    { index: 1, position: { latitudeDeg: 41.64, longitudeDeg: -4.71 }, heightM: 45 },
   ],
-  metrics: { waypointCount: 2, distanceM: 1234.5, durationS: 300 },
+  metrics: { waypointCount: 2, distanceM: 1234.5 },
   bakeVersion: '1.0.0',
 }
 
@@ -239,7 +238,6 @@ describe('the waylines held in memory (FR-WAY-09)', () => {
     expect(created).toMatchObject({
       name: 'Ronda',
       defaultHeightM: 40,
-      speedMs: 5,
       bakeVersion: '1.0.0',
       metrics: WAYLINE.metrics,
     })
@@ -284,7 +282,6 @@ describe('the waylines held in memory (FR-WAY-09)', () => {
       'defaultHeightM',
       "A wayline's default height must be above zero.",
     ],
-    ['no speed', { speedMs: 0 }, 'speedMs', "A wayline's speed must be above zero."],
     [
       'no baked waypoint',
       { waypoints: [] },

@@ -25,7 +25,7 @@ Rules:
 | [0006](0006-the-web-talks-to-supabase-and-commands-are-intents.md) | The web talks to Supabase directly, and commands are intents | Accepted |
 | [0007](0007-live-telemetry-over-realtime-broadcast.md) | Everything live travels as Realtime Broadcast on private channels | Accepted |
 | [0008](0008-flight-files-served-on-sky-orchestrators-network.md) | Flight files are built by SOC, kept as bytes and served on SO's network | Accepted |
-| [0009](0009-geometry-generators-validators-and-golden-vectors.md) | Geometry: generators in the web, validators in the services, golden vectors between them | Accepted |
+| [0009](0009-geometry-generators-validators-and-golden-vectors.md) | Geometry: generators in the web, validators in the services, golden vectors between them | Accepted; where legs are split superseded by ADR-0024 |
 | [0010](0010-the-cloud-geofence-is-enforced-where-telemetry-arrives.md) | The cloud geofence is enforced where telemetry arrives | Accepted |
 | [0011](0011-simulate-then-fly-the-same-file.md) | Simulate, then fly the same file | Accepted |
 | [0012](0012-wire-identity-is-not-airframe-identity.md) | Wire identity is not airframe identity | Accepted |
@@ -40,3 +40,4 @@ Rules:
 | [0021](0021-the-scene-camera-and-ground.md) | The scene's camera keeps its own limits; its ground is plain three.js | Accepted |
 | [0022](0022-web-test-files-share-their-workers-modules.md) | The web's test files share their worker's modules | Accepted |
 | [0023](0023-the-console-reads-its-own-configuration-file.md) | The console reads its own configuration file, checked before it starts | Accepted |
+| [0024](0024-a-wayline-is-geometry-the-operation-flies-it.md) | A wayline is geometry; the operation flies it | Accepted |

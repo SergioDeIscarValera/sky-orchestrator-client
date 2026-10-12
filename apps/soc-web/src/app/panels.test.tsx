@@ -20,10 +20,9 @@ const CORRIDOR: WaylineDraft = {
   name: 'Corridor 1',
   takeoff: SPOT,
   defaultHeightM: 30,
-  speedMs: 5,
   design: {},
   waypoints: [{ index: 0, position: SPOT, heightM: 30 }],
-  metrics: { waypointCount: 1, distanceM: 0, durationS: 0 },
+  metrics: { waypointCount: 1, distanceM: 0 },
   bakeVersion: '1',
 }
 

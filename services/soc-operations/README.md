@@ -16,24 +16,25 @@ The skeleton the operations plug into, and the flight file builder:
 | The database link, supervised, as `soc_operations`, which may request commands (`soc.command_intents`) | `service.py`, through `soc-db` |
 | `/health` and `/ready` on `SOC_HEALTH_PORT` (`NFR-OBS-02`) | `service.py`, through `soc-supervision` |
 | The process: JSON logs, SIGTERM and SIGINT stop it cleanly | `__main__.py` |
-| A baked wayline's flight file: built, fingerprinted and read back (FR-WAY-11) | `flight_files.py` |
+| A flight's file: built, fingerprinted and read back (FR-WAY-11) | `flight_files.py` |
 
 The operations, their transitions and the intents they execute (ADR-0006)
 arrive with the operations data model in M4 ([roadmap](../../docs/roadmap.md)).
 
 ## Flight files
 
-`flight_files.py` turns a baked wayline into the KMZ that Sky Orchestrator's dock
-downloads (FR-WAY-11,
+`flight_files.py` turns a flight, the baked wayline as its operation flies it
+(`$defs.flight` of `contracts/geometry/design.schema.json`), into the KMZ that Sky
+Orchestrator's dock downloads (FR-WAY-11,
 [ADR-0008](../../docs/architecture/decisions/0008-flight-files-served-on-sky-orchestrators-network.md)).
 `soc-cloud` serves the bytes; this module builds them, fingerprints them and reads
 them back.
 
 | Function | Does |
 | --- | --- |
-| `build(baked, name=...)` | The KMZ's bytes for a bake, or a `ValueError` naming what the subset cannot fly |
+| `build(flight, name=...)` | The KMZ's bytes for a flight, or a `ValueError` naming what the subset cannot fly |
 | `fingerprint(kmz)` | The MD5 hex digest, as Sky Orchestrator's plan records it (`fingerprint_md5`) |
-| `read(kmz)` | The bake's fields back from a KMZ this module wrote; the round-trip tests use it |
+| `read(kmz)` | The flight's fields back from a KMZ this module wrote; the round-trip tests use it |
 
 **What is written.** Two files, laid out as DJI's WPML has them:
 
@@ -48,7 +49,7 @@ Every element is in the subset Sky Orchestrator accepts
 
 **Conventions**, settled once here:
 
-- A bake's positions are `[longitude, latitude]`. A placemark's `coordinates` are
+- A flight's positions are `[longitude, latitude]`. A placemark's `coordinates` are
   `longitude,latitude`, with no height. `takeOffRefPoint` is `latitude,longitude,0`:
   DJI's order is translated in this module and nowhere else.
 - Heights are metres above the takeoff point (`executeHeight`). The security height
@@ -64,7 +65,7 @@ Every element is in the subset Sky Orchestrator accepts
 - Numbers are Python's shortest `repr`, in plain decimal and never in scientific
   notation, so `float(text)` gives back the value exactly.
 
-**Determinism.** The same bake and name give the same bytes. The entries are in a
+**Determinism.** The same flight and name give the same bytes. The entries are in a
 fixed order with a fixed timestamp (1980-01-01 00:00:00), with fixed attributes, and
 no comment and no extra fields. They are stored rather than deflated: no zlib release
 can move a byte, and a flight file is a few kilobytes.
@@ -75,14 +76,14 @@ not in (0, 120] m; a speed not in (0, 15] m/s, the wayline's or a waypoint's; a
 takeoff security height not in (0, 120] m; a finish action other than the three;
 actions on a waypoint, which the file does not write until FR-WAY-12; a speed into
 waypoint 0 that differs from the wayline's, which the file cannot carry; a name that
-is empty or holds a character XML cannot carry; a bake with any violation (FR-WAY-08),
+is empty or holds a character XML cannot carry; a flight with any violation (FR-WAY-08),
 each named with its rule and waypoint: a flight file is only ever built from a clean
-bake.
+flight.
 
 **Read back, refused:** a DOCTYPE or an entity declaration, malformed XML, and a KMZ
 that does not hold the two files in order.
 
-**Not this module's job.** The stack's envelope is not checked here: the bake
+**Not this module's job.** The stack's envelope is not checked here: the flight
 reports what breaks it as violations, which refuse the build, and the preflight
 (FR-OPS-03) checks the envelope again when it arrives with the operations.
 
@@ -91,7 +92,7 @@ every golden case and runs so-wayline's own `ingest.validate` on it, from Sky
 Orchestrator's checkout and in its own interpreter, under three envelopes: a
 permissive one, Sky Orchestrator's defaults, and one tight enough to break every
 rule. Each reference file must be `VALID` under the permissive one, and every
-refusal must be the one `soc_geo.limits` predicts for the bake, rule by rule and
+refusal must be the one `soc_geo.limits` predicts for the flight, rule by rule and
 waypoint by waypoint. Nothing of Sky Orchestrator's stack is touched:
 
 ```bash
@@ -105,7 +106,7 @@ all. The HTTP dry run (`POST /v1/validations`) runs the same `ingest.validate`; 
 joins the end-to-end suite with the stack session.
 
 **Golden files.** `contracts/flight-files/` holds two reference waylines as text:
-each one's bake, the two XML files it builds, and the KMZ's SHA-256 and fingerprint.
+each one's flight, the two XML files it builds, and the KMZ's SHA-256 and fingerprint.
 `tests/test_flight_files.py` rebuilds each and requires the same bytes. The subset
 tests read `contracts/sky-orchestrator/wpml/supported-subset.md` and hold every element
 written, every required element of a parent written, and every value to the page's
@@ -144,6 +145,6 @@ service comes up ready on the production Postgres image as `soc_operations`.
 | Postgres unreachable, or the password refused | The database link stays down, retried up to every 10 s; `/ready` answers 503 naming the error |
 | A bug in a supervised part | The process ends with status 1 and a `service_failed` line |
 | SIGTERM | The link closes and the process exits with status 0 |
-| A bake the subset cannot fly | `flight_files.build` raises `ValueError` naming it; no file is made |
+| A flight the subset cannot fly | `flight_files.build` raises `ValueError` naming it; no file is made |
 | A change to the builder moves a byte of a flight file | The golden tests fail; a deliberate change regenerates the golden case in the same commit |
-| A bake with violations | `flight_files.build` refuses it, naming each rule and waypoint; no file is made |
+| A flight with violations | `flight_files.build` refuses it, naming each rule and waypoint; no file is made |

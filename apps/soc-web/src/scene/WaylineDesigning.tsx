@@ -6,11 +6,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSettings } from '../config/settings'
 import { circlePoints } from '../geometry/circle'
 import { cover } from '../geometry/grid'
-import { locate, type Point } from '../geometry/planar'
 import type { Primitive } from '../geometry/bake'
 import { eastNorth, type Geodetic } from '../geometry/projection'
-import { useGeofences } from '../plans/data'
-import { judge } from '../plans/waylineBake'
+import { bakeSketch } from '../plans/waylineBake'
 import { clicked, useWaylineDesigner } from '../plans/waylineDesigner'
 import { CANVAS_SETTINGS } from './canvas'
 import { draped, type Flat } from './drape'
@@ -31,14 +29,12 @@ interface Props {
 
 /**
  * The wayline open in the designer, on the terrain (FR-WAY-01 to FR-WAY-07): its takeoff,
- * what is drawn laid over the ground, what is being drawn in the accent colour, and the
- * bake flown at its heights above the takeoff, its waypoints that break a rule in the
- * danger colour. The ground's clicks go to the tool taken up.
+ * what is drawn laid over the ground, what is being drawn in the accent colour, and its
+ * bake at its heights above the takeoff. The ground's clicks go to the tool taken up.
  */
 export function WaylineDesigning({ site, origin }: Props) {
   const designing = useWaylineDesigner((state) => state.designing)
   const change = useWaylineDesigner((state) => state.change)
-  const geofences = useGeofences()
   const settings = useSettings()
   const palette = usePalette()
   const camera = useThree((state) => state.camera)
@@ -56,28 +52,13 @@ export function WaylineDesigning({ site, origin }: Props) {
     [camera, canvas, site, origin],
   )
 
-  // The takeoff is refused outside the geofence the wayline is designed for (FR-WAY-01).
-  const fenceId = designing?.geofenceId ?? null
-  const fenceRing = geofences.data?.find(({ id }) => id === fenceId)?.polygon ?? null
   useEffect(() => {
     if (!open) return
-    const ring =
-      fenceRing === null
-        ? null
-        : fenceRing.map((vertex): Point => {
-            const placed = eastNorth(origin, vertex)
-            return [placed.eastM, placed.northM]
-          })
-    const admits = (at: Geodetic) => {
-      if (ring === null) return true
-      const placed = eastNorth(origin, at)
-      return locate(ring, [placed.eastM, placed.northM]) === 'inside'
-    }
     return useGroundTool.getState().hold(({ clientX, clientY }) => {
       const at = groundAt(clientX, clientY)
-      if (at !== null) change((current) => clicked(current, at, admits))
+      if (at !== null) change((current) => clicked(current, at))
     })
-  }, [open, groundAt, change, fenceRing, origin])
+  }, [open, groundAt, change])
 
   useEffect(() => {
     if (!aiming) return
@@ -121,16 +102,18 @@ export function WaylineDesigning({ site, origin }: Props) {
     const { x, z } = flat(at)
     return [x, site.ground(x, z) + LIFT_M, z]
   }
-  const fence = geofences.data?.find(({ id }) => id === designing.geofenceId) ?? null
-  const { baked, violations } = judge(sketch, {
-    origin,
-    maxArcSpacingM: settings.maxArcSpacingM,
-    fence: fence === null ? null : { polygon: fence.polygon, maxHeightM: fence.maxHeightM },
-  })
-  const breaking = new Set(
-    violations.flatMap(({ waypointIndex }) => (waypointIndex === undefined ? [] : [waypointIndex])),
-  )
-  const path = baked === null ? null : flownPath(baked, origin, site)
+  const baked = bakeSketch(sketch, { origin, maxArcSpacingM: settings.maxArcSpacingM })
+  const takeoff = sketch.takeoff
+  // The wayline's own path: from its takeoff straight to its first waypoint, the climb being
+  // the operation's (M4).
+  const path =
+    baked === null || takeoff === null
+      ? null
+      : flownPath(
+          { referencePoint: takeoff, takeoffSecurityHeightM: null, waypoints: baked.waypoints },
+          origin,
+          site,
+        )
   const [centre] = pending
   const sized =
     sizing && centre !== undefined && hover !== null
@@ -220,15 +203,6 @@ export function WaylineDesigning({ site, origin }: Props) {
 
   return (
     <group>
-      {fence !== null && (
-        <Line
-          points={lay(fence.polygon.map(flat), true)}
-          color={palette.gridMajor}
-          lineWidth={1}
-          depthTest={false}
-          renderOrder={7}
-        />
-      )}
       {sketch.primitives.map(drawnLine)}
       {pending.length > 0 && (
         <>
@@ -287,20 +261,7 @@ export function WaylineDesigning({ site, origin }: Props) {
           renderOrder={11}
         />
       )}
-      {path !== null && (
-        <>
-          <Dots
-            points={path.waypoints.filter((_, index) => !breaking.has(index))}
-            colour={palette.accent}
-            size={7}
-          />
-          <Dots
-            points={path.waypoints.filter((_, index) => breaking.has(index))}
-            colour={palette.danger}
-            size={9}
-          />
-        </>
-      )}
+      {path !== null && <Dots points={path.waypoints} colour={palette.accent} size={7} />}
       {sketch.takeoff !== null && (
         <Html
           position={onGround(sketch.takeoff)}

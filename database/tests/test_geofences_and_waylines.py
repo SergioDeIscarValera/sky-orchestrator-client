@@ -20,13 +20,12 @@ WAYPOINTS = [
     {"position": [-4.7230, 41.6510], "height_m": 35, "actions": []},
 ]
 DESIGN = {"primitives": [{"kind": "route", "points": [TAKEOFF, [-4.7230, 41.6510]]}]}
-METRICS = {"waypoint_count": 2, "distance_m": 142.5, "duration_s": 38}
+METRICS = {"waypoint_count": 2, "distance_m": 142.5}
 DRAWN = {"name": "Norte", "polygon": RING, "max_height_m": 120, "origin": "drawn", "margin_m": None}
 SAVED = {
     "name": "Pasillo 1",
     "takeoff": TAKEOFF,
     "default_height_m": 30,
-    "speed_ms": 5,
     "design": DESIGN,
     "waypoints": WAYPOINTS,
     "metrics": METRICS,
@@ -89,7 +88,6 @@ WAYLINE_REFUSALS = [
     pytest.param(
         {"default_height_m": 0}, "wayline_default_height_positive", id="zero-default-height"
     ),
-    pytest.param({"speed_ms": 0}, "wayline_speed_positive", id="zero-speed"),
     pytest.param({"design": [1, 2]}, "wayline_design_object", id="design-not-an-object"),
     pytest.param({"waypoints": []}, "wayline_waypoints_baked", id="no-waypoints"),
     pytest.param(
@@ -98,9 +96,14 @@ WAYLINE_REFUSALS = [
         id="waypoint-without-height",
     ),
     pytest.param(
-        {"metrics": {"waypoint_count": 2, "duration_s": 38}},
+        {"metrics": {"waypoint_count": 2}},
         "wayline_metrics_object",
         id="metrics-without-distance",
+    ),
+    pytest.param(
+        {"metrics": {"distance_m": 142.5}},
+        "wayline_metrics_object",
+        id="metrics-without-waypoint-count",
     ),
     pytest.param({"bake_version": " "}, "wayline_bake_version_given", id="blank-bake-version"),
 ]
@@ -243,11 +246,7 @@ async def test_an_editor_draws_a_geofence_and_saves_a_wayline_as_written(
     assert (geofence["margin_m"], geofence["deleted_at"]) == (None, None)
     assert json.loads(geofence["polygon"]) == RING
     assert geofence["created_at"] == geofence["updated_at"]
-    assert (wayline["name"], wayline["default_height_m"], wayline["speed_ms"]) == (
-        "Pasillo 1",
-        30,
-        5,
-    )
+    assert (wayline["name"], wayline["default_height_m"]) == ("Pasillo 1", 30)
     assert (wayline["bake_version"], wayline["deleted_at"]) == ("1", None)
     assert json.loads(wayline["takeoff"]) == TAKEOFF
     assert json.loads(wayline["design"]) == DESIGN
@@ -312,6 +311,41 @@ async def test_a_wayline_that_breaks_a_check_is_refused_by_that_checks_name(
     with pytest.raises(asyncpg.CheckViolationError) as refusal:
         await save(session, editor, **fields)
     assert refusal.value.constraint_name == named
+
+
+@pytest.mark.parametrize(
+    "metrics",
+    [
+        pytest.param({"waypoint_count": 2, "distance_m": 142.5}, id="without-a-duration"),
+        pytest.param(
+            {"waypoint_count": 2, "distance_m": 142.5, "duration_s": 38},
+            id="with-a-duration-as-an-extra-key",
+        ),
+    ],
+)
+async def test_a_wayline_is_saved_with_its_waypoint_count_and_distance_and_no_duration(
+    session: asyncpg.Connection, tenancy: Tenancy, metrics: dict[str, Any]
+) -> None:
+    """The duration is the operation's estimate (M4): a wayline's metrics do not require it."""
+    editor = await tenancy.member("editor")
+    wayline = await save(session, editor, metrics=metrics)
+    assert json.loads(wayline["metrics"]) == metrics
+
+
+async def test_a_wayline_has_no_speed_column_and_an_insert_naming_one_is_undefined(
+    session: asyncpg.Connection, tenancy: Tenancy, admin: asyncpg.Connection
+) -> None:
+    """A speed belongs to the operation that flies the wayline (M4), not to the wayline."""
+    named = await admin.fetchval(
+        "select count(*) from information_schema.columns"
+        " where table_schema = 'soc' and table_name = 'waylines' and column_name = 'speed_ms'"
+    )
+    assert named == 0
+    editor = await tenancy.member("editor")
+    with pytest.raises(asyncpg.UndefinedColumnError) as refusal:
+        await insert(session, editor, "waylines", {**SAVED, "speed_ms": 5})
+    assert refusal.value.sqlstate == "42703"
+    assert "speed_ms" in refusal.value.message
 
 
 @pytest.mark.parametrize("margin_m", [5, 100])
