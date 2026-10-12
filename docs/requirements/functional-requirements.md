@@ -372,12 +372,15 @@ envelope ceiling.
 ### FR-WAY-01 — Takeoff point · MUST
 A wayline starts from a takeoff point placed on the terrain and climbs straight
 up from it to its default height before anything else: its first waypoint is
-right above the takeoff. It never climbs or descends on a slant from the takeoff,
-which costs the aircraft more energy. A wayline is
+right above the takeoff. It never climbs or descends on a slant, which costs the
+aircraft more energy: every leg is level or straight up or down. Going up, it
+climbs where it is, then flies level; going down, it flies level, then descends
+where it arrives. A wayline is
 geometry only: the operation that flies it gives it its geofence, its speed, the
 height it climbs to over the takeoff and its return home (`FR-OPS-01`).
 
-**Acceptance**: every golden bake's first waypoint is right above its takeoff;
+**Acceptance**: every golden bake's first waypoint is right above its takeoff,
+and no leg of any golden bake or flight is on a slant;
 a wayline without a takeoff point is refused, naming it; a
 takeoff outside the operation's geofence is refused when the operation is
 planned (`FR-OPS-03`).
