@@ -17,7 +17,13 @@ import {
   verdict,
 } from './path.mjs'
 
-const CONTEXT = { seconds: 60, theme: 'light', site: 'over the flat ground', gpu: 'Iris Xe' }
+const CONTEXT = {
+  seconds: 60,
+  theme: 'light',
+  site: 'over the flat ground',
+  gpu: 'Iris Xe',
+  gpuBytes: 40 * 1024 * 1024,
+}
 
 describe("pnpm measure's path (NFR-PERF-06)", () => {
   it('is the requirement: 60 s, two aircraft, 1920×1080, 20 ms at p95', () => {
@@ -68,6 +74,8 @@ describe("pnpm measure's path (NFR-PERF-06)", () => {
       shots: null,
       headed: false,
       serve: false,
+      memory: false,
+      minutes: 70,
     })
     expect(
       parseArguments(['--site', '/srv/site', '--theme', 'dark', '--headed', '--shots', '/s']),
@@ -78,7 +86,14 @@ describe("pnpm measure's path (NFR-PERF-06)", () => {
       shots: '/s',
       headed: true,
       serve: false,
+      memory: false,
+      minutes: 70,
     })
+    expect(parseArguments(['--memory', '--minutes', '5'])).toMatchObject({
+      memory: true,
+      minutes: 5,
+    })
+    expect(() => parseArguments(['--minutes', 'soon'])).toThrow('whole number of minutes')
     expect(parseArguments(['--serve', '--chrome', '/c'])).toMatchObject({
       serve: true,
       chrome: '/c',
@@ -113,5 +128,14 @@ describe("pnpm measure's path (NFR-PERF-06)", () => {
       verdict({ frames: 3600, p95Ms: 17, worstMs: 30 }, { ...CONTEXT, shots: true }).report,
     ).toMatch(/^Screenshots were taken along the path/)
     expect(verdict({ frames: 0, p95Ms: null, worstMs: null }, CONTEXT).ok).toBe(false)
+  })
+
+  it('reads what the scene holds on the GPU, and fails over 256 MB (NFR-RES-03)', () => {
+    const run = { frames: 3600, p95Ms: 17, worstMs: 30 }
+    expect(verdict(run, CONTEXT).report).toContain(
+      'GPU memory (NFR-RES-03): 40.0 MB: within the 256.0 MB budget',
+    )
+    expect(verdict(run, { ...CONTEXT, gpuBytes: 257 * 1024 * 1024 }).ok).toBe(false)
+    expect(verdict(run, { ...CONTEXT, gpuBytes: null }).ok).toBe(false)
   })
 })
