@@ -40,8 +40,24 @@ export type SketchRefusal =
   | 'speed_not_positive'
   | 'security_height_missing'
   | 'security_height_not_positive'
+  | 'security_height_above_max'
+  | 'primitive_height_not_positive'
 
 const positive = (value: number) => Number.isFinite(value) && value > 0
+
+/** The highest climb over the takeoff the design schema and Sky Orchestrator's subset take. */
+export const MOST_CLIMB_M = 120
+
+/** Every height a drawn primitive gives of its own, above zero or not. */
+function ownHeights(sketch: WaylineSketch): number[] {
+  return sketch.primitives.flatMap((primitive) =>
+    primitive.kind === 'route' || primitive.kind === 'points'
+      ? primitive.points.flatMap(({ heightM }) => (heightM === undefined ? [] : [heightM]))
+      : primitive.heightM === undefined
+        ? []
+        : [primitive.heightM],
+  )
+}
 
 function figureRefusal<Missing extends SketchRefusal, NotPositive extends SketchRefusal>(
   value: number | null,
@@ -64,6 +80,10 @@ export function sketchRefusals(sketch: WaylineSketch): SketchRefusal[] {
       'security_height_missing',
       'security_height_not_positive',
     ),
+    sketch.takeoffSecurityHeightM !== null && sketch.takeoffSecurityHeightM > MOST_CLIMB_M
+      ? 'security_height_above_max'
+      : null,
+    ownHeights(sketch).every(positive) ? null : 'primitive_height_not_positive',
   ].filter((refusal): refusal is SketchRefusal => refusal !== null)
 }
 
@@ -75,7 +95,8 @@ export function designOf(sketch: WaylineSketch): Design | null {
     defaultHeightM === null ||
     speedMs === null ||
     takeoffSecurityHeightM === null ||
-    ![defaultHeightM, speedMs, takeoffSecurityHeightM].every(positive)
+    ![defaultHeightM, speedMs, takeoffSecurityHeightM, ...ownHeights(sketch)].every(positive) ||
+    takeoffSecurityHeightM > MOST_CLIMB_M
   ) {
     return null
   }

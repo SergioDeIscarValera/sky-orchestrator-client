@@ -67,6 +67,28 @@ describe('a wayline being designed (FR-WAY-01, FR-WAY-06, FR-WAY-10)', () => {
     expect(designOf(zero)).toBeNull()
   })
 
+  it('refuses a climb above 120 m and a drawn height not above zero, as the schema does', () => {
+    const steep = { ...READY, takeoffSecurityHeightM: 121 }
+    expect(sketchRefusals(steep)).toEqual(['security_height_above_max'])
+    expect(designOf(steep)).toBeNull()
+    expect(sketchRefusals({ ...READY, takeoffSecurityHeightM: 120 })).toEqual([])
+    const sunk = {
+      ...READY,
+      primitives: [
+        {
+          kind: 'circle' as const,
+          centre: at(0, 0),
+          radiusM: 10,
+          clockwise: true,
+          startBearingDeg: 0,
+          heightM: 0,
+        },
+      ],
+    }
+    expect(sketchRefusals(sunk)).toEqual(['primitive_height_not_positive'])
+    expect(designOf(sunk)).toBeNull()
+  })
+
   it('is a design once named, placed and given its figures', () => {
     expect(sketchRefusals(READY)).toEqual([])
     expect(designOf(READY)).toEqual({

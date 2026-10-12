@@ -68,6 +68,8 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-05)', () => {
     expect(finished(toolChosen(startedDesign(), 'route'))).toEqual(
       toolChosen(startedDesign(), 'route'),
     )
+    // One point is no route: the schema asks two at least.
+    expect(finished(drawn('route', [0, 10])).pending).toHaveLength(1)
   })
 
   it('draws points of interest the same way', () => {
@@ -133,9 +135,9 @@ describe('the wayline designer (FR-WAY-01 to FR-WAY-05)', () => {
 
   it('removes a primitive, and undoes a click before a change', () => {
     const two = finished(drawn('points', [1, 1]))
-    const routed = finished(clicked(toolChosen(two, 'route'), at(9, 9)))
+    const routed = finished(clicked(clicked(toolChosen(two, 'route'), at(9, 9)), at(9, 30)))
     expect(removedPrimitive(routed, 0).sketch.primitives).toEqual([
-      { kind: 'route', points: [at(9, 9)] },
+      { kind: 'route', points: [at(9, 9), at(9, 30)] },
     ])
     expect(removedPrimitive(routed, 5)).toBe(routed)
     const drawing = clicked(clicked(routed, at(20, 20)), at(30, 30))

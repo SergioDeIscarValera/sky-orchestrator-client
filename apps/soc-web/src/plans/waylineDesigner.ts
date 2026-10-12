@@ -116,15 +116,17 @@ const positive = (value: number | null): value is number =>
   value !== null && Number.isFinite(value) && value > 0
 
 /**
- * What is being drawn, finished into the design: a route or points of one point or
- * more, a grid of three corners or more with both its spacings given. Anything else
+ * What is being drawn, finished into the design: a route of two points or more, points
+ * of one or more, a grid of three corners or more with both its spacings given. Anything else
  * stays as it is, still being drawn.
  */
 export function finished(designing: Designing): Designing {
   const { tool, pending } = designing
   let primitive: Primitive | null = null
-  if ((tool === 'route' || tool === 'points') && pending.length > 0) {
-    primitive = { kind: tool, points: pending }
+  if (tool === 'route' && pending.length >= 2) {
+    primitive = { kind: 'route', points: pending }
+  } else if (tool === 'points' && pending.length > 0) {
+    primitive = { kind: 'points', points: pending }
   } else if (
     tool === 'grid' &&
     pending.length >= 3 &&
