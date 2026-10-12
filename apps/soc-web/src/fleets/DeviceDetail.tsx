@@ -62,7 +62,7 @@ export function DeviceDetail({
   const writes = changesFleets(organization.role)
   const zone = organization.timeZone
 
-  // Registering lives in the URL, so the fleet panel's Register opens it here.
+  // Registering lives in the URL: the Register button opens the form here.
   if (form === 'register' && writes && fleet === undefined) {
     return (
       <FleetForm

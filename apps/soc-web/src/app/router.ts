@@ -120,17 +120,6 @@ export function useForm(): readonly [Form | null, (form: Form | null) => void] {
   return [form ?? null, open]
 }
 
-/** Selects `selection` with its form open: the fleet panel's Register and Edit. */
-export function useOpenForm(): (selection: Selection, form: Form) => void {
-  const change = useChangeView()
-  return useCallback(
-    (selection: Selection, form: Form) => {
-      change((view) => ({ ...select(view, selection), form }))
-    },
-    [change],
-  )
-}
-
 export function useSelect(): (selection: Selection | null) => void {
   const change = useChangeView()
   return useCallback(

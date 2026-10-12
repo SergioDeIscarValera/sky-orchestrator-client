@@ -159,8 +159,12 @@ async function main() {
     const { announced_at_ms: announcedAtMs } = await nextLine()
     emit({ event: 'device', appeared_after_ms: (await appearing) - announcedAtMs })
 
-    // Registered as an operator does, from the aircraft's row in the fleet panel.
-    await page.getByRole('button', { name: `Register ${aircraft}` }).click()
+    // Registered as an operator does: the row selects the aircraft, and its inspector registers it.
+    await row.click()
+    await page
+      .getByRole('complementary', { name: 'Inspector' })
+      .getByRole('button', { name: 'Register as a fleet' })
+      .click()
     const form = page.getByRole('form', { name: `Register ${aircraft}` })
     await form.getByLabel('Name').fill(FLEET.name)
     await form.getByLabel('Model').selectOption(FLEET.model)
