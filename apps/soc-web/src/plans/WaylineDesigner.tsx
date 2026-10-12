@@ -6,16 +6,23 @@ import { ALERT, FIELD, PRIMARY_BUTTON, QUIET_BUTTON } from '../app/styles'
 import type { WaylineChanges } from '../backend/backend'
 import { useSettings } from '../config/settings'
 import { designOf, sketchRefusals, type SketchRefusal } from './waylineSketch'
+import type { Primitive } from '../geometry/bake'
 import type { Geodetic } from '../geometry/projection'
 import { useCreateWayline, useChangeWayline } from './data'
 import { useDesignerKeys } from './designerKeys'
 import { formatLength } from './format'
 import { bakeSketch } from './waylineBake'
 import {
+  circleSized,
+  circleTurned,
   figured,
   finished,
+  gridRespaced,
   gridSpaced,
+  primitiveChosen,
+  primitiveHeightSet,
   removedPrimitive,
+  settled,
   toolChosen,
   turned,
   undone,
@@ -23,7 +30,7 @@ import {
   type Designing,
   type Tool,
 } from './waylineDesigner'
-import { draftOf, primitiveSummary } from './waylines'
+import { draftOf, ownHeightOf, primitiveSummary } from './waylines'
 
 const TOOLS: readonly {
   readonly tool: Tool
@@ -213,21 +220,43 @@ export function WaylineDesigner({ designing, origin }: Props) {
       {sketch.primitives.length > 0 && (
         <ul aria-label="Drawn" className="mt-4 flex flex-col gap-1">
           {sketch.primitives.map((primitive, index) => {
+            const summary = primitiveSummary(primitive)
+            const open = designing.selected === index
             return (
-              <li key={`${primitive.kind}-${String(index)}`} className="flex items-center gap-2">
-                <span className="text-heading min-w-0 flex-1 truncate text-sm">
-                  {primitiveSummary(primitive)}
-                </span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${primitiveSummary(primitive)}`}
-                  className={`${QUIET_BUTTON} w-9 justify-center px-0`}
-                  onClick={() => {
-                    change((current) => removedPrimitive(current, index))
-                  }}
-                >
-                  <Trash2 size={15} aria-hidden />
-                </button>
+              <li
+                key={`${primitive.kind}-${String(index)}`}
+                className={`rounded-xl ${open ? 'bg-primary-subtle/40' : ''}`}
+              >
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={open}
+                    className="text-heading hover:bg-primary-subtle aria-pressed:text-primary-emphasis min-w-0 flex-1 truncate rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors duration-200"
+                    onClick={() => {
+                      change((current) => primitiveChosen(current, open ? null : index))
+                    }}
+                  >
+                    {summary}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${summary}`}
+                    className={`${QUIET_BUTTON} w-9 justify-center px-0`}
+                    onClick={() => {
+                      change((current) => removedPrimitive(current, index))
+                    }}
+                  >
+                    <Trash2 size={15} aria-hidden />
+                  </button>
+                </div>
+                {open && (
+                  <PrimitiveEditor
+                    primitive={primitive}
+                    index={index}
+                    label={summary}
+                    defaultHeightM={sketch.defaultHeightM}
+                  />
+                )}
               </li>
             )
           })}
@@ -343,6 +372,160 @@ function Figure({
         />
         <span className="text-muted text-xs">{unit}</span>
       </div>
+    </div>
+  )
+}
+
+/** A figure as the field shows it: to the decimetre, as the scene's drag leaves it. */
+const figure = (value: number) => String(Math.round(value * 10) / 10)
+
+/**
+ * A figure of the primitive open, typed exactly: the field holds what is typed while it
+ * has the focus and the design's figure otherwise, so a drag in the scene shows at once.
+ * Each number above zero is applied as it is typed; empty gives the default back where
+ * there is one. Leaving the field ends its run of keys, one undo step.
+ */
+function Measure({
+  label,
+  unit,
+  value,
+  placeholder,
+  optional = false,
+  onValue,
+}: {
+  readonly label: string
+  readonly unit: string
+  readonly value: number | null
+  readonly placeholder?: string
+  readonly optional?: boolean
+  readonly onValue: (value: number | null) => void
+}) {
+  const id = useId()
+  const change = useWaylineDesigner((state) => state.change)
+  const [draft, setDraft] = useState<string | null>(null)
+  const text = draft ?? (value === null ? '' : figure(value))
+  const typed = readNumber(text)
+  const invalid = text.trim() === '' ? !optional : typed === null || typed <= 0
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={id} className="text-heading text-sm font-medium">
+        {label}
+      </label>
+      <div className="flex items-center gap-1.5">
+        <input
+          id={id}
+          className={`${FIELD} min-w-0`}
+          inputMode="decimal"
+          autoComplete="off"
+          value={text}
+          placeholder={placeholder}
+          aria-invalid={invalid}
+          onFocus={() => {
+            setDraft(text)
+          }}
+          onChange={(event) => {
+            const next = event.target.value
+            setDraft(next)
+            const number = readNumber(next)
+            if (next.trim() === '' && optional) onValue(null)
+            else if (number !== null && number > 0) onValue(number)
+          }}
+          onBlur={() => {
+            setDraft(null)
+            change(settled)
+          }}
+        />
+        <span className="text-muted text-xs">{unit}</span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The primitive open, its figures typed exactly (FR-WAY-04 to FR-WAY-06): a circle's
+ * radius and direction, a grid's spacings, and any primitive's own height over the
+ * wayline's default. Its place is changed by its handles in the scene.
+ */
+function PrimitiveEditor({
+  primitive,
+  index,
+  label,
+  defaultHeightM,
+}: {
+  readonly primitive: Primitive
+  readonly index: number
+  readonly label: string
+  readonly defaultHeightM: number | null
+}) {
+  const change = useWaylineDesigner((state) => state.change)
+  const height = (
+    <Measure
+      label="Height"
+      unit="m"
+      value={ownHeightOf(primitive)}
+      placeholder={defaultHeightM === null ? undefined : figure(defaultHeightM)}
+      optional
+      onValue={(heightM) => {
+        change((current) => primitiveHeightSet(current, index, heightM))
+      }}
+    />
+  )
+  return (
+    <div role="group" aria-label={label} className="grid grid-cols-2 gap-2 px-3 pt-1 pb-3">
+      {primitive.kind === 'circle' && (
+        <>
+          <Measure
+            label="Radius"
+            unit="m"
+            value={primitive.radiusM}
+            onValue={(radiusM) => {
+              if (radiusM !== null) change((current) => circleSized(current, index, radiusM))
+            }}
+          />
+          {height}
+          <div role="group" aria-label="Direction" className="col-span-2 -ml-3 flex gap-1">
+            {[true, false].map((clockwise) => (
+              <button
+                key={String(clockwise)}
+                type="button"
+                aria-pressed={primitive.clockwise === clockwise}
+                className={`${QUIET_BUTTON} aria-pressed:bg-primary-subtle aria-pressed:text-primary-emphasis`}
+                onClick={() => {
+                  change((current) => circleTurned(current, index, clockwise))
+                }}
+              >
+                {clockwise ? 'Clockwise' : 'Anticlockwise'}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {primitive.kind === 'grid' && (
+        <>
+          <Measure
+            label="Between lines"
+            unit="m"
+            value={primitive.lineSpacingM}
+            onValue={(metres) => {
+              if (metres !== null) {
+                change((current) => gridRespaced(current, index, 'lineSpacingM', metres))
+              }
+            }}
+          />
+          <Measure
+            label="Between points"
+            unit="m"
+            value={primitive.pointSpacingM}
+            onValue={(metres) => {
+              if (metres !== null) {
+                change((current) => gridRespaced(current, index, 'pointSpacingM', metres))
+              }
+            }}
+          />
+          {height}
+        </>
+      )}
+      {(primitive.kind === 'route' || primitive.kind === 'points') && height}
     </div>
   )
 }
