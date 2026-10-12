@@ -17,12 +17,12 @@ criteria named in the changelog's Known limitations, and closes once they are.
 The MVP is M5: **a first real flight commanded from SOC**
 ([ADR-0013](architecture/decisions/0013-narrow-vertical-slice-for-the-mvp.md)).
 
-| Milestone | Release | Outcome | State on 2026-10-11 |
+| Milestone | Release | Outcome | State on 2026-10-12 |
 | --- | --- | --- | --- |
 | M0 Foundations | v0.1.0 | Repository, conventions, pipelines, requirements, decisions | Closed, released |
 | M1 Platform and viability | v0.2.0 | Every unit runs, measured where the design could break | Released with 4 of 7 criteria demonstrated; 3 wait on the mini-PC's box steps and read access to SO's packages |
-| M2 Live fleet | v0.3.0 | A registered aircraft's live telemetry in 3D, on the farm's terrain | Closed, released: 5 of 5 criteria, in the console end to end |
-| M3 Mission design | v0.4.0 | Geofences and waylines drawn, baked, validated, turned into files SO accepts | Next; the local frame already in (`soc-geo`) |
+| M2 Live fleet | v0.3.0, v0.3.1 | A registered aircraft's live telemetry in 3D, on the farm's terrain | Closed, released: 5 of 5 criteria, in the console end to end; v0.3.1 met the rest of its requirements the mini-PC does not wait on |
+| M3 Mission design | v0.4.0 | Geofences and waylines drawn, baked, validated, turned into files SO accepts | In progress: the geometry and the TypeScript engine in review |
 | M4 Operations | v0.5.0 | A whole operation flown from the web against SO's fake bridge | Planned |
 | M5 First real flight | v0.6.0 | **MVP**: the same, with the real aircraft | Planned |
 
@@ -91,7 +91,7 @@ mini-PC and read access to Sky Orchestrator's packages, and close there.
 
 ---
 
-## M2 — Live fleet · *closed 2026-10-11, v0.3.0*
+## M2 — Live fleet · *closed 2026-10-11, v0.3.0; v0.3.1 2026-10-12*
 
 | Step | Pull request |
 | --- | --- |
@@ -102,6 +102,12 @@ mini-PC and read access to Sky Orchestrator's packages, and close there.
 | Aircraft in the scene: model, stalk, labels, selection, pin and follow, fly-to | `feature/web/settings`, merged (#61, the console's thresholds); `feature/web/live-telemetry`, merged (#62, the browser's telemetry and the inspector's live values); `feature/web/scene-aircraft`, merged (#70); `feature/web/scene-selection`, merged (#72); `feature/web/scene-pin`, merged (#73); `feature/web/delivery-latency`, merged (#74) |
 | Site model: the baking tool, stylised terrain, contours, markers | `feature/infra/site-bake`, merged (#75, the baking tool); `feature/web/site-terrain`, merged (#77); `feature/web/serve-site`, merged (#78); `feature/web/heights-over-terrain`, merged (#79); `feature/web/camera-over-terrain`, merged (#81) |
 | Measured: the frame time on the production build, and the exit criteria through the console | `feature/web/measure-frames`, merged (#80, `pnpm measure`); `feature/infra/console-e2e` (#82, `infra/e2e`: the platform behind Kong, soc-cloud, a dock, the console in Chrome) |
+
+After the close, v0.3.1 (2026-10-12): the console reworked after Sergio's review
+of the demo (#87, #88: the selection followed, each aircraft's colour, the
+inspector, the search), and every M2 requirement the mini-PC does not wait on met:
+the browser's reconnection, honest freshness and no value ever invented (#89), the
+memory over an hour, the GPU's share and recorded flights as fixtures (#90).
 
 **Exit criteria**
 
