@@ -1,10 +1,10 @@
 {
   "design": {
     "schema_version": "1.0.0",
-    "takeoff": {
-      "latitude_deg": 41.6523,
-      "longitude_deg": -4.7245
-    },
+    "takeoff": [
+      -4.7245,
+      41.6523
+    ],
     "default_height_m": 30.0,
     "takeoff_security_height_m": 20.0,
     "speed_ms": 5.0,
@@ -12,10 +12,10 @@
     "primitives": [
       {
         "kind": "circle",
-        "centre": {
-          "latitude_deg": 41.6519,
-          "longitude_deg": -4.724
-        },
+        "centre": [
+          -4.724,
+          41.6519
+        ],
         "radius_m": 30.0,
         "clockwise": true,
         "start_bearing_deg": 0.0
@@ -23,22 +23,22 @@
       {
         "kind": "grid",
         "area": [
-          {
-            "latitude_deg": 41.6515,
-            "longitude_deg": -4.725
-          },
-          {
-            "latitude_deg": 41.6515,
-            "longitude_deg": -4.7244
-          },
-          {
-            "latitude_deg": 41.6512,
-            "longitude_deg": -4.7244
-          },
-          {
-            "latitude_deg": 41.6512,
-            "longitude_deg": -4.725
-          }
+          [
+            -4.725,
+            41.6515
+          ],
+          [
+            -4.7244,
+            41.6515
+          ],
+          [
+            -4.7244,
+            41.6512
+          ],
+          [
+            -4.725,
+            41.6512
+          ]
         ],
         "line_spacing_m": 10.0,
         "point_spacing_m": 15.0,

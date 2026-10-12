@@ -4,10 +4,8 @@ import { readFileSync } from 'node:fs'
 import { violations, type Envelope, type Plan } from './limits'
 import { distanceM } from './sphere'
 
-interface Position {
-  readonly latitude_deg: number
-  readonly longitude_deg: number
-}
+/** A stored position: [longitude, latitude], GeoJSON order. */
+type Position = readonly [number, number]
 
 const BAKED = (
   JSON.parse(
@@ -20,15 +18,12 @@ const BAKED = (
       reference_point: Position
       takeoff_security_height_m: number
       speed_ms: number
-      waypoints: (Position & { index: number; height_m: number })[]
+      waypoints: { index: number; position: Position; height_m: number }[]
     }
   }
 ).baked
 
-const geodetic = ({ latitude_deg: latitudeDeg, longitude_deg: longitudeDeg }: Position) => ({
-  latitudeDeg,
-  longitudeDeg,
-})
+const geodetic = ([longitudeDeg, latitudeDeg]: Position) => ({ latitudeDeg, longitudeDeg })
 
 const PLAN: Plan = {
   referencePoint: geodetic(BAKED.reference_point),
@@ -36,7 +31,7 @@ const PLAN: Plan = {
   speedMs: BAKED.speed_ms,
   waypoints: BAKED.waypoints.map((w) => ({
     index: w.index,
-    position: geodetic(w),
+    position: geodetic(w.position),
     heightM: w.height_m,
   })),
 }

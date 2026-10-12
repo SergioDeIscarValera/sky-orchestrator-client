@@ -11,11 +11,13 @@ const VECTORS = new URL('../../../../contracts/geometry/bake.json', import.meta.
 const FARM: Geodetic = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
 
 /** A position `east` and `north` metres from the farm, as a design would hold it. */
-function near(east: number, north: number) {
-  return {
-    latitude_deg: FARM.latitudeDeg + north / 111_045,
-    longitude_deg: FARM.longitudeDeg + east / 83_330,
-  }
+function near(east: number, north: number): [number, number] {
+  return [FARM.longitudeDeg + east / 83_330, FARM.latitudeDeg + north / 111_045]
+}
+
+/** A drawn point there, with its own height when given. */
+function at(east: number, north: number, heightM?: number) {
+  return { position: near(east, north), ...(heightM === undefined ? {} : { height_m: heightM }) }
 }
 
 const ROOMY = {
@@ -47,8 +49,8 @@ const CASES: readonly { name: string; design: Json; envelope: Json }[] = [
     design: {
       ...BASE,
       primitives: [
-        { kind: 'route', points: [near(0, 28), near(37, 28), { ...near(37, 0), height_m: 35 }] },
-        { kind: 'points', points: [near(17, 0)] },
+        { kind: 'route', points: [at(0, 28), at(37, 28), at(37, 0, 35)] },
+        { kind: 'points', points: [at(17, 0)] },
       ],
     },
     envelope: ROOMY,
@@ -61,7 +63,7 @@ const CASES: readonly { name: string; design: Json; envelope: Json }[] = [
         {
           kind: 'points',
           points: Array.from({ length: 20 }, (_, i) =>
-            near(((i * 37) % 200) - 100, ((i * 53) % 160) - 80),
+            at(((i * 37) % 200) - 100, ((i * 53) % 160) - 80),
           ),
         },
       ],
@@ -87,21 +89,21 @@ const CASES: readonly { name: string; design: Json; envelope: Json }[] = [
           clockwise: true,
           start_bearing_deg: 0,
         },
-        { kind: 'route', points: [near(20, -40), near(60, -40)] },
+        { kind: 'route', points: [at(20, -40), at(60, -40)] },
       ],
     },
     envelope: ROOMY,
   },
   {
     name: 'legs longer than the stack allows, split',
-    design: { ...BASE, primitives: [{ kind: 'route', points: [near(0, 100), near(250, 100)] }] },
+    design: { ...BASE, primitives: [{ kind: 'route', points: [at(0, 100), at(250, 100)] }] },
     envelope: { ...ROOMY, max_leg_m: 60 },
   },
   {
     name: 'a point above the ceiling, reported not fixed',
     design: {
       ...BASE,
-      primitives: [{ kind: 'route', points: [near(0, 50), { ...near(50, 50), height_m: 150 }] }],
+      primitives: [{ kind: 'route', points: [at(0, 50), at(50, 50, 150)] }],
     },
     envelope: ROOMY,
   },
@@ -109,14 +111,21 @@ const CASES: readonly { name: string; design: Json; envelope: Json }[] = [
     name: 'points closer than half a metre, merged',
     design: {
       ...BASE,
-      primitives: [{ kind: 'route', points: [near(10, 10), near(10.3, 10), near(40, 10)] }],
+      primitives: [{ kind: 'route', points: [at(10, 10), at(10.3, 10), at(40, 10)] }],
     },
     envelope: ROOMY,
   },
   { name: 'nothing drawn', design: { ...BASE, primitives: [] }, envelope: ROOMY },
 ]
 
+/** A stored position, [longitude, latitude] in GeoJSON order. */
 const geodetic = (raw: unknown): Geodetic => {
+  const [longitudeDeg, latitudeDeg] = raw as [number, number]
+  return { latitudeDeg, longitudeDeg }
+}
+
+/** A position in Sky Orchestrator's envelope, which is its API's, not SOC's storage. */
+const fromSkyOrchestrator = (raw: unknown): Geodetic => {
   const { latitude_deg: latitudeDeg, longitude_deg: longitudeDeg } = raw as {
     latitude_deg: number
     longitude_deg: number
@@ -133,7 +142,7 @@ function designOf(raw: Json): Design {
         return {
           kind: p.kind,
           points: (p.points as Json[]).map((point) => ({
-            ...geodetic(point),
+            ...geodetic(point.position),
             ...(point.height_m === undefined ? {} : { heightM: point.height_m as number }),
           })),
         }
@@ -168,7 +177,7 @@ function designOf(raw: Json): Design {
 
 function envelopeOf(raw: Json): Envelope {
   return {
-    geofenceCenter: geodetic(raw.geofence_center),
+    geofenceCenter: fromSkyOrchestrator(raw.geofence_center),
     geofenceRadiusM: raw.geofence_radius_m as number,
     maxHeightM: raw.max_height_m as number,
     maxHomeDistanceM: raw.max_home_distance_m as number,
@@ -185,16 +194,12 @@ function written(baked: Baked) {
   return {
     schema_version: '1.0.0',
     takeoff_security_height_m: baked.takeoffSecurityHeightM,
-    reference_point: {
-      latitude_deg: baked.referencePoint.latitudeDeg,
-      longitude_deg: baked.referencePoint.longitudeDeg,
-    },
+    reference_point: [baked.referencePoint.longitudeDeg, baked.referencePoint.latitudeDeg],
     speed_ms: baked.speedMs,
     finish_action: baked.finishAction,
     waypoints: baked.waypoints.map((w) => ({
       index: w.index,
-      latitude_deg: w.latitudeDeg,
-      longitude_deg: w.longitudeDeg,
+      position: [w.longitudeDeg, w.latitudeDeg],
       height_m: w.heightM,
     })),
     distance_m: baked.distanceM,
@@ -256,7 +261,7 @@ describe('the bake (FR-WAY-07)', () => {
       name: 'six points',
       design: {
         ...BASE,
-        primitives: [{ kind: 'points', points: offsets.map(([e, n]) => near(e, n)) }],
+        primitives: [{ kind: 'points', points: offsets.map(([e, n]) => at(e, n)) }],
       },
       envelope: ROOMY,
     }
@@ -327,7 +332,7 @@ describe('the bake (FR-WAY-07)', () => {
             description:
               "Designs and the waylines the console's bake gives them (FR-WAY-07), at origin with max_arc_spacing_m, against each case's envelope. libs/soc-geo holds every bake to the design schema and to the requirement: its violations are exactly what the Python validator finds, its distance is Sky Orchestrator's, no leg is longer than the envelope's and no two points are closer than half a metre.",
             'x-version': '1.0.0',
-            origin: { latitude_deg: FARM.latitudeDeg, longitude_deg: FARM.longitudeDeg },
+            origin: [FARM.longitudeDeg, FARM.latitudeDeg],
             max_arc_spacing_m: 10,
             cases,
           },

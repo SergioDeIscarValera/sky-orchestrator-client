@@ -60,8 +60,10 @@ class Violation:
     waypoint_index: int | None = None
 
 
-def _position(value: Mapping[str, Any]) -> Geodetic:
-    return Geodetic(value["latitude_deg"], value["longitude_deg"])
+def _position(value: Sequence[float]) -> Geodetic:
+    """A stored position, [longitude, latitude] in GeoJSON order."""
+    longitude, latitude = value
+    return Geodetic(latitude, longitude)
 
 
 def plan_of(baked: Mapping[str, Any]) -> Plan:
@@ -71,7 +73,7 @@ def plan_of(baked: Mapping[str, Any]) -> Plan:
         takeoff_security_height_m=baked["takeoff_security_height_m"],
         speed_ms=baked["speed_ms"],
         waypoints=[
-            Waypoint(w["index"], _position(w), w["height_m"], w.get("speed_ms"))
+            Waypoint(w["index"], _position(w["position"]), w["height_m"], w.get("speed_ms"))
             for w in baked["waypoints"]
         ],
     )

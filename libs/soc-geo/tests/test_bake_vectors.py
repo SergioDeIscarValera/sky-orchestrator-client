@@ -30,7 +30,15 @@ VECTORS: dict[str, Any] = json.loads(
 SCHEMA = jsonschema_rs.validator_for(
     json.loads((CONTRACTS / "geometry" / "design.schema.json").read_text(encoding="utf-8"))
 )
-ORIGIN = Geodetic(**VECTORS["origin"])
+
+
+def geodetic(position: list[float]) -> Geodetic:
+    """A stored position, [longitude, latitude] in GeoJSON order."""
+    longitude, latitude = position
+    return Geodetic(latitude, longitude)
+
+
+ORIGIN = geodetic(VECTORS["origin"])
 #: Points closer than this merge (FR-WAY-07).
 MERGE_M = 0.5
 
@@ -54,10 +62,10 @@ def test_every_bake_is_what_the_validator_finds_in_sky_orchestrators_metric(
     envelope = envelope_of(case["envelope"])
     found = violations(plan_of(baked), envelope)
     assert [(v.rule, v.waypoint_index) for v in found] == rules
-    positions = [Geodetic(w["latitude_deg"], w["longitude_deg"]) for w in baked["waypoints"]]
+    positions = [geodetic(w["position"]) for w in baked["waypoints"]]
     legs = [
         distance_m(a, b)
-        for a, b in itertools.pairwise([Geodetic(**baked["reference_point"]), *positions])
+        for a, b in itertools.pairwise([geodetic(baked["reference_point"]), *positions])
     ]
     assert math.fsum(legs) == pytest.approx(baked["distance_m"], abs=1e-6)
     assert baked["duration_s"] == pytest.approx(baked["distance_m"] / baked["speed_ms"])
