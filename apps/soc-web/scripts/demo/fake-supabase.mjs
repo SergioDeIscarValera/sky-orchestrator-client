@@ -1,6 +1,6 @@
 // The demo's Supabase: the GoTrue and PostgREST calls the console makes, answered from
-// memory, so `pnpm demo` runs the console with no server behind it (run.mjs). Fleets
-// change in memory, and a restart resets them. Realtime is not faked: this server has
+// memory, so `pnpm demo` runs the console with no server behind it (run.mjs). Fleets,
+// geofences and waylines change in memory, and a restart resets them. Realtime is not faked: this server has
 // no WebSocket upgrade, so the console shows no live telemetry and no change made from
 // another console.
 import { randomUUID } from 'node:crypto'
@@ -183,6 +183,43 @@ function seedFleets() {
   ]
 }
 
+/** A point `east` and `north` metres from Finca Norte, as [longitude, latitude]. */
+function nearNorth(east, north) {
+  const metresPerDegree = 111_320
+  return [
+    -4.7245 + east / (metresPerDegree * Math.cos((41.6523 * Math.PI) / 180)),
+    41.6523 + north / metresPerDegree,
+  ]
+}
+
+/** One wayline of Finca Norte, a corridor along its north field, to generate a geofence round. */
+function seedWaylines() {
+  const takeoff = nearNorth(0, 0)
+  const waypoints = [
+    [0, 60],
+    [180, 60],
+    [180, 140],
+    [0, 140],
+  ].map(([east, north], index) => ({ index, position: nearNorth(east, north), height_m: 30 }))
+  return [
+    {
+      id: '55555555-5555-4555-8555-555555555555',
+      organization_id: NORTH,
+      name: 'North corridor',
+      takeoff,
+      default_height_m: 30,
+      speed_ms: 5,
+      design: {},
+      waypoints,
+      metrics: { waypoint_count: 4, distance_m: 580, duration_s: 116 },
+      bake_version: '1',
+      created_at: '2026-10-11T08:10:00+00:00',
+      updated_at: '2026-10-11T08:10:00+00:00',
+      deleted_at: null,
+    },
+  ]
+}
+
 /** A JWT-shaped string with a placeholder signature: the console reads only its payload. */
 export function unsignedJwt(payload) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -194,7 +231,12 @@ export function unsignedJwt(payload) {
  * console is given as its Supabase URL; `close` stops the server and drops its connections.
  */
 export function startFakeSupabase({ port = 0 } = {}) {
-  const state = { fleets: seedFleets(), refreshTokens: new Map() }
+  const state = {
+    fleets: seedFleets(),
+    geofences: [],
+    waylines: seedWaylines(),
+    refreshTokens: new Map(),
+  }
   const server = createServer((request, response) => {
     void answer(state, request, response)
   })
@@ -290,6 +332,11 @@ function route(state, method, url, body) {
   if (pathname === '/rest/v1/devices' && method === 'GET') return devicesOf(searchParams)
   if (pathname === '/rest/v1/fleets' && ['GET', 'POST', 'PATCH'].includes(method)) {
     return fleets(state, method, searchParams, body)
+  }
+  for (const table of ['geofences', 'waylines']) {
+    if (pathname === `/rest/v1/${table}` && ['GET', 'POST', 'PATCH'].includes(method)) {
+      return plans(state[table], method, searchParams, body)
+    }
   }
   return { status: 404, payload: { message: `the demo has no ${method} ${pathname}` } }
 }
@@ -400,6 +447,33 @@ function fleets(state, method, searchParams, body) {
   }
   Object.assign(fleet, body, { updated_at: new Date().toISOString() })
   return { status: 200, payload: [fleet] }
+}
+
+/**
+ * A geofences or waylines table (database/migrations/0008): GET the organization's live
+ * rows by name, POST one (201 with the row), PATCH one by id (its row in a list, or an
+ * empty list when there is none, as row security answers). The checks are the console's
+ * and the database's; the demo stores what it is given.
+ */
+function plans(rows, method, searchParams, body) {
+  if (method === 'GET') {
+    const organization = equals(searchParams.get('organization_id'))
+    const live = rows
+      .filter((row) => row.organization_id === organization && row.deleted_at === null)
+      .sort((a, b) => a.name.localeCompare(b.name))
+    return { status: 200, payload: live }
+  }
+  const now = new Date().toISOString()
+  if (method === 'POST') {
+    const row = { ...body, id: randomUUID(), created_at: now, updated_at: now, deleted_at: null }
+    rows.push(row)
+    return { status: 201, payload: row }
+  }
+  const id = equals(searchParams.get('id'))
+  const row = rows.find((candidate) => candidate.id === id && candidate.deleted_at === null)
+  if (row === undefined) return { status: 200, payload: [] }
+  Object.assign(row, body, { updated_at: now })
+  return { status: 200, payload: [row] }
 }
 
 function taken(state, gatewaySn, aircraftSn, except) {
