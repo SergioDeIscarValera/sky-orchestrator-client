@@ -10,8 +10,11 @@ import {
   MAX_GLIDE_MS,
   MIN_SPAN_PX,
   SPAN_M,
+  STALE_FADE,
   createAircraftGeometry,
   createAircraftParts,
+  createGroundDiscGeometry,
+  createNoseGeometry,
   disposeAircraft,
   drawnAt,
   paintAircraft,
@@ -35,6 +38,7 @@ const PALETTE: ScenePalette = {
   gridMajor: 'gray',
   accent: 'teal',
   casing: 'darkslategray',
+  aircraft: ['teal', 'royalblue', 'mediumpurple', 'hotpink', 'olivedrab', 'peru'],
 }
 
 function sample(changes: Partial<TelemetrySample> = {}): TelemetrySample {
@@ -65,8 +69,11 @@ function track(
 ): Track {
   const samples = previous === null ? [sample(latest)] : [sample(previous), sample(latest)]
   return {
-    latest: { sample: sample(latest), receivedAt: latestAt },
-    previous: previous === null ? null : { sample: sample(previous), receivedAt: previousAt },
+    latest: { sample: sample(latest), receivedAt: latestAt, dueAt: latestAt },
+    previous:
+      previous === null
+        ? null
+        : { sample: sample(previous), receivedAt: previousAt, dueAt: previousAt },
     takeoff: samples.reduce(takeoffAfter, null),
   }
 }
@@ -262,6 +269,33 @@ describe('motion between samples (FR-TEL-02)', () => {
     expect(Math.abs(halfway?.placement.yawRad ?? 0)).toBeCloseTo(Math.PI, 3)
   })
 
+  it('is drawn where it is after a gap in its samples, never glided across it (NFR-REL-07)', () => {
+    // The aircraft's own clock says 3 s or more went unseen between the two.
+    const across = (gapMs: number) =>
+      drawnAt(
+        track(
+          { longitudeDeg: east(0), takenAtMs: 0 },
+          { longitudeDeg: east(100), takenAtMs: gapMs },
+          0,
+          gapMs,
+        ),
+        FARM,
+        gapMs + 100,
+        THRESHOLDS,
+      )
+    expect(across(3000)).toMatchObject({ gliding: false })
+    expect(across(3000)?.placement.x).toBeCloseTo(100, 0)
+    expect(across(2800)).toMatchObject({ gliding: true })
+    expect(across(2800)?.placement.x).toBeLessThan(100)
+  })
+
+  it('reads its freshness from when its latest sample was due, not when it arrived', () => {
+    const late = track(null, {}, 0, 10_000)
+    const held = { ...late, latest: { ...late.latest, dueAt: 2000 } }
+    expect(drawnAt(held, FARM, 10_000, THRESHOLDS)?.freshness).toBe('stale')
+    expect(drawnAt(held, FARM, 12_000, THRESHOLDS)?.freshness).toBe('lost')
+  })
+
   it('is drawn as stale, then lost where it was last known', () => {
     const still = track(null, {}, 0, 0)
     expect(drawnAt(still, FARM, 2999, THRESHOLDS)?.freshness).toBe('live')
@@ -278,7 +312,7 @@ describe('drawing the aircraft (FR-SCN-04, NFR-RES-01)', () => {
     expect((SPAN_M * far) / metresPerPixel).toBeCloseTo(MIN_SPAN_PX, 6)
   })
 
-  it('draws the live in the accent, the stale muted, the lost as a disc only, in four draws', () => {
+  it('draws the live in their own colour, the stale faded, the lost as a muted disc, in five draws', () => {
     const parts = createAircraftParts(8)
     paintAircraft(parts, PALETTE)
     const drawn = (x: number, freshness: Drawn['freshness']): Drawn => ({
@@ -289,9 +323,9 @@ describe('drawing the aircraft (FR-SCN-04, NFR-RES-01)', () => {
     writeAircraft(
       parts,
       [
-        { key: 'D/live', drawn: drawn(0, 'live') },
-        { key: 'D/stale', drawn: drawn(50, 'stale') },
-        { key: 'D/lost', drawn: drawn(100, 'lost') },
+        { key: 'D/live', drawn: drawn(0, 'live'), colour: 1 },
+        { key: 'D/stale', drawn: drawn(50, 'stale'), colour: 1 },
+        { key: 'D/lost', drawn: drawn(100, 'lost'), colour: 1 },
       ],
       { x: 0, y: 300, z: 300 },
       FIELD_OF_VIEW_DEG,
@@ -299,26 +333,115 @@ describe('drawing the aircraft (FR-SCN-04, NFR-RES-01)', () => {
       PALETTE,
       'D/stale',
     )
-    expect(parts.group.children).toHaveLength(5)
+    expect(parts.group.children).toHaveLength(6)
     expect(parts.ring.visible).toBe(true)
     expect(Math.round(parts.ring.position.x)).toBe(50)
-    expect([parts.bodies.count, parts.casings.count, parts.discs.count]).toEqual([2, 2, 3])
+    expect([parts.bodies.count, parts.casings.count, parts.noses.count, parts.discs.count]).toEqual(
+      [2, 2, 2, 3],
+    )
     expect(parts.keys).toEqual(['D/live', 'D/stale'])
-    const colour = (index: number) => {
+    const colour = (mesh: 'bodies' | 'discs', index: number) => {
       const found = new Color()
-      parts.bodies.getColorAt(index, found)
+      parts[mesh].getColorAt(index, found)
       return found.getHexString()
     }
-    expect(colour(0)).not.toEqual(colour(1))
+    const own = new Color('royalblue')
+    expect(colour('bodies', 0)).toBe(own.getHexString())
+    expect(colour('bodies', 1)).toBe(own.clone().lerp(new Color('gray'), STALE_FADE).getHexString())
+    expect(colour('discs', 2)).toBe(new Color('gray').getHexString())
     expect(parts.stalks.geometry.drawRange.count).toBe(4)
     const position = new Vector3()
     const matrix = new Matrix4()
     parts.discs.getMatrixAt(2, matrix)
     expect(position.setFromMatrixPosition(matrix).toArray().map(Math.round)).toEqual([100, 0, 0])
     expect(parts.casings.material.color.getStyle()).toBe(parts.stalks.material.color.getStyle())
+    expect(parts.noses.material.color.getStyle()).toBe(parts.casings.material.color.getStyle())
     writeAircraft(parts, [], { x: 0, y: 300, z: 300 }, FIELD_OF_VIEW_DEG, 900, PALETTE, 'D/stale')
     expect(parts.ring.visible).toBe(false)
     disposeAircraft(parts)
+  })
+
+  it('tells two aircraft apart by their colours', () => {
+    const parts = createAircraftParts(8)
+    const drawn: Drawn = {
+      placement: { x: 0, y: 25, z: 0, yawRad: 0, groundY: 0 },
+      freshness: 'live',
+      gliding: false,
+    }
+    writeAircraft(
+      parts,
+      [
+        { key: 'D/a', drawn, colour: 0 },
+        { key: 'D/b', drawn, colour: 1 },
+      ],
+      { x: 0, y: 300, z: 300 },
+      FIELD_OF_VIEW_DEG,
+      900,
+      PALETTE,
+    )
+    const first = new Color()
+    const second = new Color()
+    parts.bodies.getColorAt(0, first)
+    parts.bodies.getColorAt(1, second)
+    expect(first.getHexString()).toBe(new Color('teal').getHexString())
+    expect(second.getHexString()).toBe(new Color('royalblue').getHexString())
+    disposeAircraft(parts)
+  })
+
+  it('points the nose and the ground wedge where the aircraft heads', () => {
+    const parts = createAircraftParts(8)
+    const at = (headingDeg: number) => {
+      const drawn: Drawn = {
+        placement: { x: 0, y: 25, z: 0, yawRad: -(headingDeg * Math.PI) / 180, groundY: 0 },
+        freshness: 'live',
+        gliding: false,
+      }
+      writeAircraft(
+        parts,
+        [{ key: 'D/a', drawn, colour: 0 }],
+        { x: 0, y: 2, z: 2 },
+        30,
+        900,
+        PALETTE,
+      )
+      const matrix = new Matrix4()
+      // The wedge's tip and the nose's tip, in their own frames: ahead is -z.
+      parts.discs.getMatrixAt(0, matrix)
+      const wedge = new Vector3(0, 0, -SPAN_M * 1.05).applyMatrix4(matrix)
+      parts.noses.getMatrixAt(0, matrix)
+      const nose = new Vector3(0, 0.04, -0.32).applyMatrix4(matrix)
+      const round = (value: number) => Math.round(value * 100) / 100 + 0
+      return [
+        Math.sign(round(wedge.x)),
+        Math.sign(round(-wedge.z)),
+        Math.sign(round(nose.x)),
+        Math.sign(round(-nose.z)),
+      ]
+    }
+    // North, east, south, west: x east, -z north.
+    expect(at(0)).toEqual([0, 1, 0, 1])
+    expect(at(90)).toEqual([1, 0, 1, 0])
+    expect(at(180)).toEqual([0, -1, 0, -1])
+    expect(at(-90)).toEqual([-1, 0, -1, 0])
+    disposeAircraft(parts)
+  })
+
+  it('puts the nose ahead of the body and on its back, and the wedge past the disc', () => {
+    const body = new Box3().setFromBufferAttribute(
+      createAircraftGeometry().getAttribute('position') as never,
+    )
+    const nose = new Box3().setFromBufferAttribute(
+      createNoseGeometry().getAttribute('position') as never,
+    )
+    expect(nose.min.z).toBeLessThan(-0.3)
+    expect(nose.max.z).toBeLessThan(0)
+    expect(nose.min.y).toBeGreaterThanOrEqual(0.03 - 1e-9)
+    expect(Math.abs(nose.max.x)).toBeLessThan(body.max.x)
+    const disc = new Box3().setFromBufferAttribute(
+      createGroundDiscGeometry().getAttribute('position') as never,
+    )
+    expect(disc.min.z).toBeCloseTo(-SPAN_M * 1.05, 6)
+    expect(disc.max.z).toBeCloseTo(SPAN_M / 2, 6)
   })
 })
 
@@ -339,7 +462,7 @@ describe('picking an aircraft (FR-SCN-05)', () => {
     expect(hits(0, 0)).toEqual([])
     writeAircraft(
       parts,
-      [{ key: 'D/a', drawn: drawn(0, 0) }],
+      [{ key: 'D/a', drawn: drawn(0, 0), colour: 0 }],
       camera,
       FIELD_OF_VIEW_DEG,
       900,
@@ -349,8 +472,8 @@ describe('picking an aircraft (FR-SCN-05)', () => {
     writeAircraft(
       parts,
       [
-        { key: 'D/a', drawn: drawn(400, -300) },
-        { key: 'D/b', drawn: drawn(-200, 100) },
+        { key: 'D/a', drawn: drawn(400, -300), colour: 0 },
+        { key: 'D/b', drawn: drawn(-200, 100), colour: 1 },
       ],
       camera,
       FIELD_OF_VIEW_DEG,

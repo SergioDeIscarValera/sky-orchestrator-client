@@ -1,5 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 
+import { useSelect } from '../app/router'
+
 import type { Geodetic } from '../geometry/projection'
 import { Aircraft } from './Aircraft'
 import type { LoadedSite } from './siteModel'
@@ -21,8 +23,16 @@ interface Props {
 
 /** The one persistent scene (FR-SCN-01), loaded apart from the rest (NFR-PERF-05). */
 export default function Scene({ site, organizationId, origin, terrain }: Props) {
+  const select = useSelect()
   return (
-    <Canvas {...CANVAS_SETTINGS} dpr={[...CANVAS_SETTINGS.dpr]}>
+    <Canvas
+      {...CANVAS_SETTINGS}
+      dpr={[...CANVAS_SETTINGS.dpr]}
+      // A click on the ground, not a drag, clears the selection; an aircraft's click selects it.
+      onPointerMissed={(event) => {
+        if (event.button === 0) select(null)
+      }}
+    >
       <SceneContents site={site} flat={terrain === null} />
       {terrain !== null && <Terrain site={terrain} />}
       <Aircraft origin={origin} site={site} />

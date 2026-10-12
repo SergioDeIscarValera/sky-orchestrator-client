@@ -62,6 +62,18 @@
   }
 }
 
+/* Each aircraft's own colour, in the scene and beside its name: six hues apart from
+   the status colours (warning, danger) and from the waylines' (info). Outside @theme:
+   no utility names them, and Tailwind drops the theme variables no source names. */
+:root {
+  --color-aircraft-1: #2ba58a;
+  --color-aircraft-2: #3a78d4;
+  --color-aircraft-3: #9b5de5;
+  --color-aircraft-4: #e0569a;
+  --color-aircraft-5: #5fa832;
+  --color-aircraft-6: #a8743f;
+}
+
 [data-theme='dark'] {
   --color-page: #212529;
   --color-surface: #2b3035;
@@ -70,6 +82,13 @@
   --color-heading: #f8f9fa;
   --color-muted: #adb5bd;
   --color-casing: #f8f9fa;
+
+  --color-aircraft-1: #5fd1b3;
+  --color-aircraft-2: #7aa7f0;
+  --color-aircraft-3: #c09bf5;
+  --color-aircraft-4: #f28cbd;
+  --color-aircraft-5: #8fd164;
+  --color-aircraft-6: #d3a06c;
 
   --color-primary-subtle: #182723;
   --color-primary-emphasis: #aedace;

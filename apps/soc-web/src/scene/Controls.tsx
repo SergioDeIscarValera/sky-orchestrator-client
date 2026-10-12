@@ -11,6 +11,7 @@ import {
   framePose,
   keepAboveTerrain,
   overviewPose,
+  unpinsOn,
 } from './camera'
 import { useView } from '../app/router'
 import type { Site } from './site'
@@ -54,12 +55,13 @@ export function Controls({ site, organizationId }: Props) {
     }
   }, [site])
 
-  // The user taking the camera unpins whatever it followed (FR-SCN-05).
+  // The user panning the map lets go of whatever the camera followed; orbiting and
+  // zooming keep it, around the subject (FR-SCN-05).
   useEffect(() => {
     const controls = ref.current
     if (controls === null) return
     const unpin = () => {
-      useCameraCommands.getState().pin(null)
+      if (unpinsOn(controls.currentAction)) useCameraCommands.getState().pin(null)
     }
     controls.addEventListener('controlstart', unpin)
     return () => {

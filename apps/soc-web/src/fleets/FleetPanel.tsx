@@ -1,15 +1,23 @@
-import { RotateCw } from 'lucide-react'
+import { Pencil, RotateCw } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 
-import type { Device, Fleet } from '../backend/backend'
-import { useSelect, useSelection, type Selection } from '../app/router'
+import { aircraftKey, type Device, type Fleet } from '../backend/backend'
+import { useOpenForm, useSelect, useSelection, type Selection } from '../app/router'
 import { ALERT, QUIET_BUTTON } from '../app/styles'
+import { useOrganization } from '../organizations/context'
+import { useAircraftColours } from './colours'
 import { useAircraftModels, useDevices, useFleets } from './data'
 import { Waiting } from './Details'
+import { changesFleets } from './form'
 import { PresencePill } from './PresencePill'
+import { Swatch } from './Swatch'
 
 const ROW =
-  'hover:bg-primary-subtle aria-pressed:bg-primary-subtle flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition-colors duration-200'
+  'hover:bg-primary-subtle aria-pressed:bg-primary-subtle flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition-colors duration-200'
+const ROW_ACTION =
+  'text-muted hover:bg-primary-subtle hover:text-primary-emphasis grid size-9 shrink-0 place-items-center rounded-xl transition-colors duration-200'
+const REGISTER_ACTION =
+  'rounded-pill bg-primary-subtle text-primary-emphasis hover:bg-primary hover:text-on-primary h-8 shrink-0 px-3 text-xs font-semibold transition-colors duration-200'
 
 function sameAircraft(fleet: Fleet, device: Device): boolean {
   return fleet.gatewaySn === device.gatewaySn && fleet.aircraftSn === device.aircraftSn
@@ -28,13 +36,20 @@ function isSelected(selection: Selection | null, candidate: Selection): boolean 
   )
 }
 
-/** The organization's fleets, and the aircraft its stacks announced that are in none (FR-FLE-02). */
+/**
+ * The organization's aircraft in one list (FR-FLE-02): its fleets first, then the
+ * aircraft its stacks announced that are in none, each with what an editor does to it,
+ * Edit or Register, at hand.
+ */
 export function FleetPanel() {
   const fleets = useFleets()
   const devices = useDevices()
+  const colourOf = useAircraftColours()
   const models = useAircraftModels()
   const selection = useSelection()
   const select = useSelect()
+  const openForm = useOpenForm()
+  const { organization } = useOrganization()
 
   if (fleets.isPending || devices.isPending) return <Waiting>Loading the fleet…</Waiting>
   if (fleets.isError || devices.isError) {
@@ -63,81 +78,105 @@ export function FleetPanel() {
   const unregistered = devices.data.filter(
     (device) => !fleets.data.some((fleet) => sameAircraft(fleet, device)),
   )
+  const writes = changesFleets(organization.role)
   const toggle = (candidate: Selection) => {
     select(isSelected(selection, candidate) ? null : candidate)
   }
+  const total = fleets.data.length + unregistered.length
 
   return (
-    <div className="-mx-2 mt-3 flex min-h-0 flex-col gap-5 overflow-y-auto px-2">
-      <Group title="Fleets" count={fleets.data.length}>
-        {fleets.data.length === 0 ? (
-          <Waiting>
-            No fleet registered yet. An aircraft a stack announces appears under Seen on the wire,
-            to be registered from there.
-          </Waiting>
-        ) : (
-          fleets.data.map((fleet) => {
-            const candidate: Selection = { kind: 'fleet', fleetId: fleet.id }
-            const device = devices.data.find((seen) => sameAircraft(fleet, seen))
-            return (
-              <li key={fleet.id}>
-                <button
-                  type="button"
-                  aria-pressed={isSelected(selection, candidate)}
-                  className={ROW}
-                  onClick={() => {
-                    toggle(candidate)
-                  }}
-                >
+    <div className="-mx-2 mt-3 flex min-h-0 flex-col gap-3 overflow-y-auto px-2">
+      <Group title="Aircraft" count={total}>
+        {total === 0 && (
+          <Waiting>No aircraft yet: one appears here when a stack announces it.</Waiting>
+        )}
+        {fleets.data.map((fleet) => {
+          const candidate: Selection = { kind: 'fleet', fleetId: fleet.id }
+          const device = devices.data.find((seen) => sameAircraft(fleet, seen))
+          return (
+            <li key={fleet.id} className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-pressed={isSelected(selection, candidate)}
+                className={ROW}
+                onClick={() => {
+                  toggle(candidate)
+                }}
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <Swatch colour={colourOf(aircraftKey(fleet.gatewaySn, fleet.aircraftSn))} />
                   <span className="flex min-w-0 flex-col">
                     <span className="text-heading font-heading truncate text-sm font-semibold">
                       {fleet.name}
                     </span>
                     <span className="text-muted truncate text-xs">{modelName(fleet.model)}</span>
                   </span>
-                  {device !== undefined && <PresencePill device={device} />}
-                </button>
-              </li>
-            )
-          })
-        )}
-      </Group>
-      <Group title="Seen on the wire" count={unregistered.length}>
-        {unregistered.length === 0 ? (
-          <Waiting>
-            {devices.data.length === 0
-              ? 'No aircraft seen yet: one appears here when a stack announces it.'
-              : 'Every aircraft seen is in a fleet.'}
-          </Waiting>
-        ) : (
-          unregistered.map((device) => {
-            const candidate: Selection = {
-              kind: 'device',
-              gatewaySn: device.gatewaySn,
-              aircraftSn: device.aircraftSn,
-            }
-            return (
-              <li key={`${device.gatewaySn}/${device.aircraftSn}`}>
+                </span>
+                {device !== undefined && <PresencePill device={device} />}
+              </button>
+              {writes && (
                 <button
                   type="button"
-                  aria-pressed={isSelected(selection, candidate)}
-                  className={ROW}
+                  aria-label={`Edit ${fleet.name}`}
+                  title={`Edit ${fleet.name}`}
+                  className={ROW_ACTION}
                   onClick={() => {
-                    toggle(candidate)
+                    openForm(candidate, 'edit')
                   }}
                 >
+                  <Pencil size={15} aria-hidden />
+                </button>
+              )}
+            </li>
+          )
+        })}
+        {unregistered.map((device) => {
+          const candidate: Selection = {
+            kind: 'device',
+            gatewaySn: device.gatewaySn,
+            aircraftSn: device.aircraftSn,
+          }
+          return (
+            <li
+              key={`${device.gatewaySn}/${device.aircraftSn}`}
+              className="flex items-center gap-1"
+            >
+              <button
+                type="button"
+                aria-pressed={isSelected(selection, candidate)}
+                className={ROW}
+                onClick={() => {
+                  toggle(candidate)
+                }}
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <Swatch colour={colourOf(aircraftKey(device.gatewaySn, device.aircraftSn))} />
                   <span className="flex min-w-0 flex-col">
                     <span className="text-heading truncate text-sm font-semibold">
                       {device.aircraftSn}
                     </span>
-                    <span className="text-muted truncate text-xs">via {device.stack.name}</span>
+                    <span className="text-muted truncate text-xs">
+                      Not registered · via {device.stack.name}
+                    </span>
                   </span>
-                  <PresencePill device={device} />
+                </span>
+                <PresencePill device={device} />
+              </button>
+              {writes && (
+                <button
+                  type="button"
+                  aria-label={`Register ${device.aircraftSn}`}
+                  className={REGISTER_ACTION}
+                  onClick={() => {
+                    openForm(candidate, 'register')
+                  }}
+                >
+                  Register
                 </button>
-              </li>
-            )
-          })
-        )}
+              )}
+            </li>
+          )
+        })}
       </Group>
     </div>
   )

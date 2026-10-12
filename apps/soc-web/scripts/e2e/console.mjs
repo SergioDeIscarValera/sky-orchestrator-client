@@ -5,17 +5,23 @@
 //
 //   → {"event": "ready"}                       signed in, the fleet panel open
 //   ← {"announced_at_ms": <wall ms>}           the dock has started announcing
-//   → {"event": "device", "appeared_after_ms"} the aircraft under Seen on the wire
+//   → {"event": "device", "appeared_after_ms"} the aircraft in the fleet panel
 //   → {"event": "fleet", "name"}               registered through the form, shown
 //   ← {"flying_since_ms": <wall ms>}           the dock has started its OSD
 //   → {"event": "telemetry", ...}              SOC_E2E_SAMPLES samples, measured
 //   ← {"stopped": true}                        the dock has gone quiet
 //   → {"event": "stale", "after_last_ms"}      the inspector says Stale
+//   → {"event": "layout", "map_tools_moved_px"} the map tools with the panel open and shut
+//   → {"event": "search", "selected", "following"} the fleet found from the top bar
+//   ← {"flying_again": true}                   the dock flies again
+//   → {"event": "cut"}                         the browser's network is cut
+//   ← {"renamed_to": <name>}                   the fleet renamed in the database
+//   → {"event": "reconnected", ...}            the network back for CUT_MS, timed
 //
 // Each sample's latency is the browser's receipt, the frame as Playwright hands it
 // over, against the dock's publish (its taken_at_ms) and against soc-cloud's
 // broadcast (its sent_at_ms); both clocks are this machine's.
-import { mkdirSync } from 'node:fs'
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
@@ -27,6 +33,8 @@ import { sampleOf, summary } from './frames.mjs'
 // The catalogue's identifier, as contracts/catalogue/aircraft-models.json names the Mavic Air 2.
 const FLEET = { name: 'Norte 1', model: 'mavic-air-2', airframeSerial: '1WNBH9' }
 const WAIT_MS = 30_000
+/** NFR-REL-07: how long the browser's network is cut. */
+const CUT_MS = 10_000
 
 function required(name) {
   const value = process.env[name]
@@ -64,19 +72,22 @@ async function overlayMs(page, label) {
   return Number.isFinite(value) ? value : null
 }
 
-/** Runs in the page, where globalThis is its window: the wall clock when the Live card's pill first reads Stale. */
-function staleAt() {
-  const stale = () =>
+/**
+ * Runs in the page: the wall clock when some span's text first starts with `text`
+ * (`present`), or when none does any more.
+ */
+function whenText({ text, present }) {
+  const shown = () =>
     Array.from(globalThis.document.querySelectorAll('span')).some((node) =>
-      node.textContent.startsWith('Stale,'),
+      node.textContent.startsWith(text),
     )
   return new Promise((resolve) => {
-    if (stale()) {
+    if (shown() === present) {
       resolve(Date.now())
       return
     }
     const observer = new globalThis.MutationObserver(() => {
-      if (!stale()) return
+      if (shown() !== present) return
       observer.disconnect()
       resolve(Date.now())
     })
@@ -86,6 +97,11 @@ function staleAt() {
       characterData: true,
     })
   })
+}
+
+/** `promise`'s value, or null once `ms` have passed without one. */
+function within(promise, ms) {
+  return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(null), ms))])
 }
 
 async function main() {
@@ -111,12 +127,22 @@ async function main() {
       process.stderr.write(`page error: ${error.message}\n`)
     })
     const samples = []
+    // With SOC_E2E_RECORD, every sample the page receives is kept as a recording
+    // (contracts/recordings, NFR-TEST-05): one line each, as broadcast, and when it came.
+    const recording = process.env.SOC_E2E_RECORD ?? null
+    if (recording !== null) writeFileSync(recording, '')
     page.on('websocket', (socket) => {
       socket.on('framereceived', ({ payload }) => {
         const receivedAtMs = Date.now()
         const sample = sampleOf(payload)
-        if (sample !== null && sample.aircraftSn === aircraft)
-          samples.push({ ...sample, receivedAtMs })
+        if (sample === null) return
+        if (recording !== null) {
+          appendFileSync(
+            recording,
+            `${JSON.stringify({ received_at_ms: receivedAtMs, sample: sample.payload })}\n`,
+          )
+        }
+        if (sample.aircraftSn === aircraft) samples.push({ ...sample, receivedAtMs })
       })
     })
 
@@ -124,8 +150,8 @@ async function main() {
     await page.getByLabel('Email').fill(required('SOC_E2E_EMAIL'))
     await page.getByLabel('Password').fill(required('SOC_E2E_PASSWORD'))
     await page.getByRole('button', { name: 'Sign in' }).click()
-    await page.getByText('Seen on the wire').first().waitFor({ timeout: WAIT_MS })
-    const row = page.getByRole('button', { name: new RegExp(aircraft) })
+    await page.getByRole('region', { name: /^Aircraft/ }).waitFor({ timeout: WAIT_MS })
+    const row = page.getByRole('button', { name: new RegExp(`^${aircraft}`) })
     const appearing = row.waitFor({ timeout: WAIT_MS }).then(() => Date.now())
     trace('signed in, waiting for the aircraft')
     emit({ event: 'ready' })
@@ -133,8 +159,8 @@ async function main() {
     const { announced_at_ms: announcedAtMs } = await nextLine()
     emit({ event: 'device', appeared_after_ms: (await appearing) - announcedAtMs })
 
-    await row.click()
-    await page.getByRole('button', { name: 'Register as a fleet' }).click()
+    // Registered as an operator does, from the aircraft's row in the fleet panel.
+    await page.getByRole('button', { name: `Register ${aircraft}` }).click()
     const form = page.getByRole('form', { name: `Register ${aircraft}` })
     await form.getByLabel('Name').fill(FLEET.name)
     await form.getByLabel('Model').selectOption(FLEET.model)
@@ -147,6 +173,13 @@ async function main() {
     const { flying_since_ms: flyingSinceMs } = await nextLine()
     trace('the dock flies')
     const framesBefore = await page.evaluate(() => globalThis.socScene?.frames ?? 0)
+    // The selected aircraft is followed: its label holds still on the screen while it flies.
+    const label = page.locator('span.font-heading.text-xs', { hasText: FLEET.name }).first()
+    const labelAt = async () => {
+      const box = await label.boundingBox().catch(() => null)
+      return box === null ? null : { x: box.x, y: box.y }
+    }
+    let followedFrom = null
     const deadline = Date.now() + WAIT_MS + (wanted / 5) * 1000
     let firstPosition = null
     while (samples.length < wanted && Date.now() < deadline) {
@@ -154,8 +187,14 @@ async function main() {
       if (firstPosition === null && samples.length > 0) {
         firstPosition = await liveValue(page, 'Position')
       }
+      // From once the camera has flown in, a couple of seconds into the flight.
+      if (followedFrom === null && samples.length >= 15) followedFrom = await labelAt()
     }
     const lastPosition = await liveValue(page, 'Position')
+    const followedTo = await labelAt()
+    const following = await page
+      .getByRole('button', { name: 'Following', exact: true, pressed: true })
+      .count()
     const framesAfter = await page.evaluate(() => globalThis.socScene?.frames ?? 0)
     if (shots !== null) {
       mkdirSync(shots, { recursive: true })
@@ -173,6 +212,11 @@ async function main() {
       ),
       console_delivery_p95_ms: await overlayMs(page, 'delivery p95'),
       moved: firstPosition !== null && firstPosition !== lastPosition,
+      followed: following === 1,
+      label_drift_px:
+        followedFrom === null || followedTo === null
+          ? null
+          : Math.hypot(followedTo.x - followedFrom.x, followedTo.y - followedFrom.y),
       frames_drawn: framesAfter - framesBefore,
     })
 
@@ -180,12 +224,85 @@ async function main() {
     trace(`the dock is silent after ${String(samples.length)} samples`)
     // Timed in the page as the pill changes: a locator's wait polls every half second.
     const staleAtMs = await Promise.race([
-      page.evaluate(staleAt),
+      page.evaluate(whenText, { text: 'Stale, ', present: true }),
       page.waitForTimeout(WAIT_MS).then(() => {
         throw new Error('the inspector never said Stale')
       }),
     ])
     emit({ event: 'stale', after_last_ms: staleAtMs - (samples.at(-1)?.receivedAtMs ?? staleAtMs) })
+
+    // The map tools sit bottom right whether or not a panel is open (the design system).
+    const tools = page.getByRole('toolbar', { name: 'Map tools' })
+    const open = await tools.boundingBox()
+    await page.getByRole('button', { name: 'Close Fleet' }).click()
+    await page.getByRole('button', { name: 'Close Fleet' }).waitFor({ state: 'detached' })
+    const shut = await tools.boundingBox()
+    emit({
+      event: 'layout',
+      map_tools_moved_px:
+        open === null || shut === null ? null : Math.hypot(open.x - shut.x, open.y - shut.y),
+    })
+
+    // The search: with nothing selected, `/`, a piece of the aircraft's serial and Enter
+    // select its fleet, which the inspector shows and the scene follows.
+    await page.keyboard.press('Escape')
+    await page.getByRole('complementary', { name: 'Inspector' }).waitFor({ state: 'detached' })
+    await page.keyboard.press('/')
+    await page.keyboard.type(aircraft.slice(-6))
+    await page
+      .getByRole('option', { name: new RegExp(`^${FLEET.name}`) })
+      .waitFor({ timeout: WAIT_MS })
+    await page.keyboard.press('Enter')
+    await page.getByRole('heading', { name: FLEET.name }).waitFor({ timeout: WAIT_MS })
+    emit({
+      event: 'search',
+      selected: new URL(page.url()).searchParams.has('fleet'),
+      following:
+        (await page
+          .getByRole('button', { name: 'Following', exact: true, pressed: true })
+          .count()) === 1,
+    })
+
+    // NFR-REL-07: the dock flies again, and the browser's network is cut for CUT_MS.
+    // Meanwhile the harness renames the fleet: what the console shows changes while it
+    // cannot hear of it. Each change on screen is timed in the page as it happens.
+    await nextLine()
+    trace('the dock flies again')
+    await page.getByText(/^Live, /).waitFor({ timeout: WAIT_MS })
+    const sockets = []
+    page.on('websocket', () => sockets.push(Date.now()))
+    const reconnecting = page.evaluate(whenText, { text: 'Reconnecting', present: true })
+    const framesAtCut = samples.length
+    const cutAtMs = Date.now()
+    await page.context().setOffline(true)
+    emit({ event: 'cut' })
+    const { renamed_to: renamed } = await nextLine()
+    await page.waitForTimeout(Math.max(0, cutAtMs + CUT_MS - Date.now()))
+    const framesDuringCut = samples.length - framesAtCut
+    const inspector = page.getByRole('complementary', { name: 'Inspector' })
+    const freshnessAtRestore = await inspector.getByText(/^(Live|Stale|Lost), /).textContent()
+    const presenceDuringCut = await inspector.getByText('Unknown', { exact: true }).count()
+    const linkBack = page.evaluate(whenText, { text: 'Reconnecting', present: false })
+    const liveAgain = page.evaluate(whenText, { text: 'Live, ', present: true })
+    const restoredAtMs = Date.now()
+    await page.context().setOffline(false)
+    trace('the network is back')
+    const renamedAtMs = await page
+      .getByRole('heading', { name: renamed })
+      .waitFor({ timeout: WAIT_MS })
+      .then(() => Date.now())
+    const after = (at) => (at === null ? null : at - restoredAtMs)
+    emit({
+      event: 'reconnected',
+      frames_during_cut: framesDuringCut,
+      reconnecting_after_ms: (await within(reconnecting, WAIT_MS)) - cutAtMs,
+      freshness_at_restore: freshnessAtRestore,
+      presence_unknown_during_cut: presenceDuringCut > 0,
+      link_back_after_ms: after(await within(linkBack, WAIT_MS)),
+      live_after_ms: after(await within(liveAgain, WAIT_MS)),
+      renamed_after_ms: after(renamedAtMs),
+      sockets_opened_after_restore: sockets.filter((at) => at >= restoredAtMs).length,
+    })
   } finally {
     await browser.close()
   }

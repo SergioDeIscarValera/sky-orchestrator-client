@@ -21,7 +21,11 @@ export interface View {
   readonly fleet?: string
   readonly gateway?: string
   readonly aircraft?: string
+  /** The selection's form open in the inspector: registering an aircraft, editing a fleet. */
+  readonly form?: Form
 }
+
+export type Form = 'register' | 'edit'
 
 export type Selection =
   | { readonly kind: 'fleet'; readonly fleetId: string }
@@ -29,12 +33,14 @@ export type Selection =
 
 const FIELDS = {
   panel: z.enum(PANELS),
+  form: z.enum(['register', 'edit']),
   fleet: z.uuid(),
   serial: z.string().check(z.regex(/^[A-Za-z0-9]{1,64}$/)),
 }
 
 export function readView(search: Record<string, unknown>): View {
-  const view: { panel?: Panel; fleet?: string; gateway?: string; aircraft?: string } = {}
+  const view: { panel?: Panel; fleet?: string; gateway?: string; aircraft?: string; form?: Form } =
+    {}
   const panel = FIELDS.panel.safeParse(search.panel)
   if (panel.success) view.panel = panel.data
   const fleet = FIELDS.fleet.safeParse(search.fleet)
@@ -45,6 +51,9 @@ export function readView(search: Record<string, unknown>): View {
     view.gateway = gateway.data
     view.aircraft = aircraft.data
   }
+  // A form belongs to a selection: alone, it opens nothing.
+  const form = FIELDS.form.safeParse(search.form)
+  if (form.success && selectionOf(view) !== null) view.form = form.data
   return view
 }
 
@@ -75,6 +84,30 @@ export function useView(): View {
 
 export function useSelection(): Selection | null {
   return selectionOf(useView())
+}
+
+/** The form open for the selection, if any, and how to open or close it. */
+export function useForm(): readonly [Form | null, (form: Form | null) => void] {
+  const { form } = useView()
+  const change = useChangeView()
+  const open = useCallback(
+    (next: Form | null) => {
+      change((view) => ({ ...view, form: next ?? undefined }))
+    },
+    [change],
+  )
+  return [form ?? null, open]
+}
+
+/** Selects `selection` with its form open: the fleet panel's Register and Edit. */
+export function useOpenForm(): (selection: Selection, form: Form) => void {
+  const change = useChangeView()
+  return useCallback(
+    (selection: Selection, form: Form) => {
+      change((view) => ({ ...select(view, selection), form }))
+    },
+    [change],
+  )
 }
 
 export function useSelect(): (selection: Selection | null) => void {

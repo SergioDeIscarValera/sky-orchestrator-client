@@ -1,28 +1,17 @@
 import { X } from 'lucide-react'
-import { useEffect, useId } from 'react'
+import { useId } from 'react'
 
 import { FleetPanel } from '../fleets/FleetPanel'
 import { DESTINATIONS } from './destinations'
 import { useChangeView, useView } from './router'
 import { CARD, QUIET_BUTTON } from './styles'
 
-/** The open panel, floating beside the rail over the scene; Escape closes it. */
+/** The open panel, floating beside the rail over the scene; Escape closes it (the shell's). */
 export function PanelHost() {
   const { panel } = useView()
   const change = useChangeView()
   const heading = useId()
   const destination = DESTINATIONS.find((candidate) => candidate.panel === panel)
-
-  useEffect(() => {
-    if (destination === undefined) return
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') change((view) => ({ ...view, panel: undefined }))
-    }
-    window.addEventListener('keydown', close)
-    return () => {
-      window.removeEventListener('keydown', close)
-    }
-  }, [destination, change])
 
   if (destination === undefined) return null
   return (

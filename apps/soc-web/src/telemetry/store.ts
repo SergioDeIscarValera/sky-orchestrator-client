@@ -7,6 +7,12 @@ export interface Received {
   readonly sample: TelemetrySample
   /** When the browser got it, on its monotonic clock (`performance.now()`). */
   readonly receivedAt: number
+  /**
+   * When it would have arrived had nothing held it up, on the same clock: `receivedAt`
+   * less its delay beyond the link's usual transit. Its age counts from here, so a
+   * sample held up by a cut and delivered late never reads as live (FR-SAF-02).
+   */
+  readonly dueAt: number
 }
 
 /**
@@ -46,6 +52,25 @@ export function takeoffAfter(known: Takeoff | null, sample: TelemetrySample): Ta
 /** How many kept deliveries the p95 is taken over: the last 600 (NFR-PERF-01). */
 const DELIVERY_WINDOW = 600
 
+/**
+ * How far back the link's usual transit is looked for: the least transit, soc-cloud's
+ * send to the browser's arrival, seen over this long. It carries the offset between the
+ * two clocks, which cancels out of a sample's delay; a cut shorter than this keeps the
+ * transit from before it, and a clock stepped forward reads as late for at most this long.
+ */
+export const TRANSIT_WINDOW_MS = 30_000
+
+/** The least of the values pushed over the last `windowMs`: only those that may yet be the least are kept. */
+export function slidingMinimum(windowMs: number) {
+  const kept: { at: number; value: number }[] = []
+  return (at: number, value: number): number => {
+    while (kept.length > 0 && (kept.at(-1)?.value ?? -Infinity) >= value) kept.pop()
+    kept.push({ at, value })
+    while ((kept[0]?.at ?? at) < at - windowMs) kept.shift()
+    return kept[0]?.value ?? value
+  }
+}
+
 interface Telemetry {
   readonly tracks: ReadonlyMap<string, Track>
   readonly receive: (sample: TelemetrySample, receivedAt: number) => void
@@ -66,6 +91,7 @@ export type TelemetryStore = StoreApi<Telemetry>
 export function createTelemetryStore(wallClock: () => number = Date.now): TelemetryStore {
   const deliveries = new Float64Array(DELIVERY_WINDOW)
   let delivered = 0
+  let usualTransit = slidingMinimum(TRANSIT_WINDOW_MS)
   return createStore<Telemetry>()((set) => ({
     tracks: new Map(),
     receive: (sample, receivedAt) => {
@@ -74,11 +100,14 @@ export function createTelemetryStore(wallClock: () => number = Date.now): Teleme
         const track = state.tracks.get(key)
         if (track !== undefined && sample.takenAtMs <= track.latest.sample.takenAtMs) return state
         // After the drop above, so a sample the store does not keep is not measured.
-        deliveries[delivered % DELIVERY_WINDOW] = wallClock() - sample.sentAtMs
+        const now = wallClock()
+        const transit = now - sample.sentAtMs
+        deliveries[delivered % DELIVERY_WINDOW] = transit
         delivered += 1
+        const delay = transit - usualTransit(now, transit)
         const tracks = new Map(state.tracks)
         tracks.set(key, {
-          latest: { sample, receivedAt },
+          latest: { sample, receivedAt, dueAt: receivedAt - delay },
           previous: track?.latest ?? null,
           takeoff: takeoffAfter(track?.takeoff ?? null, sample),
         })
@@ -88,6 +117,7 @@ export function createTelemetryStore(wallClock: () => number = Date.now): Teleme
     // A switch of organization starts afresh: its figures are its own stacks'.
     clear: () => {
       delivered = 0
+      usualTransit = slidingMinimum(TRANSIT_WINDOW_MS)
       set({ tracks: new Map() })
     },
     deliveryP95: () => {

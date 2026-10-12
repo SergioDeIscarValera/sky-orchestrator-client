@@ -114,6 +114,21 @@ function device(aircraftSn, { online, linkState, firmware, firstSeen, lastSeen }
   }
 }
 
+/** One of the replay's aircraft, seen on the replay's own stack. */
+function replayDevice(gatewaySn, aircraftSn) {
+  return {
+    ...device(aircraftSn, {
+      online: true,
+      linkState: 'connected',
+      firmware: '10.01.0004',
+      firstSeen: '2026-10-11T08:00:00+00:00',
+      lastSeen: '2026-10-11T12:41:00+00:00',
+    }),
+    gateway_sn: gatewaySn,
+    stacks: { name: 'replay', link_state: 'connected' },
+  }
+}
+
 const DEVICES_BY_ORGANIZATION = new Map([
   [
     NORTH,
@@ -142,18 +157,9 @@ const DEVICES_BY_ORGANIZATION = new Map([
         firstSeen: '2026-10-11T10:30:00+00:00',
         lastSeen: '2026-10-11T11:58:00+00:00',
       }),
-      // The aircraft `?replay` flies in development (src/telemetry/replay.ts), on a stack of its own.
-      {
-        ...device('REPLAYUAV', {
-          online: true,
-          linkState: 'connected',
-          firmware: '10.01.0004',
-          firstSeen: '2026-10-11T08:00:00+00:00',
-          lastSeen: '2026-10-11T12:41:00+00:00',
-        }),
-        gateway_sn: 'REPLAYDOCK',
-        stacks: { name: 'replay', link_state: 'connected' },
-      },
+      // The aircraft `?replay=2` flies in development (src/telemetry/replay.ts), on a stack of their own.
+      replayDevice('REPLAYDOCK', 'REPLAYUAV'),
+      replayDevice('REPLAYDOCK2', 'REPLAYUAV2'),
     ],
   ],
 ])

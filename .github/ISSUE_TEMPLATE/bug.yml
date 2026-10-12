@@ -7,7 +7,7 @@ body:
     attributes:
       label: Severity
       options:
-        - S1 - could contribute to losing an aircraft or hurting someone
+        - S1 - could contribute to losing an aircraft or hurting someone, or shows an aircraft online, a position current or a check passed when it is not (NFR-SAF-02)
         - S2 - blocks the project or damages a neighbouring project
         - S3 - costs time
     validations:

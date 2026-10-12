@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 
 import { FakeBackend, NEIGHBOUR } from '../test/FakeBackend'
 import { renderApp } from '../test/render'
@@ -11,12 +11,42 @@ async function renderShell() {
 }
 
 describe('the shell', () => {
-  it('lays the panels over the scene as landmarks', async () => {
+  it('lays the panels over the scene as landmarks, the inspector only for a selection', async () => {
     await renderShell()
     expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Sections' })).toBeInTheDocument()
     expect(screen.getByRole('main', { name: 'Scene' })).toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+  })
+
+  it('steps back with Escape: the selection first, then the panel (NFR-UX-04)', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?panel=fleet&gateway=SOTESTDOCK01&aircraft=SOTESTUAV001',
+    )
+    const { user } = await renderShell()
+    await screen.findByRole('complementary', { name: 'Inspector' })
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+    })
+    expect(screen.getByRole('heading', { name: 'Fleet' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Fleet' })).toBeNull()
+    })
+  })
+
+  it("clears the selection with the inspector's own close button", async () => {
+    window.history.replaceState(null, '', '/?gateway=SOTESTDOCK01&aircraft=SOTESTUAV001')
+    const { user } = await renderShell()
+    await screen.findByRole('complementary', { name: 'Inspector' })
+    await user.click(screen.getByRole('button', { name: 'Close the inspector' }))
+    await waitFor(() => {
+      expect(window.location.search).toBe('')
+    })
+    expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
   })
 
   it('offers every section of the console', async () => {

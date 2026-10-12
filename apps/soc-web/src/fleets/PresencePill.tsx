@@ -1,4 +1,5 @@
 import type { Device } from '../backend/backend'
+import { useLink } from '../backend/context'
 import { presenceLabel, presenceOf, type Presence } from './format'
 
 const TONE: Readonly<Record<Presence, string>> = {
@@ -8,11 +9,12 @@ const TONE: Readonly<Record<Presence, string>> = {
 }
 
 export function PresencePill({ device }: { readonly device: Device }) {
+  const link = useLink()
   return (
     <span
-      className={`rounded-pill inline-flex h-6 shrink-0 items-center px-2.5 text-xs font-medium whitespace-nowrap ${TONE[presenceOf(device)]}`}
+      className={`rounded-pill inline-flex h-6 shrink-0 items-center px-2.5 text-xs font-medium whitespace-nowrap ${TONE[presenceOf(device, link)]}`}
     >
-      {presenceLabel(device)}
+      {presenceLabel(device, link)}
     </span>
   )
 }

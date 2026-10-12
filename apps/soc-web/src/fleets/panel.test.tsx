@@ -38,27 +38,57 @@ afterEach(() => {
 })
 
 describe('the fleet panel (FR-FLE-02)', () => {
-  it('lists the fleets, and apart the aircraft seen that are in none', async () => {
+  const rows = async () =>
+    within(await group('Aircraft'))
+      .getAllByRole('listitem')
+      .map((row) => within(row).getAllByRole('button')[0]?.textContent)
+
+  it('lists every aircraft in one list: the fleets first, then those not registered', async () => {
     const { backend } = await farm()
     await openAt(backend, '?panel=fleet')
-    const fleets = await group('Fleets')
-    expect(within(fleets).getByRole('button', { name: /Norte 1/ })).toHaveTextContent(
+    expect(await rows()).toEqual([
       'Norte 1DJI Mavic Air 2Online',
-    )
-    const seen = await group('Seen on the wire')
-    expect(
-      within(seen)
-        .getAllByRole('button')
-        .map((row) => row.textContent),
-    ).toEqual(['SOTESTUAV002via labOffline'])
+      'SOTESTUAV002Not registered · via labOffline',
+    ])
+  })
+
+  it('marks each aircraft with its own colour, the one the scene draws it in', async () => {
+    const { backend } = await farm()
+    await openAt(backend, '?panel=fleet')
+    const colourOf = async (name: RegExp) =>
+      (await screen.findByRole('button', { name }))
+        .querySelector('[data-colour]')
+        ?.getAttribute('data-colour')
+    const fleet = await colourOf(/^Norte 1/)
+    const seen = await colourOf(/^SOTESTUAV002/)
+    expect(fleet).toBeDefined()
+    expect(seen).toBeDefined()
+    expect(fleet).not.toBe(seen)
+  })
+
+  it("opens an aircraft's registration from its row", async () => {
+    const { backend } = await farm()
+    const { user } = await openAt(backend, '?panel=fleet')
+    await user.click(await screen.findByRole('button', { name: 'Register SOTESTUAV002' }))
+    expect(await screen.findByRole('form', { name: 'Register SOTESTUAV002' })).toBeVisible()
+    expect([search().get('aircraft'), search().get('form')]).toEqual(['SOTESTUAV002', 'register'])
+  })
+
+  it("opens a fleet's edit from its row", async () => {
+    const { backend } = await farm()
+    const { user } = await openAt(backend, '?panel=fleet')
+    await user.click(await screen.findByRole('button', { name: 'Edit Norte 1' }))
+    expect(await screen.findByRole('form', { name: 'Edit Norte 1' })).toBeVisible()
+    expect(search().get('form')).toBe('edit')
   })
 
   it('says what to do when there is nothing yet', async () => {
     const backend = new FakeBackend(NEIGHBOUR)
     backend.seen.set(NORTH.id, [])
     await openAt(backend, '?panel=fleet')
-    expect(await screen.findByText(/No fleet registered yet/)).toBeInTheDocument()
-    expect(screen.getByText(/No aircraft seen yet/)).toBeInTheDocument()
+    expect(
+      await screen.findByText('No aircraft yet: one appears here when a stack announces it.'),
+    ).toBeInTheDocument()
   })
 
   it('does not call an aircraft online while its stack is out of reach (FR-LNK-02)', async () => {
@@ -66,22 +96,19 @@ describe('the fleet panel (FR-FLE-02)', () => {
     const lost = { name: 'lab', linkState: 'unreachable' } as const
     backend.seen.set(NORTH.id, [{ ...device('SOTESTUAV001'), stack: lost }])
     const { user } = await openAt(backend, '?panel=fleet')
-    const row = within(await group('Seen on the wire')).getByRole('button')
+    const row = await screen.findByRole('button', { name: /^SOTESTUAV001/ })
     expect(row).toHaveTextContent('Stack unreachable')
     await user.click(row)
     expect(await within(inspector()).findByText('lab, unreachable')).toBeInTheDocument()
   })
 
-  it('moves an aircraft to the fleets when another console registers it', async () => {
+  it('shows an aircraft as a fleet once another console registers it', async () => {
     const backend = new FakeBackend(NEIGHBOUR)
     await openAt(backend, '?panel=fleet')
-    const seen = await group('Seen on the wire')
-    expect(within(seen).getByRole('button', { name: /SOTESTUAV001/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /^SOTESTUAV001/ })).toBeInTheDocument()
     await act(() => backend.registerFleet(NORTH.id, DRAFT))
-    expect(
-      await within(await group('Fleets')).findByRole('button', { name: /Norte 1/ }),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Every aircraft seen is in a fleet.')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /^Norte 1/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^SOTESTUAV001/ })).toBeNull()
   })
 })
 
@@ -89,13 +116,18 @@ describe('the inspector follows the selection (FR-FLE-04, NFR-UX-03)', () => {
   it('shows the fleet a row selects, keeps it in the URL, and lets go on a second click', async () => {
     const { backend, fleet } = await farm()
     const { user } = await openAt(backend, '?panel=fleet')
-    const row = within(await group('Fleets')).getByRole('button', { name: /Norte 1/ })
+    const row = within(await group('Aircraft')).getByRole('button', { name: /^Norte 1/ })
     await user.click(row)
 
     expect(await within(inspector()).findByRole('heading', { name: 'Norte 1' })).toBeVisible()
     expect(row).toHaveAttribute('aria-pressed', 'true')
     expect([search().get('panel'), search().get('fleet')]).toEqual(['fleet', fleet.id])
     const details = within(inspector())
+    expect(details.getByText('DJI Mavic Air 2 · SOTESTUAV001')).toBeVisible()
+    // The facts that matter less than the flight are folded, a click away.
+    expect(details.getByText('1WNBH9')).not.toBeVisible()
+    await user.click(details.getByText('Identity'))
+    expect(details.getByText('1WNBH9')).toBeVisible()
     expect(details.getByText('1WNBH9')).toBeInTheDocument()
     expect(details.getByText('Not recorded')).toBeInTheDocument()
     expect(details.getByText('1 h 30 min')).toBeInTheDocument()
@@ -107,7 +139,10 @@ describe('the inspector follows the selection (FR-FLE-04, NFR-UX-03)', () => {
     expect(details.getAllByText('Not published').length).toBeGreaterThan(0)
 
     await user.click(row)
-    expect(await within(inspector()).findByText('Nothing selected.')).toBeInTheDocument()
+    // Nothing selected, no inspector: the scene keeps the whole width.
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+    })
     expect(search().get('fleet')).toBeNull()
     expect(search().get('panel')).toBe('fleet')
   })
@@ -117,7 +152,8 @@ describe('the inspector follows the selection (FR-FLE-04, NFR-UX-03)', () => {
     const { user } = await openAt(backend, '?gateway=SOTESTDOCK01&aircraft=SOTESTUAV001')
     const details = within(inspector())
     expect(await details.findByRole('heading', { name: 'SOTESTUAV001' })).toBeVisible()
-    expect(details.getByText('Seen on the wire')).toBeInTheDocument()
+    expect(details.getByText(/^In fleet/)).toBeVisible()
+    expect(details.queryByRole('button', { name: 'Register as a fleet' })).toBeNull()
     expect(details.getByText('0-67-0')).toBeInTheDocument()
     await user.click(details.getByRole('button', { name: 'Norte 1' }))
     expect(await details.findByRole('heading', { name: 'Norte 1' })).toBeVisible()
@@ -133,7 +169,7 @@ describe('the inspector follows the selection (FR-FLE-04, NFR-UX-03)', () => {
     await waitFor(() => {
       expect(window.location.search).toBe('')
     })
-    expect(within(inspector()).getByText('Nothing selected.')).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
   })
 
   it('says so when a selected fleet is retired elsewhere', async () => {

@@ -20,6 +20,8 @@ export interface Arguments {
     readonly shots: string | null
     readonly headed: boolean
     readonly serve: boolean
+    readonly memory: boolean
+    readonly minutes: number
 }
 
 export interface Run {
@@ -34,6 +36,8 @@ export interface Context {
     readonly site: string
     readonly gpu: string
     readonly shots?: boolean
+    /** What the scene held on the GPU at the end, in bytes (NFR-RES-03). */
+    readonly gpuBytes?: number | null
 }
 
 export declare const BUDGET_MS: number

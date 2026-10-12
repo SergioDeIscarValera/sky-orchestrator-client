@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator-client/blob/develop/contracts/recordings/recording.schema.json",
+  "title": "One line of a telemetry recording",
+  "description": "A recording is JSON Lines, one object per sample a console received, in the order received (NFR-TEST-05): the sample as soc-cloud broadcast it and when the browser got it. Replayed, it feeds the console's tests the same samples at the same intervals, so an incident becomes a test.",
+  "x-version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["received_at_ms", "sample"],
+  "properties": {
+    "received_at_ms": {
+      "description": "When the browser received the sample, Unix milliseconds on its own clock.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "sample": {
+      "$ref": "../broadcast/telemetry.schema.json"
+    }
+  }
+}

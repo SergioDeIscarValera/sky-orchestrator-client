@@ -1,3 +1,5 @@
+import type { GpuMemory } from './gpuMemory'
+
 /** Frames longer apart than this are the scene waking up from idle, not frame time. */
 export const IDLE_GAP_MS = 250
 const WINDOW = 600
@@ -28,6 +30,11 @@ function p95(values: ArrayLike<number>): number | null {
  * for a scripted measurement longer than the window (`pnpm measure`).
  */
 export class FrameSampler {
+  /**
+   * What the scene holds on the GPU, read on demand: the canvas sets it while it draws
+   * (NFR-RES-03, NFR-OBS-05). Walking the scene is cheap but not free, so not each frame.
+   */
+  gpuMemory: () => GpuMemory | null = () => null
   frames = 0
   drawCalls = 0
   triangles = 0

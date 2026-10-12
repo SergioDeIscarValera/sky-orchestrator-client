@@ -1,3 +1,4 @@
+import type { Link } from './link'
 import type { LoadedSite } from '../scene/siteModel'
 import type { TelemetrySample } from '../telemetry/sample'
 
@@ -144,6 +145,9 @@ export interface Backend {
   retireFleet(fleetId: string): Promise<void>
   onState(organizationId: string, listener: (event: StateEvent) => void): () => void
   onTelemetry(organizationId: string, listener: (sample: TelemetrySample) => void): () => void
+  /** Whether the console's live topics reach it now (NFR-REL-07). */
+  link(): Link
+  onLink(listener: (link: Link) => void): () => void
   /** The organization's baked site model, served beside the console, or null (ADR-0018). */
   siteModel(organizationId: string): Promise<LoadedSite | null>
 }

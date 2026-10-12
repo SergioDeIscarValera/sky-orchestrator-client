@@ -1,19 +1,55 @@
+import { ChevronDown } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 
 import { useSelect } from '../app/router'
 import { QUIET_BUTTON } from '../app/styles'
 
+/**
+ * A titled list of facts. `folded`, it is a disclosure the user opens: the facts that
+ * matter less than what is happening, kept a click away.
+ */
 export function Details({
   title,
   aside,
   rows,
+  folded = false,
+  children,
 }: {
   readonly title: string
   /** Said of the whole section, beside its title. */
   readonly aside?: ReactNode
   readonly rows: readonly (readonly [string, ReactNode])[]
+  readonly folded?: boolean
+  /** Said after the facts. */
+  readonly children?: ReactNode
 }) {
   const heading = useId()
+  const facts = (
+    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      {rows.map(([label, value]) => (
+        <div key={label} className="contents">
+          <dt className="text-muted">{label}</dt>
+          <dd className="text-heading min-w-0 text-right break-words">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+  if (folded) {
+    return (
+      <details className="group border-border mt-4 border-t pt-3">
+        <summary className="text-muted hover:text-heading flex cursor-pointer list-none items-center justify-between text-xs font-semibold tracking-wider uppercase transition-colors duration-200">
+          {title}
+          <ChevronDown
+            size={16}
+            aria-hidden
+            className="transition-transform duration-200 group-open:rotate-180"
+          />
+        </summary>
+        {facts}
+        {children}
+      </details>
+    )
+  }
   return (
     <section aria-labelledby={heading} className="mt-5">
       <div className="flex items-center justify-between gap-3">
@@ -22,14 +58,8 @@ export function Details({
         </h4>
         {aside}
       </div>
-      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-        {rows.map(([label, value]) => (
-          <div key={label} className="contents">
-            <dt className="text-muted">{label}</dt>
-            <dd className="text-heading min-w-0 text-right break-words">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      {facts}
+      {children}
     </section>
   )
 }

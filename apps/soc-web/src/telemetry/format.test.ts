@@ -1,5 +1,12 @@
 // @vitest-environment node
-import { formatAge, formatCoordinates, formatHeading, formatMetres, modeName } from './format'
+import {
+  batteryLevel,
+  formatAge,
+  formatCoordinates,
+  formatHeading,
+  formatMetres,
+  modeName,
+} from './format'
 import { freshnessOf } from './freshness'
 
 describe('live values in words (FR-TEL-03)', () => {
@@ -14,6 +21,17 @@ describe('live values in words (FR-TEL-03)', () => {
     [42, 'Mode 42'],
   ])('reads mode %i, as Sky Orchestrator sends it, as %s', (code, words) => {
     expect(modeName(code)).toBe(words)
+  })
+
+  it.each([
+    [100, 'ok'],
+    [50, 'ok'],
+    [49, 'low'],
+    [20, 'low'],
+    [19, 'critical'],
+    [0, 'critical'],
+  ])('reads a battery at %i %% as %s', (percent, level) => {
+    expect(batteryLevel(percent)).toBe(level)
   })
 
   it.each([

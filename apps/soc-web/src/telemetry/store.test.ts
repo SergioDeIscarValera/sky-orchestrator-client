@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { createTelemetryStore } from './store'
+import { createTelemetryStore, slidingMinimum, TRANSIT_WINDOW_MS } from './store'
 import type { TelemetrySample } from './sample'
 
 function sample(takenAtMs: number, aircraftSn = 'SOTESTUAV001'): TelemetrySample {
@@ -23,12 +23,14 @@ function sample(takenAtMs: number, aircraftSn = 'SOTESTUAV001'): TelemetrySample
 
 describe("the console's telemetry (FR-TEL-01, FR-TEL-02)", () => {
   it("keeps each aircraft's latest sample and the one before it", () => {
-    const store = createTelemetryStore()
+    let wall = 1010
+    const store = createTelemetryStore(() => wall)
     store.getState().receive(sample(1000), 10)
+    wall = 1210
     store.getState().receive(sample(1200), 210)
     const track = store.getState().tracks.get('SOTESTDOCK01/SOTESTUAV001')
-    expect(track?.latest).toEqual({ sample: sample(1200), receivedAt: 210 })
-    expect(track?.previous).toEqual({ sample: sample(1000), receivedAt: 10 })
+    expect(track?.latest).toEqual({ sample: sample(1200), receivedAt: 210, dueAt: 210 })
+    expect(track?.previous).toEqual({ sample: sample(1000), receivedAt: 10, dueAt: 10 })
   })
 
   it('drops a sample the aircraft took no later than the latest, so a track never runs back', () => {
@@ -150,5 +152,34 @@ describe("the console's delivery p95 (NFR-PERF-01)", () => {
     expect(store.getState().deliveryP95()).toBeNull()
     store.getState().receive({ ...sample(2000), sentAtMs: 10_000 - 30 }, 2)
     expect(store.getState().deliveryP95()).toBe(30)
+  })
+
+  it('counts a sample held up by a cut from when it was due, so it never reads as live (FR-SAF-02)', () => {
+    // The browser's clock a minute ahead of the mini-PC's: the offset cancels out.
+    const AHEAD_MS = 60_000
+    let wall = 0
+    const store = createTelemetryStore(() => wall + AHEAD_MS)
+    const due = (takenAtMs: number) => {
+      store.getState().receive(sample(takenAtMs), wall)
+      return store.getState().tracks.get('SOTESTDOCK01/SOTESTUAV001')?.latest.dueAt
+    }
+    // On time: 5 ms after soc-cloud sent each, so due as it arrives.
+    wall = 1009
+    expect(due(1005 - 4)).toBe(1009)
+    wall = 1209
+    expect(due(1205 - 4)).toBe(1209)
+    // An 8 s cut held what was sent meanwhile, delivered at once when it ended: each is
+    // due when it was sent, 5 ms later, however late it arrived.
+    wall = 9209
+    expect([due(1405 - 4), due(5205 - 4), due(9205 - 4)]).toEqual([1409, 5209, 9209])
+  })
+
+  it('takes the usual transit over the last 30 s, so a cut leaves it as it was', () => {
+    const least = slidingMinimum(TRANSIT_WINDOW_MS)
+    expect([least(0, 7), least(100, 5), least(200, 9)]).toEqual([7, 5, 5])
+    expect(least(25_000, 8000)).toBe(5)
+    // Thirty seconds on, 5 is gone: the least since is the usual transit now.
+    expect(least(30_150, 9)).toBe(9)
+    expect(least(30_300, 6)).toBe(6)
   })
 })

@@ -6,6 +6,7 @@ import {
   Color,
   CylinderGeometry,
   DynamicDrawUsage,
+  ExtrudeGeometry,
   Float32BufferAttribute,
   Group,
   InstancedMesh,
@@ -15,7 +16,11 @@ import {
   Mesh,
   MeshBasicMaterial,
   Object3D,
+  Quaternion,
   RingGeometry,
+  Shape,
+  ShapeGeometry,
+  Vector2,
   Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
@@ -61,9 +66,40 @@ export function createAircraftGeometry(): BufferGeometry {
   return merged
 }
 
-/** The disc under an aircraft that its stalk drops to, flat on the ground. */
+/**
+ * The chevron on the aircraft's back, pointing ahead past its body, in the casing's
+ * colour against the aircraft's own: where it heads, seen from any side (FR-SCN-04).
+ */
+export function createNoseGeometry(): BufferGeometry {
+  const chevron = new Shape([
+    new Vector2(0, 0.32),
+    new Vector2(0.1, 0.06),
+    new Vector2(0, 0.12),
+    new Vector2(-0.1, 0.06),
+  ])
+  // Drawn on the x-y plane, the chevron pointing up y: laid down, it points ahead, -z.
+  return new ExtrudeGeometry(chevron, { depth: 0.012, bevelEnabled: false })
+    .rotateX(-Math.PI / 2)
+    .translate(0, 0.031, 0)
+}
+
+/**
+ * The disc under an aircraft that its stalk drops to, flat on the ground, with a
+ * wedge on its rim pointing where the aircraft heads: legible from above.
+ */
 export function createGroundDiscGeometry(): BufferGeometry {
-  return new CircleGeometry(SPAN_M / 2, 32).rotateX(-Math.PI / 2)
+  const radius = SPAN_M / 2
+  const wedge = new Shape([
+    new Vector2(0, radius * 2.1),
+    new Vector2(radius * 0.55, radius * 0.75),
+    new Vector2(-radius * 0.55, radius * 0.75),
+  ])
+  const parts = [new CircleGeometry(radius, 32), new ShapeGeometry(wedge)].map((part) =>
+    part.rotateX(-Math.PI / 2),
+  )
+  const merged = mergeGeometries(parts)
+  for (const part of parts) part.dispose()
+  return merged
 }
 
 /** The casing's material: drawn on its back faces only, so it shows as an outline. */
@@ -135,7 +171,8 @@ export interface Drawn {
 /**
  * Where to draw an aircraft at `now` (FR-TEL-02). From the latest sample's arrival
  * it glides from the previous sample to the latest, over their interval, and stops
- * there: motion is interpolated between samples, never extrapolated past the latest.
+ * there: motion is interpolated between samples, never extrapolated past the latest,
+ * nor across a gap in them. Its freshness counts from when the latest was due.
  * Lost, the latest sample is where it was last known, which the scene marks on the
  * ground only, never as a current position.
  */
@@ -146,14 +183,22 @@ export function drawnAt(
   thresholds: { readonly telemetryStaleAfterMs: number; readonly telemetryLostAfterMs: number },
   ground: Ground = FLAT_GROUND,
 ): Drawn | null {
-  const freshness = freshnessOf(Math.max(0, now - track.latest.receivedAt), thresholds)
+  const freshness = freshnessOf(Math.max(0, now - track.latest.dueAt), thresholds)
   const takeoff = takeoffLevel(track, origin, ground)
   const latest = placement(origin, track.latest.sample, ground, takeoff)
   if (latest === null) return null
   if (freshness === 'lost') return { placement: latest, freshness, gliding: false }
   const previous =
     track.previous === null ? null : placement(origin, track.previous.sample, ground, takeoff)
-  if (previous === null || track.previous === null) {
+  // Samples a stale threshold or more apart, the aircraft's own clock says, had a gap
+  // between them: the aircraft is drawn where it is, not glided across what was not seen
+  // (NFR-REL-07).
+  if (
+    previous === null ||
+    track.previous === null ||
+    track.latest.sample.takenAtMs - track.previous.sample.takenAtMs >=
+      thresholds.telemetryStaleAfterMs
+  ) {
     return { placement: latest, freshness, gliding: false }
   }
   const glideMs = Math.min(track.latest.receivedAt - track.previous.receivedAt, MAX_GLIDE_MS)
@@ -187,11 +232,13 @@ export function screenScale(distanceM: number, fovDeg: number, viewportPx: numbe
   return Math.max(1, (MIN_SPAN_PX * metresPerPixel) / SPAN_M)
 }
 
-/** The instanced parts every aircraft of the organization is drawn with: four draws, five with a selection. */
+/** The instanced parts every aircraft of the organization is drawn with: five draws, six with a selection. */
 export interface AircraftParts {
   readonly group: Group
   readonly bodies: InstancedMesh<BufferGeometry, MeshBasicMaterial>
   readonly casings: InstancedMesh<BufferGeometry, MeshBasicMaterial>
+  /** The chevrons that point each aircraft's heading. */
+  readonly noses: InstancedMesh<BufferGeometry, MeshBasicMaterial>
   readonly discs: InstancedMesh<BufferGeometry, MeshBasicMaterial>
   readonly stalks: LineSegments<BufferGeometry, LineBasicMaterial>
   /** The soft ring on the ground under the selected aircraft. */
@@ -209,6 +256,8 @@ export function createAircraftParts(capacity: number): AircraftParts {
   bodies.name = 'aircraft'
   const casings = new InstancedMesh(shape, casingMaterial(), capacity)
   casings.name = 'aircraft-casing'
+  const noses = new InstancedMesh(createNoseGeometry(), new MeshBasicMaterial(), capacity)
+  noses.name = 'aircraft-nose'
   const discs = new InstancedMesh(
     createGroundDiscGeometry(),
     new MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false, ...ON_GROUND }),
@@ -230,26 +279,32 @@ export function createAircraftParts(capacity: number): AircraftParts {
   ring.visible = false
   const group = new Group()
   group.name = 'aircraft-parts'
-  for (const part of [bodies, casings, discs, stalks, ring]) {
+  for (const part of [bodies, casings, noses, discs, stalks, ring]) {
     // Instances spread over the whole site; the geometry's own bounds would cull them wrongly.
     part.frustumCulled = false
     group.add(part)
   }
-  // Only an aircraft is picked: the discs, the stalks and the ring do not take the pointer.
-  for (const part of [discs, stalks, ring]) part.raycast = () => undefined
-  for (const mesh of [bodies, casings, discs]) mesh.count = 0
+  // Only an aircraft is picked: its nose, the discs, the stalks and the ring do not take the pointer.
+  for (const part of [noses, discs, stalks, ring]) part.raycast = () => undefined
+  for (const mesh of [bodies, casings, noses, discs]) mesh.count = 0
   stalks.geometry.setDrawRange(0, 0)
-  return { group, bodies, casings, discs, stalks, ring, keys: [] }
+  return { group, bodies, casings, noses, discs, stalks, ring, keys: [] }
 }
 
 export function paintAircraft(parts: AircraftParts, palette: ScenePalette): void {
   parts.casings.material.color.set(palette.casing)
+  parts.noses.material.color.set(palette.casing)
   parts.stalks.material.color.set(palette.casing)
   parts.ring.material.color.set(palette.accent)
 }
 
+/** How far a stale aircraft's colour fades towards the muted one: still its own, plainly old. */
+export const STALE_FADE = 0.55
+
 const pose = new Object3D()
 const tint = new Color()
+const muted = new Color()
+const heading = new Quaternion()
 const UP = new Vector3(0, 1, 0)
 const normal = new Vector3()
 
@@ -277,14 +332,22 @@ export function restOnGround(
   object.position.set(x, Math.max(centre, (west + east + north + south) / 4) + lift, z)
 }
 
+/** One aircraft to draw: where and how fresh it is, and its colour's index (`useAircraftColours`). */
+export interface ToDraw {
+  readonly key: string
+  readonly drawn: Drawn
+  readonly colour: number
+}
+
 /**
- * Writes this frame's aircraft into the parts. Live, an aircraft is the accent;
- * stale, the muted colour; lost, only a muted disc where it was last known. Each
- * is enlarged to stay MIN_SPAN_PX across from wherever the camera is.
+ * Writes this frame's aircraft into the parts. Live, an aircraft is its own colour;
+ * stale, that colour faded towards the muted one; lost, only a muted disc where it
+ * was last known. Its nose and its disc's wedge point where it heads. Each is
+ * enlarged to stay MIN_SPAN_PX across from wherever the camera is.
  */
 export function writeAircraft(
   parts: AircraftParts,
-  aircraft: readonly { readonly key: string; readonly drawn: Drawn }[],
+  aircraft: readonly ToDraw[],
   camera: { readonly x: number; readonly y: number; readonly z: number },
   fovDeg: number,
   viewportPx: number,
@@ -294,11 +357,12 @@ export function writeAircraft(
 ): void {
   const stalk = parts.stalks.geometry.getAttribute('position') as Float32BufferAttribute
   parts.ring.visible = false
+  muted.set(palette.gridMajor)
   let bodies = 0
   let discs = 0
   let stalks = 0
   parts.keys.length = 0
-  for (const { key, drawn } of aircraft) {
+  for (const { key, drawn, colour } of aircraft) {
     if (discs >= parts.discs.instanceMatrix.count) break
     const { x, y, z, yawRad, groundY } = drawn.placement
     const scale = screenScale(
@@ -307,13 +371,18 @@ export function writeAircraft(
       viewportPx,
     )
     const current = drawn.freshness !== 'lost'
-    const colour = drawn.freshness === 'live' ? palette.accent : palette.gridMajor
+    const own = palette.aircraft[colour % Math.max(1, palette.aircraft.length)] ?? palette.accent
+    tint.set(own)
+    if (drawn.freshness === 'stale') tint.lerp(muted, STALE_FADE)
+    if (!current) tint.copy(muted)
 
     restOnGround(pose, ground, x, z, (SPAN_M / 2) * scale)
+    // Turned about the ground's own up, so the wedge points the heading on a slope too.
+    pose.quaternion.multiply(heading.setFromAxisAngle(UP, yawRad))
     pose.scale.setScalar(scale)
     pose.updateMatrix()
     parts.discs.setMatrixAt(discs, pose.matrix)
-    parts.discs.setColorAt(discs, tint.set(current ? colour : palette.gridMajor))
+    parts.discs.setColorAt(discs, tint)
     discs += 1
     if (key === selected) {
       restOnGround(parts.ring, ground, x, z, SPAN_M * 1.05 * scale)
@@ -327,7 +396,8 @@ export function writeAircraft(
     pose.rotation.set(0, yawRad, 0)
     pose.updateMatrix()
     parts.bodies.setMatrixAt(bodies, pose.matrix)
-    parts.bodies.setColorAt(bodies, tint.set(colour))
+    parts.bodies.setColorAt(bodies, tint)
+    parts.noses.setMatrixAt(bodies, pose.matrix)
     pose.scale.setScalar(scale * CASING_SCALE)
     pose.updateMatrix()
     parts.casings.setMatrixAt(bodies, pose.matrix)
@@ -342,8 +412,9 @@ export function writeAircraft(
   }
   parts.bodies.count = bodies
   parts.casings.count = bodies
+  parts.noses.count = bodies
   parts.discs.count = discs
-  for (const mesh of [parts.bodies, parts.casings, parts.discs]) {
+  for (const mesh of [parts.bodies, parts.casings, parts.noses, parts.discs]) {
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true
   }
@@ -357,13 +428,22 @@ export function writeAircraft(
 
 export function disposeAircraft(parts: AircraftParts): void {
   parts.bodies.geometry.dispose()
+  parts.noses.geometry.dispose()
   parts.discs.geometry.dispose()
   parts.stalks.geometry.dispose()
   parts.ring.geometry.dispose()
-  for (const part of [parts.bodies, parts.casings, parts.discs, parts.stalks, parts.ring]) {
+  for (const part of [
+    parts.bodies,
+    parts.casings,
+    parts.noses,
+    parts.discs,
+    parts.stalks,
+    parts.ring,
+  ]) {
     part.material.dispose()
   }
   parts.bodies.dispose()
   parts.casings.dispose()
+  parts.noses.dispose()
   parts.discs.dispose()
 }
