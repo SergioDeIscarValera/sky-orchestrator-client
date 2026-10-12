@@ -15,6 +15,7 @@ interface Reading {
   readonly triangles: number
   readonly geometries: number
   readonly textures: number
+  readonly gpuBytes: number | null
 }
 
 function read(telemetry: TelemetryStore): Reading {
@@ -26,8 +27,11 @@ function read(telemetry: TelemetryStore): Reading {
     triangles: sampler.triangles,
     geometries: sampler.geometries,
     textures: sampler.textures,
+    gpuBytes: sampler.gpuMemory()?.bytes ?? null,
   }
 }
+
+const MEBIBYTE = 1024 * 1024
 
 /**
  * The developer overlay, with `?stats` (NFR-OBS-05, NFR-PERF-01); the sampler is then on window
@@ -66,6 +70,8 @@ export function StatsOverlay() {
       <dd>{reading.geometries}</dd>
       <dt>textures</dt>
       <dd>{reading.textures}</dd>
+      <dt>GPU memory</dt>
+      <dd>{reading.gpuBytes === null ? '–' : `${(reading.gpuBytes / MEBIBYTE).toFixed(1)} MB`}</dd>
     </dl>
   )
 }

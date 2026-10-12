@@ -3,6 +3,8 @@ export interface Sample {
     readonly aircraftSn: string
     readonly takenAtMs: number
     readonly sentAtMs: number
+    /** The sample as soc-cloud broadcast it (contracts/broadcast/telemetry.schema.json). */
+    readonly payload: Readonly<Record<string, unknown>>
 }
 
 export interface Summary {
