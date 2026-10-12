@@ -51,11 +51,28 @@ The console: one persistent 3D scene of the farm with floating panels
   load is named in the note, and the ground stays flat. In development Vite
   serves the models in `SOC_SITE_DIR`.
 - **The view in the URL** (`NFR-UX-03`): the rail opens and closes a panel
-  beside it, kept as `?panel=` with the selection (`?fleet=<id>`, or an
-  aircraft as `?gateway=<sn>&aircraft=<sn>`), so a link shared on the LAN opens
+  beside it, kept as `?panel=` with the selection (`?fleet=<id>`, a geofence as
+  `?geofence=<id>`, or an aircraft as `?gateway=<sn>&aircraft=<sn>`), so a link
+  shared on the LAN opens
   the same view; a value the console cannot read is left out, and Escape
   closes the open panel (`NFR-UX-04`). The panels' content arrives with their
   milestones, each saying when.
+- **Geofences** (`FR-GEO-01` to `FR-GEO-04`): the geofence panel lists the
+  organization's geofences, each with how it was made and its ceiling; one
+  selected shows its figures in the inspector, with Edit, Duplicate and Retire.
+  New draws one on the terrain: each click on the ground places a vertex, a
+  click on the first one or Enter closes the ring, and then each vertex drags,
+  each edge bends from its middle, Delete removes the vertex chosen, the arrow
+  keys nudge it a metre (ten with Shift) and Ctrl or ⌘ Z undoes a step. The
+  area and perimeter follow every step; edges that meet show in the danger
+  colour, and Save names every reason the geofence is not valid yet. Generate
+  grows one round the waylines chosen, by a margin from 5 to 100 m, previewed
+  as the slider moves, within `geofence_max_vertices`; reshaped by hand, it is
+  saved as drawn. Each vertex is placed and measured on the scene's frame
+  (`src/scene/siteFrame.ts`), so it is measured where it is drawn. The open
+  geofence outlives the panel: closing it puts the drawing away, opening it
+  brings it back. The stack's envelope reaches the console with the operations
+  (M4); until then the ceiling is held to being above zero.
 - **The organization kept live** (ADR-0007): while an organization is open,
   the console listens on its private topic `org:<id>:soc:state`, where the
   database's triggers announce each change to a stack, a device, a fleet or a
@@ -67,6 +84,11 @@ The console: one persistent 3D scene of the farm with floating panels
   with their stack's link; the live fleets; registering, changing (the wire
   identity too) and retiring a fleet, each settled once the fleets were read
   again. A refusal names the field the database's constraint is about.
+- **The geofences' and waylines' data** (`FR-GEO-02`, `FR-WAY-09`): the
+  organization's geofences and waylines in name order, read again on each change
+  of the state topic; creating, changing and retiring each, as an editor or an
+  owner. A position the console cannot read or write is refused, never guessed,
+  and a retired row changes no more.
 - **The fleet panel** (`FR-FLE-02`): the organization's aircraft in one list,
   each with its colour: its fleets first, with their model and presence, then the
   aircraft its stacks announced that are in no fleet, marked _Not registered_. An
@@ -178,19 +200,20 @@ The other panels' content arrives with their milestones ([roadmap](../../docs/ro
 
 ## How it is built
 
-| Directory           | What it holds                                                                                                                                                                                                                     |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/config`        | The runtime configuration and its checks                                                                                                                                                                                          |
-| `src/backend`       | `Backend`, everything the web asks of Supabase, and its Supabase implementation; components see only the interface                                                                                                                |
-| `src/account`       | The session (`useAccountState`), sign-in, sign-out, the account menu                                                                                                                                                              |
-| `src/organizations` | The organization gate, the picker, the switcher, the per-device choice, and `organizationKey`, which every organization's query key starts with                                                                                   |
-| `src/telemetry`     | The telemetry sample and its contract, the console's store of each aircraft's latest samples and takeoff point, their freshness and their words, the development replay (`replay.ts`)                                             |
-| `src/fleets`        | The catalogue's, devices' and fleets' queries and writes; `useLiveState`, which keeps the open organization's queries current from its state topic; the fleet panel, the fleet's and the aircraft's details, and their formatting |
-| `src/app`           | The application, the shell, the scene's region (loaded lazily), the shared card layout and styles                                                                                                                                 |
-| `src/scene`         | The scene: the site and its ground, the baked terrain, the camera and its limits (`flyTo`), the aircraft and their labels, the palette from the tokens, the frame sampler and the statistics overlay, the map tools               |
-| `src/geometry`      | The local frame (ADR-0009, ADR-0014): the projection at the organization's position and its inverse, held to `contracts/geometry/projection.json`                                                                                 |
-| `src/theme`         | The tokens, the theme switch and the favicon drawn from them                                                                                                                                                                      |
-| `src/test`          | The fakes the tests use: `FakeBackend` for components, `FakeSupabase` behind `fetch` for the Supabase implementation                                                                                                              |
+| Directory           | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/config`        | The runtime configuration and its checks                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `src/backend`       | `Backend`, everything the web asks of Supabase, and its Supabase implementation for the fleets and the plans; every position is converted once, in `positions.ts`; components see only the interface                                                                                                                                                                                                                                                                                            |
+| `src/account`       | The session (`useAccountState`), sign-in, sign-out, the account menu                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `src/organizations` | The organization gate, the picker, the switcher, the per-device choice, and `organizationKey`, which every organization's query key starts with                                                                                                                                                                                                                                                                                                                                                 |
+| `src/telemetry`     | The telemetry sample and its contract, the console's store of each aircraft's latest samples and takeoff point, their freshness and their words, the development replay (`replay.ts`)                                                                                                                                                                                                                                                                                                           |
+| `src/fleets`        | The catalogue's, devices' and fleets' queries and writes; `useLiveState`, which keeps the open organization's queries current from its state topic; the fleet panel, the fleet's and the aircraft's details, and their formatting                                                                                                                                                                                                                                                               |
+| `src/plans`         | The geofences' and waylines' queries and writes, under the organization's key, kept current through the `STALE` table in `src/fleets/data.ts`; the geofence being drawn (`geofenceDrawing.ts`) and its editor's steps and undo (`geofenceEditor.ts`), its keys, its generation round waylines, and the geofence panel, editor and detail                                                                                                                                                        |
+| `src/app`           | The application, the shell, the scene's region (loaded lazily), the shared card layout and styles                                                                                                                                                                                                                                                                                                                                                                                               |
+| `src/scene`         | The scene: the site and its ground and frame, the baked terrain, the camera and its limits (`flyTo`), the aircraft and their labels, the geofences and the one being edited with its handles, the ground under the pointer and the editor holding its clicks (`groundTool.ts`), the palette from the tokens, the frame sampler and the statistics overlay, the map tools                                                                                                                        |
+| `src/geometry`      | The geometry engine (ADR-0009): the local frame and its inverse; the plane's predicates, exact on Shewchuk's orientation (robust-predicates); Sky Orchestrator's metric and envelope; the circle and grid tools; the geofence grown round the waylines; the bake; the design and its bake as design.schema.json writes them, read back refusing what the schema refuses (`designJson.ts`, FR-WAY-09). Each held to its golden vectors in `contracts/geometry/`, which libs/soc-geo checks again |
+| `src/theme`         | The tokens, the theme switch and the favicon drawn from them                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `src/test`          | The fakes the tests use: `FakeBackend` for components, `FakeSupabase` behind `fetch` for the Supabase implementation                                                                                                                                                                                                                                                                                                                                                                            |
 
 A query about one organization's data uses `organizationKey(id, ...)`, so that
 switching organization drops it (`FR-AUT-02`).
@@ -363,3 +386,12 @@ for `/favicon.ico`.
 | A viewer's change or retirement of a fleet                                  | Row security leaves the row untouched without an error; the console counts the rows returned and says nothing changed                                               |
 | A fleet's write the database refuses                                        | The refusal names the field its constraint is about: the name, the model, the airframe serial, the aircraft, its stack                                              |
 | A viewer opens a fleet or an aircraft seen                                  | Edit, Retire and Register stay focusable, say why they do nothing, and open nothing; the database refuses the write anyway                                          |
+| A geofence or a wayline the database refuses                                | The refusal names the field its constraint is about: the name, the polygon, the height or the margin; the takeoff, the speeds, the waypoints or the bake version    |
+| A stored position that is not two numbers in range                          | The read fails, saying the position is not valid; nothing is shown in its place. A position to write is refused before any request is sent                          |
+| A viewer's geofence or wayline write                                        | An insert is refused, saying the role may not change it; a change or a retirement touches no row and says nothing changed                                           |
+| A change or a retirement of a retired geofence or wayline                   | Refused, saying it does not change: it stays retired in the database and in no list                                                                                 |
+| An organization with no position in Virtual Origen                          | Its geofences list; New, Generate and Edit stay off: nothing is drawn or measured off the map                                                                       |
+| A drag on a handle                                                          | It stops at the handle: the camera never orbits under it, and a click on a vertex chooses it rather than placing one where it is                                    |
+| A geofence that crosses itself, has a repeated vertex or no area            | The edges about it show in the danger colour as it is drawn, and Save refuses it naming why; nothing is written                                                     |
+| The geofence panel closed with a drawing open                               | The drawing is kept as it was, with its undo; the panel opens back on it                                                                                            |
+| The stack's envelope not known yet (until M4)                               | A geofence's ceiling is held to being above zero only; the envelope's ceiling is checked when the operations bring it                                               |

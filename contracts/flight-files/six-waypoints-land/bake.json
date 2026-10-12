@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0.0",
+  "takeoff_security_height_m": 25.0,
+  "reference_point": [
+    -4.725,
+    41.653
+  ],
+  "speed_ms": 6.5,
+  "finish_action": "land",
+  "waypoints": [
+    {
+      "index": 0,
+      "position": [
+        -4.7251,
+        41.6532
+      ],
+      "height_m": 40.0
+    },
+    {
+      "index": 1,
+      "position": [
+        -4.7244,
+        41.6536
+      ],
+      "height_m": 40.0,
+      "speed_ms": 4.0
+    },
+    {
+      "index": 2,
+      "position": [
+        -4.7238,
+        41.6534
+      ],
+      "height_m": 55.5
+    },
+    {
+      "index": 3,
+      "position": [
+        -4.7236,
+        41.6527
+      ],
+      "height_m": 60.0,
+      "speed_ms": 9.0
+    },
+    {
+      "index": 4,
+      "position": [
+        -4.7242,
+        41.6522
+      ],
+      "height_m": 45.0
+    },
+    {
+      "index": 5,
+      "position": [
+        -4.7249,
+        41.6525
+      ],
+      "height_m": 30.0
+    }
+  ],
+  "distance_m": 372.852374,
+  "duration_s": 61.001,
+  "violations": []
+}

@@ -77,6 +77,12 @@ class Resolution(unittest.TestCase):
         self.write(".venv/lib/README.md", "see [gone](missing.md)")
         self.assertEqual(self.broken_targets(), [])
 
+    def test_vendored_files_are_skipped_but_not_their_readme(self) -> None:
+        # Sky Orchestrator's own prose links into its tree; this repository's README there does not.
+        self.write("contracts/sky-orchestrator/wpml/subset.md", "see [adr](../../docs/0017.md)")
+        self.write("contracts/sky-orchestrator/README.md", "see [gone](missing.md)")
+        self.assertEqual(self.broken_targets(), ["missing.md"])
+
     def test_exit_status_follows_the_result(self) -> None:
         self.write("README.md", "see [gone](missing.md)")
         with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):

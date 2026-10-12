@@ -45,6 +45,7 @@ type Placed = ReadonlyMap<string, Placement>
 function selectedKey(selection: Selection | null, fleets: readonly Fleet[] | undefined) {
   if (selection === null) return null
   if (selection.kind === 'device') return aircraftKey(selection.gatewaySn, selection.aircraftSn)
+  if (selection.kind !== 'fleet') return null
   const fleet = fleets?.find(({ id }) => id === selection.fleetId)
   return fleet === undefined ? null : aircraftKey(fleet.gatewaySn, fleet.aircraftSn)
 }

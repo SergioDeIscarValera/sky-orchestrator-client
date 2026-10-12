@@ -21,6 +21,7 @@ const LIGHT: ScenePalette = {
   gridMinor: 'gainsboro',
   gridMajor: 'gray',
   accent: 'teal',
+  danger: 'tomato',
   casing: 'darkslategray',
   aircraft: ['teal', 'royalblue', 'mediumpurple', 'hotpink', 'olivedrab', 'peru'],
 }

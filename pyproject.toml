@@ -7,12 +7,16 @@ members = ["database", "infra/migrate", "libs/soc-config", "libs/soc-log", "libs
 [dependency-groups]
 dev = [
   "asyncpg-stubs==0.32.0",
+  # Holds contracts' examples to their schemas in the units without a schema of their own.
+  "jsonschema-rs==0.58.6",
   "mypy==2.4.0",
-  # A test oracle only (ADR-0009): it checks contracts/geometry, never runs in a service.
+  # Test oracles only (ADR-0009): they check contracts/geometry, never run in a service.
   "pyproj==3.8.0",
+  "shapely==2.2.0",
   "pytest==9.1.1",
   "pytest-asyncio==1.4.0",
   "ruff==0.16.10",
+  "types-shapely==2.1.0.20260728",
 ]
 
 [tool.ruff]

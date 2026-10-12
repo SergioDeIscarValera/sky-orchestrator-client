@@ -8,6 +8,7 @@ dependencies = [
   "msgspec==0.22.0",
   "soc-config",
   "soc-db",
+  "soc-geo",
   "soc-log",
   "soc-supervision",
 ]
@@ -26,6 +27,7 @@ build-backend = "uv_build"
 soc-config = { workspace = true }
 soc-database = { workspace = true }
 soc-db = { workspace = true }
+soc-geo = { workspace = true }
 soc-log = { workspace = true }
 soc-migrate = { workspace = true }
 soc-supervision = { workspace = true }

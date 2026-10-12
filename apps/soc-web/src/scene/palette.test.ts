@@ -9,6 +9,7 @@ const LIGHT = {
   border: 'gainsboro',
   muted: 'gray',
   primary: 'teal',
+  danger: 'tomato',
   casing: 'darkslategray',
   ...Object.fromEntries(AIRCRAFT.map((colour, index) => [`aircraft-${String(index + 1)}`, colour])),
 }
@@ -39,6 +40,7 @@ describe("the scene's palette (FR-SCN-08)", () => {
       gridMinor: 'gainsboro',
       gridMajor: 'gray',
       accent: 'teal',
+      danger: 'tomato',
       casing: 'darkslategray',
       aircraft: AIRCRAFT,
     })

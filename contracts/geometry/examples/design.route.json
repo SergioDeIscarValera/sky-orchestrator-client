@@ -1,0 +1,97 @@
+{
+  "design": {
+    "schema_version": "1.0.0",
+    "takeoff": [
+      -4.7245,
+      41.6523
+    ],
+    "default_height_m": 30.0,
+    "takeoff_security_height_m": 20.0,
+    "speed_ms": 5.0,
+    "finish_action": "return_home",
+    "primitives": [
+      {
+        "kind": "route",
+        "points": [
+          {
+            "position": [
+              -4.7245,
+              41.65255
+            ]
+          },
+          {
+            "position": [
+              -4.72405,
+              41.65255
+            ]
+          },
+          {
+            "position": [
+              -4.72405,
+              41.6523
+            ],
+            "height_m": 35.0
+          }
+        ]
+      },
+      {
+        "kind": "points",
+        "points": [
+          {
+            "position": [
+              -4.7243,
+              41.6523
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "baked": {
+    "schema_version": "1.0.0",
+    "takeoff_security_height_m": 20.0,
+    "reference_point": [
+      -4.7245,
+      41.6523
+    ],
+    "speed_ms": 5.0,
+    "finish_action": "return_home",
+    "waypoints": [
+      {
+        "index": 0,
+        "position": [
+          -4.7245,
+          41.65255
+        ],
+        "height_m": 30.0
+      },
+      {
+        "index": 1,
+        "position": [
+          -4.72405,
+          41.65255
+        ],
+        "height_m": 30.0
+      },
+      {
+        "index": 2,
+        "position": [
+          -4.72405,
+          41.6523
+        ],
+        "height_m": 35.0
+      },
+      {
+        "index": 3,
+        "position": [
+          -4.7243,
+          41.6523
+        ],
+        "height_m": 30.0
+      }
+    ],
+    "distance_m": 113.756227,
+    "duration_s": 22.751,
+    "violations": []
+  }
+}

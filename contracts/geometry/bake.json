@@ -1,0 +1,1220 @@
+{
+  "description": "Designs and the waylines the console's bake gives them (FR-WAY-07), at origin with max_arc_spacing_m, against each case's envelope. libs/soc-geo holds every bake to the design schema and to the requirement: its violations are exactly what the Python validator finds, its distance is Sky Orchestrator's, no leg is longer than the envelope's and no two points are closer than half a metre.",
+  "x-version": "1.0.0",
+  "origin": [
+    -4.7245,
+    41.6523
+  ],
+  "max_arc_spacing_m": 10,
+  "cases": [
+    {
+      "name": "a route and a point of interest",
+      "design": {
+        "schema_version": "1.0.0",
+        "takeoff": [
+          -4.7245,
+          41.6523
+        ],
+        "default_height_m": 30,
+        "takeoff_security_height_m": 20,
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "primitives": [
+          {
+            "kind": "route",
+            "points": [
+              {
+                "position": [
+                  -4.7245,
+                  41.652552150029265
+                ]
+              },
+              {
+                "position": [
+                  -4.72405598223929,
+                  41.652552150029265
+                ]
+              },
+              {
+                "position": [
+                  -4.72405598223929,
+                  41.6523
+                ],
+                "height_m": 35
+              }
+            ]
+          },
+          {
+            "kind": "points",
+            "points": [
+              {
+                "position": [
+                  -4.724295991839673,
+                  41.6523
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "envelope": {
+        "geofence_center": {
+          "latitude_deg": 41.6523,
+          "longitude_deg": -4.7245
+        },
+        "geofence_radius_m": 1000,
+        "max_height_m": 120,
+        "max_home_distance_m": 1000,
+        "max_leg_m": 300,
+        "max_transit_m": 300,
+        "max_total_distance_m": 5000,
+        "max_waypoints": 200,
+        "max_horizontal_speed_ms": 15
+      },
+      "baked": {
+        "schema_version": "1.0.0",
+        "takeoff_security_height_m": 20,
+        "reference_point": [
+          -4.7245,
+          41.6523
+        ],
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "waypoints": [
+          {
+            "index": 0,
+            "position": [
+              -4.7245,
+              41.65255215002926
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 1,
+            "position": [
+              -4.724055982239292,
+              41.65255215002928
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 2,
+            "position": [
+              -4.7240559822392845,
+              41.6523
+            ],
+            "height_m": 35
+          },
+          {
+            "index": 3,
+            "position": [
+              -4.724295991839673,
+              41.65229999999999
+            ],
+            "height_m": 30
+          }
+        ],
+        "distance_m": 112.9073016269977,
+        "duration_s": 22.58146032539954,
+        "violations": []
+      }
+    },
+    {
+      "name": "twenty points of interest, ordered by the heuristic",
+      "design": {
+        "schema_version": "1.0.0",
+        "takeoff": [
+          -4.7245,
+          41.6523
+        ],
+        "default_height_m": 30,
+        "takeoff_security_height_m": 20,
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "primitives": [
+          {
+            "kind": "points",
+            "points": [
+              {
+                "position": [
+                  -4.72570004800192,
+                  41.651579571344946
+                ]
+              },
+              {
+                "position": [
+                  -4.725256030241209,
+                  41.652056855328915
+                ]
+              },
+              {
+                "position": [
+                  -4.724812012480499,
+                  41.65253413931289
+                ]
+              },
+              {
+                "position": [
+                  -4.724367994719788,
+                  41.65301142329686
+                ]
+              },
+              {
+                "position": [
+                  -4.723923976959078,
+                  41.65204784997073
+                ]
+              },
+              {
+                "position": [
+                  -4.723479959198368,
+                  41.6525251339547
+                ]
+              },
+              {
+                "position": [
+                  -4.725436037441497,
+                  41.65300241793867
+                ]
+              },
+              {
+                "position": [
+                  -4.724992019680787,
+                  41.65203884461254
+                ]
+              },
+              {
+                "position": [
+                  -4.724548001920077,
+                  41.65251612859651
+                ]
+              },
+              {
+                "position": [
+                  -4.724103984159366,
+                  41.652993412580486
+                ]
+              },
+              {
+                "position": [
+                  -4.723659966398656,
+                  41.652029839254354
+                ]
+              },
+              {
+                "position": [
+                  -4.725616044641786,
+                  41.65250712323832
+                ]
+              },
+              {
+                "position": [
+                  -4.725172026881075,
+                  41.65298440722229
+                ]
+              },
+              {
+                "position": [
+                  -4.724728009120365,
+                  41.65202083389617
+                ]
+              },
+              {
+                "position": [
+                  -4.724283991359655,
+                  41.652498117880135
+                ]
+              },
+              {
+                "position": [
+                  -4.723839973598944,
+                  41.652975401864104
+                ]
+              },
+              {
+                "position": [
+                  -4.7233959558382335,
+                  41.65201182853798
+                ]
+              },
+              {
+                "position": [
+                  -4.7253520340813635,
+                  41.65248911252195
+                ]
+              },
+              {
+                "position": [
+                  -4.7249080163206525,
+                  41.65296639650592
+                ]
+              },
+              {
+                "position": [
+                  -4.724463998559942,
+                  41.652002823179785
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "envelope": {
+        "geofence_center": {
+          "latitude_deg": 41.6523,
+          "longitude_deg": -4.7245
+        },
+        "geofence_radius_m": 1000,
+        "max_height_m": 120,
+        "max_home_distance_m": 1000,
+        "max_leg_m": 300,
+        "max_transit_m": 300,
+        "max_total_distance_m": 5000,
+        "max_waypoints": 200,
+        "max_horizontal_speed_ms": 15
+      },
+      "baked": {
+        "schema_version": "1.0.0",
+        "takeoff_security_height_m": 20,
+        "reference_point": [
+          -4.7245,
+          41.6523
+        ],
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "waypoints": [
+          {
+            "index": 0,
+            "position": [
+              -4.7242839913596555,
+              41.652498117880135
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 1,
+            "position": [
+              -4.724548001920077,
+              41.65251612859653
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 2,
+            "position": [
+              -4.7248120124804975,
+              41.652534139312884
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 3,
+            "position": [
+              -4.725352034081397,
+              41.65248911252196
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 4,
+            "position": [
+              -4.725616044641868,
+              41.652507123238365
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 5,
+            "position": [
+              -4.725436037441442,
+              41.653002417938765
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 6,
+            "position": [
+              -4.725172026881021,
+              41.65298440722233
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 7,
+            "position": [
+              -4.724908016320614,
+              41.652966396505924
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 8,
+            "position": [
+              -4.724367994719804,
+              41.65301142329686
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 9,
+            "position": [
+              -4.724103984159408,
+              41.65299341258051
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 10,
+            "position": [
+              -4.723839973598995,
+              41.65297540186415
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 11,
+            "position": [
+              -4.7234799591983085,
+              41.65252513395472
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 12,
+            "position": [
+              -4.723395955838164,
+              41.652011828537944
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 13,
+            "position": [
+              -4.72365996639863,
+              41.65202983925434
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 14,
+            "position": [
+              -4.723923976959074,
+              41.652047849970714
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 15,
+            "position": [
+              -4.724463998559943,
+              41.652002823179785
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 16,
+            "position": [
+              -4.724728009120361,
+              41.65202083389618
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 17,
+            "position": [
+              -4.724992019680788,
+              41.652038844612534
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 18,
+            "position": [
+              -4.725256030241228,
+              41.65205685532891
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 19,
+            "position": [
+              -4.725700048001888,
+              41.65157957134481
+            ],
+            "height_m": 30
+          }
+        ],
+        "distance_m": 665.693124421388,
+        "duration_s": 133.1386248842776,
+        "violations": []
+      }
+    },
+    {
+      "name": "a route, a circle and a grid, ordered exactly",
+      "design": {
+        "schema_version": "1.0.0",
+        "takeoff": [
+          -4.7245,
+          41.6523
+        ],
+        "default_height_m": 30,
+        "takeoff_security_height_m": 20,
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "primitives": [
+          {
+            "kind": "grid",
+            "area": [
+              [
+                -4.72329995199808,
+                41.65320053581881
+              ],
+              [
+                -4.722579923196927,
+                41.65320053581881
+              ],
+              [
+                -4.722579923196927,
+                41.65356075014633
+              ],
+              [
+                -4.72329995199808,
+                41.65356075014633
+              ]
+            ],
+            "line_spacing_m": 10,
+            "point_spacing_m": 15,
+            "height_m": 25
+          },
+          {
+            "kind": "circle",
+            "centre": [
+              -4.725460038401536,
+              41.65284032149128
+            ],
+            "radius_m": 30,
+            "clockwise": true,
+            "start_bearing_deg": 0
+          },
+          {
+            "kind": "route",
+            "points": [
+              {
+                "position": [
+                  -4.724259990399616,
+                  41.651939785672475
+                ]
+              },
+              {
+                "position": [
+                  -4.723779971198848,
+                  41.651939785672475
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "envelope": {
+        "geofence_center": {
+          "latitude_deg": 41.6523,
+          "longitude_deg": -4.7245
+        },
+        "geofence_radius_m": 1000,
+        "max_height_m": 120,
+        "max_home_distance_m": 1000,
+        "max_leg_m": 300,
+        "max_transit_m": 300,
+        "max_total_distance_m": 5000,
+        "max_waypoints": 200,
+        "max_horizontal_speed_ms": 15
+      },
+      "baked": {
+        "schema_version": "1.0.0",
+        "takeoff_security_height_m": 20,
+        "reference_point": [
+          -4.7245,
+          41.6523
+        ],
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "waypoints": [
+          {
+            "index": 0,
+            "position": [
+              -4.725101122298744,
+              41.652818018559195
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 1,
+            "position": [
+              -4.725130225264969,
+              41.65273182248989
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 2,
+            "position": [
+              -4.7251950684286905,
+              41.65265738399924
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 3,
+            "position": [
+              -4.725288624965487,
+              41.65260276960073
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 4,
+            "position": [
+              -4.725400756610502,
+              41.652573897556834
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 5,
+            "position": [
+              -4.725519312280892,
+              41.652573896566665
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 6,
+            "position": [
+              -4.725631444783273,
+              41.652602766737544
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 7,
+            "position": [
+              -4.7257250029418945,
+              41.65265737957332
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 8,
+            "position": [
+              -4.725789848316132,
+              41.65273181698086
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 9,
+            "position": [
+              -4.725818953842013,
+              41.65281801256405
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 10,
+            "position": [
+              -4.725809165349563,
+              41.65290662572096
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 11,
+            "position": [
+              -4.725761543422833,
+              41.65298805383171
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 12,
+            "position": [
+              -4.725681248532845,
+              41.6530534728553
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 13,
+            "position": [
+              -4.725576981864198,
+              41.65309579356882
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 14,
+            "position": [
+              -4.725460042412034,
+              41.65311042981884
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 15,
+            "position": [
+              -4.72534310252528,
+              41.6530957955221
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 16,
+            "position": [
+              -4.72523883459995,
+              41.65305347655017
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 17,
+            "position": [
+              -4.725158537767363,
+              41.65298805886783
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 18,
+            "position": [
+              -4.725110913422612,
+              41.65290663155254
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 19,
+            "position": [
+              -4.725101122298744,
+              41.652818018559195
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 20,
+            "position": [
+              -4.724259990399621,
+              41.65193978567247
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 21,
+            "position": [
+              -4.723779971198845,
+              41.65193978567246
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 22,
+            "position": [
+              -4.723209915002394,
+              41.653200571023966
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 23,
+            "position": [
+              -4.723029930065849,
+              41.65320057130585
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 24,
+            "position": [
+              -4.722849945129277,
+              41.653200571305916
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 25,
+            "position": [
+              -4.722669960192674,
+              41.65320057102417
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 26,
+            "position": [
+              -4.722669960318136,
+              41.65329060712909
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 27,
+            "position": [
+              -4.722849945171143,
+              41.65329060741083
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 28,
+            "position": [
+              -4.72302993002412,
+              41.65329060741076
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 29,
+            "position": [
+              -4.723209914877068,
+              41.65329060712887
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 30,
+            "position": [
+              -4.723209914751745,
+              41.65338064323236
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 31,
+            "position": [
+              -4.723029929982394,
+              41.65338064351426
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 32,
+            "position": [
+              -4.722849945213012,
+              41.65338064351435
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 33,
+            "position": [
+              -4.722669960443602,
+              41.653380643232616
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 34,
+            "position": [
+              -4.722669960569071,
+              41.65347067933472
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 35,
+            "position": [
+              -4.722849945254884,
+              41.65347067961644
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 36,
+            "position": [
+              -4.723029929940669,
+              41.653470679616355
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 37,
+            "position": [
+              -4.723209914626423,
+              41.65347067933444
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 38,
+            "position": [
+              -4.723209914501105,
+              41.65356071543512
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 39,
+            "position": [
+              -4.723029929898946,
+              41.65356071571702
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 40,
+            "position": [
+              -4.722849945296759,
+              41.65356071571713
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 41,
+            "position": [
+              -4.722669960694542,
+              41.6535607154354
+            ],
+            "height_m": 25
+          }
+        ],
+        "distance_m": 836.0360228507428,
+        "duration_s": 167.20720457014858,
+        "violations": []
+      }
+    },
+    {
+      "name": "legs longer than the stack allows, split",
+      "design": {
+        "schema_version": "1.0.0",
+        "takeoff": [
+          -4.7245,
+          41.6523
+        ],
+        "default_height_m": 30,
+        "takeoff_security_height_m": 20,
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "primitives": [
+          {
+            "kind": "route",
+            "points": [
+              {
+                "position": [
+                  -4.7245,
+                  41.65320053581881
+                ]
+              },
+              {
+                "position": [
+                  -4.7214998799952,
+                  41.65320053581881
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "envelope": {
+        "geofence_center": {
+          "latitude_deg": 41.6523,
+          "longitude_deg": -4.7245
+        },
+        "geofence_radius_m": 1000,
+        "max_height_m": 120,
+        "max_home_distance_m": 1000,
+        "max_leg_m": 60,
+        "max_transit_m": 300,
+        "max_total_distance_m": 5000,
+        "max_waypoints": 200,
+        "max_horizontal_speed_ms": 15
+      },
+      "baked": {
+        "schema_version": "1.0.0",
+        "takeoff_security_height_m": 20,
+        "reference_point": [
+          -4.7245,
+          41.6523
+        ],
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "waypoints": [
+          {
+            "index": 0,
+            "position": [
+              -4.724499999999999,
+              41.652750267927075
+            ],
+            "height_m": 25
+          },
+          {
+            "index": 1,
+            "position": [
+              -4.7245,
+              41.65320053581881
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 2,
+            "position": [
+              -4.723899975999345,
+              41.65320054208308
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 3,
+            "position": [
+              -4.72329995199848,
+              41.65320054521531
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 4,
+            "position": [
+              -4.722699927997338,
+              41.65320054521553
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 5,
+            "position": [
+              -4.722099903995853,
+              41.65320054208372
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 6,
+            "position": [
+              -4.721499879995199,
+              41.653200535818804
+            ],
+            "height_m": 30
+          }
+        ],
+        "distance_m": 349.39377558625,
+        "duration_s": 69.87875511725,
+        "violations": []
+      }
+    },
+    {
+      "name": "a point above the ceiling, reported not fixed",
+      "design": {
+        "schema_version": "1.0.0",
+        "takeoff": [
+          -4.7245,
+          41.6523
+        ],
+        "default_height_m": 30,
+        "takeoff_security_height_m": 20,
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "primitives": [
+          {
+            "kind": "route",
+            "points": [
+              {
+                "position": [
+                  -4.7245,
+                  41.652750267909404
+                ]
+              },
+              {
+                "position": [
+                  -4.72389997599904,
+                  41.652750267909404
+                ],
+                "height_m": 150
+              }
+            ]
+          }
+        ]
+      },
+      "envelope": {
+        "geofence_center": {
+          "latitude_deg": 41.6523,
+          "longitude_deg": -4.7245
+        },
+        "geofence_radius_m": 1000,
+        "max_height_m": 120,
+        "max_home_distance_m": 1000,
+        "max_leg_m": 300,
+        "max_transit_m": 300,
+        "max_total_distance_m": 5000,
+        "max_waypoints": 200,
+        "max_horizontal_speed_ms": 15
+      },
+      "baked": {
+        "schema_version": "1.0.0",
+        "takeoff_security_height_m": 20,
+        "reference_point": [
+          -4.7245,
+          41.6523
+        ],
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "waypoints": [
+          {
+            "index": 0,
+            "position": [
+              -4.724499999999999,
+              41.6527502679094
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 1,
+            "position": [
+              -4.723899975999055,
+              41.65275026790943
+            ],
+            "height_m": 150
+          }
+        ],
+        "distance_m": 99.91964938217629,
+        "duration_s": 19.98392987643526,
+        "violations": [
+          {
+            "rule": "height_above_max",
+            "message": "waypoint 1 is at 150.0 m, above max_height_m 120.0 m",
+            "waypoint_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "points closer than half a metre, merged",
+      "design": {
+        "schema_version": "1.0.0",
+        "takeoff": [
+          -4.7245,
+          41.6523
+        ],
+        "default_height_m": 30,
+        "takeoff_security_height_m": 20,
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "primitives": [
+          {
+            "kind": "route",
+            "points": [
+              {
+                "position": [
+                  -4.724379995199808,
+                  41.652390053581875
+                ]
+              },
+              {
+                "position": [
+                  -4.724376395055802,
+                  41.652390053581875
+                ]
+              },
+              {
+                "position": [
+                  -4.724019980799232,
+                  41.652390053581875
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "envelope": {
+        "geofence_center": {
+          "latitude_deg": 41.6523,
+          "longitude_deg": -4.7245
+        },
+        "geofence_radius_m": 1000,
+        "max_height_m": 120,
+        "max_home_distance_m": 1000,
+        "max_leg_m": 300,
+        "max_transit_m": 300,
+        "max_total_distance_m": 5000,
+        "max_waypoints": 200,
+        "max_horizontal_speed_ms": 15
+      },
+      "baked": {
+        "schema_version": "1.0.0",
+        "takeoff_security_height_m": 20,
+        "reference_point": [
+          -4.7245,
+          41.6523
+        ],
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "waypoints": [
+          {
+            "index": 0,
+            "position": [
+              -4.724379995199808,
+              41.652390053581875
+            ],
+            "height_m": 30
+          },
+          {
+            "index": 1,
+            "position": [
+              -4.724019980799226,
+              41.652390053581875
+            ],
+            "height_m": 30
+          }
+        ],
+        "distance_m": 44.042260564783334,
+        "duration_s": 8.808452112956667,
+        "violations": []
+      }
+    },
+    {
+      "name": "nothing drawn",
+      "design": {
+        "schema_version": "1.0.0",
+        "takeoff": [
+          -4.7245,
+          41.6523
+        ],
+        "default_height_m": 30,
+        "takeoff_security_height_m": 20,
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "primitives": []
+      },
+      "envelope": {
+        "geofence_center": {
+          "latitude_deg": 41.6523,
+          "longitude_deg": -4.7245
+        },
+        "geofence_radius_m": 1000,
+        "max_height_m": 120,
+        "max_home_distance_m": 1000,
+        "max_leg_m": 300,
+        "max_transit_m": 300,
+        "max_total_distance_m": 5000,
+        "max_waypoints": 200,
+        "max_horizontal_speed_ms": 15
+      },
+      "baked": {
+        "schema_version": "1.0.0",
+        "takeoff_security_height_m": 20,
+        "reference_point": [
+          -4.7245,
+          41.6523
+        ],
+        "speed_ms": 5,
+        "finish_action": "return_home",
+        "waypoints": [],
+        "distance_m": 0,
+        "duration_s": 0,
+        "violations": [
+          {
+            "rule": "no_waypoints",
+            "message": "nothing is drawn to fly"
+          }
+        ]
+      }
+    }
+  ]
+}

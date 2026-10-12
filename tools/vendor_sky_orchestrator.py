@@ -33,7 +33,17 @@ ROOT = Path(__file__).resolve().parents[1]
 DESTINATION = ROOT / "contracts" / "sky-orchestrator"
 PROVENANCE = "vendored.json"
 CHECKSUMS = "vendored.sha256"
-VENDORED_TREES = ("mqtt", "wayline")
+VENDORED_TREES = ("mqtt", "wayline", "msdk", "wpml")
+#: What SOC takes from the application's contracts: the geodesy every implementation
+#: reproduces, the mission plan so-wayline turns a flight file into, and the WPML
+#: subset it accepts (ADR-0009, FR-WAY-08, FR-WAY-11). The phone bridge's own API and
+#: messages are not SOC's.
+MSDK_AND_WPML = (
+    PurePosixPath("msdk/geodesy-cases.json"),
+    PurePosixPath("msdk/mission-plan.schema.json"),
+    PurePosixPath("msdk/examples/mission-plan.square.json"),
+    PurePosixPath("wpml/supported-subset.md"),
+)
 SOURCE_PREFIX = PurePosixPath("contracts")
 SOURCE_TREES = tuple(str(SOURCE_PREFIX / tree) for tree in VENDORED_TREES)
 
@@ -42,6 +52,8 @@ def wanted(path: PurePosixPath) -> bool:
     relative = path.relative_to(SOURCE_PREFIX)
     if relative.parts[0] == "mqtt":
         return "internal" not in relative.parts and relative.suffix == ".json"
+    if relative.parts[0] in ("msdk", "wpml"):
+        return relative in MSDK_AND_WPML
     return relative == PurePosixPath("wayline/openapi.yaml")
 
 

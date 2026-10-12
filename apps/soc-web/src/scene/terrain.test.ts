@@ -18,6 +18,7 @@ const LIGHT: ScenePalette = {
   gridMinor: 'gainsboro',
   gridMajor: 'slategray',
   accent: 'teal',
+  danger: 'tomato',
   casing: 'darkslategray',
   aircraft: ['teal', 'royalblue', 'mediumpurple', 'hotpink', 'olivedrab', 'peru'],
 }
@@ -27,6 +28,7 @@ const DARK: ScenePalette = {
   gridMinor: 'gray',
   gridMajor: 'silver',
   accent: 'teal',
+  danger: 'tomato',
   casing: 'whitesmoke',
   aircraft: ['teal', 'royalblue', 'mediumpurple', 'hotpink', 'olivedrab', 'peru'],
 }
