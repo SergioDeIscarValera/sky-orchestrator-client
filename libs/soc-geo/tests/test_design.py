@@ -38,9 +38,20 @@ def test_every_example_follows_the_schema(path: Path) -> None:
     assert list(SCHEMA.iter_errors(example(path))) == []
 
 
+def as_sky_orchestrators(position: list[float]) -> dict[str, float]:
+    """A stored position in Sky Orchestrator's form, as the flight file builder writes it."""
+    longitude, latitude = position
+    return {"latitude_deg": latitude, "longitude_deg": longitude}
+
+
 def test_a_bake_is_sky_orchestrators_plan_once_its_file_names_it() -> None:
     baked = example(CONTRACTS / "geometry" / "examples" / "design.route.json")["baked"]
     plan = {key: value for key, value in baked.items() if key not in SOC_ONLY}
+    plan["reference_point"] = as_sky_orchestrators(baked["reference_point"])
+    plan["waypoints"] = [
+        {"index": w["index"], **as_sky_orchestrators(w["position"]), "height_m": w["height_m"]}
+        for w in baked["waypoints"]
+    ]
     plan.update(
         wayline_id="3f2b8c1e-6a4d-4e2f-9b1a-7c5d3e8f0a12",
         fingerprint_md5="0123456789abcdef0123456789abcdef",
@@ -48,12 +59,23 @@ def test_a_bake_is_sky_orchestrators_plan_once_its_file_names_it() -> None:
     assert list(MISSION_PLAN.iter_errors(plan)) == []
 
 
+def test_positions_are_stored_in_geojson_order() -> None:
+    design = example(CONTRACTS / "geometry" / "examples" / "design.route.json")["design"]
+    longitude, latitude = design["takeoff"]
+    assert (longitude, latitude) == (-4.7245, 41.6523)
+    swapped = example(CONTRACTS / "geometry" / "examples" / "design.route.json")
+    swapped["design"]["takeoff"] = [41.6523, 181.0]
+    assert list(SCHEMA.iter_errors(swapped)) != []
+
+
 def test_a_bakes_distance_is_measured_in_sky_orchestrators_metric() -> None:
     baked = example(CONTRACTS / "geometry" / "examples" / "design.route.json")["baked"]
-    previous = Geodetic(**baked["reference_point"])
+    longitude, latitude = baked["reference_point"]
+    previous = Geodetic(latitude, longitude)
     total = 0.0
     for waypoint in baked["waypoints"]:
-        here = Geodetic(waypoint["latitude_deg"], waypoint["longitude_deg"])
+        longitude, latitude = waypoint["position"]
+        here = Geodetic(latitude, longitude)
         total += distance_m(previous, here)
         previous = here
     assert baked["distance_m"] == pytest.approx(total, abs=1e-6)

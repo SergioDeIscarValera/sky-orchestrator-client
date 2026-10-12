@@ -62,7 +62,10 @@ designer saves it and as its bake leaves it: the takeoff point, the default
 height, the takeoff security height, the speed, the finish, and the drawn
 primitives (routes, points, circles, grids), each point with its own height if
 it has one; then the baked waypoints, their distance in SO's metric, duration and
-violations. The bake is Sky Orchestrator's mission plan field for field, so a
-test holds the example's bake, with an identity and a fingerprint, to SO's
+violations. Positions are stored in GeoJSON order, `[longitude, latitude]`, and
+polygons as rings of them, not closed, as the units table says; DJI's order is
+written in one place only, the flight file builder. The bake carries what Sky
+Orchestrator's mission plan needs: a test turns the example's bake into SO's form,
+as the builder will, and holds it, with an identity and a fingerprint, to SO's
 vendored `mission-plan.schema.json`. `contracts/geometry/examples/` holds a route
 and its bake, and a circle and a grid not baked yet.

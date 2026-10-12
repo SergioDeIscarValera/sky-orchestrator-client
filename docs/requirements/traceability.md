@@ -58,7 +58,7 @@ documents: one row per requirement, the same priority, no row for anything else.
 | FR-WAY-04 | SHOULD | soc-web, libs | M3 | — | Planned |
 | FR-WAY-05 | SHOULD | soc-web, libs | M3 | — | Planned |
 | FR-WAY-06 | MUST | soc-web, libs | M3 | — | Planned |
-| FR-WAY-07 | MUST | soc-web, libs | M3 | `contracts/geometry/design.schema.json`, `libs/soc-geo/tests/test_design.py` | Partial: the design and its bake have their schema, 1.0.0, the bake Sky Orchestrator's mission plan field for field (an example held to SO's vendored schema), its distance in SO's metric; the bake itself and its golden vectors arrive with the TypeScript engine |
+| FR-WAY-07 | MUST | soc-web, libs | M3 | `contracts/geometry/design.schema.json`, `libs/soc-geo/tests/test_design.py` | Partial: the design and its bake have their schema, 1.0.0, positions in GeoJSON order as the units table says, the bake carrying what Sky Orchestrator's mission plan needs (an example, turned into SO's form, held to SO's vendored schema), its distance in SO's metric; the bake itself and its golden vectors arrive with the TypeScript engine |
 | FR-WAY-08 | MUST | soc-web, libs, soc-cloud | M3, M4 | `libs/soc-geo/tests/test_planar.py`, `libs/soc-geo/tests/test_sphere.py` | Partial: what the validation decides with: a leg's clearance from the geofence's boundary, none when any of it leaves, a leg across the arms of a U included; Sky Orchestrator's metric for its limits, held to its geodesy cases, a NaN refused rather than passed; the rules and their messages arrive with the validators |
 | FR-WAY-09 | MUST | soc-web, libs | M3 | — | Planned |
 | FR-WAY-10 | MUST | soc-web, libs | M3 | — | Planned |
