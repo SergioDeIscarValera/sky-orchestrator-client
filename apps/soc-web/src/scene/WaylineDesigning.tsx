@@ -232,7 +232,8 @@ export function WaylineDesigning({ site, origin }: Props) {
       {sketch.primitives.map(drawnLine)}
       {pending.length > 0 && (
         <>
-          {pending.length > 1 && (
+          {/* Points of interest are points: only a route or a grid's area is a line. */}
+          {pending.length > 1 && designing.tool !== 'points' && (
             <Line
               points={lay(pending.map(flat), designing.tool === 'grid')}
               color={palette.accent}
@@ -254,6 +255,15 @@ export function WaylineDesigning({ site, origin }: Props) {
           gapSize={2}
           depthTest={false}
           renderOrder={10}
+        />
+      )}
+      {covered.length > 0 && (
+        <Dots
+          points={covered.flatMap((line) =>
+            line.map(({ x, z }) => [x, site.ground(x, z) + LIFT_M, z] as const),
+          )}
+          colour={palette.accent}
+          size={5}
         />
       )}
       {covered.map((line, index) =>
