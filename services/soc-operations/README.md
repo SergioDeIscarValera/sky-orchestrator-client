@@ -84,8 +84,25 @@ that does not hold the two files in order.
 
 **Not this module's job.** The stack's envelope is not checked here: the bake
 reports what breaks it as violations, which refuse the build, and the preflight
-(FR-OPS-03) checks the envelope again when it arrives with the operations. Sky Orchestrator's own verdict on the file, its
-dry run, arrives with the stack session.
+(FR-OPS-03) checks the envelope again when it arrives with the operations.
+
+**Sky Orchestrator's verdict** (NFR-COMP-02). `soc_operations.so_acceptance` builds
+every golden case and runs so-wayline's own `ingest.validate` on it, from Sky
+Orchestrator's checkout and in its own interpreter, under three envelopes: a
+permissive one, Sky Orchestrator's defaults, and one tight enough to break every
+rule. Each reference file must be `VALID` under the permissive one, and every
+refusal must be the one `soc_geo.limits` predicts for the bake, rule by rule and
+waypoint by waypoint. Nothing of Sky Orchestrator's stack is touched:
+
+```bash
+uv run --frozen python -m soc_operations.so_acceptance \
+  --so-root ../sky-orchestrator --so-python <python with lxml and jsonschema-rs>
+```
+
+On 2026-10-12, against Sky Orchestrator's `develop` at `5172e08` (v0.4.2), both
+reference files were `VALID`, and all four refusing cases agreed, 45 findings in
+all. The HTTP dry run (`POST /v1/validations`) runs the same `ingest.validate`; it
+joins the end-to-end suite with the stack session.
 
 **Golden files.** `contracts/flight-files/` holds two reference waylines as text:
 each one's bake, the two XML files it builds, and the KMZ's SHA-256 and fingerprint.
@@ -109,6 +126,10 @@ uv run --frozen mypy services/soc-operations
 uv run --frozen pytest services/soc-operations/tests -m "not lane"   # gate
 uv run --frozen pytest services/soc-operations/tests -m lane         # lane, needs Docker
 ```
+
+`tests/test_so_acceptance.py` holds the acceptance check itself to a reduced Sky
+Orchestrator checkout: a refusal SOC did not predict, an acceptance where SOC
+predicts a refusal, and a checkout that does not run each fail it.
 
 The settings read exactly the keys the contract gives `soc-operations`, each
 removed key stops the start naming it, no secret shows; a refused configuration
