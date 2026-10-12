@@ -6,7 +6,7 @@ import { sampleOf, type TelemetrySample } from '../telemetry/sample'
 
 /** Where the recordings are kept (contracts/recordings, NFR-TEST-05). */
 export const RECORDINGS = fileURLToPath(
-  new URL('../../../../contracts/recordings', import.meta.url),
+  new URL('../../../../contracts/recordings/', import.meta.url),
 )
 
 /** One sample a console received, and when, on the browser's wall clock. */
