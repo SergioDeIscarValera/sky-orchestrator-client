@@ -34,8 +34,10 @@ export function Shell() {
   return (
     <div className="bg-page relative h-dvh w-dvw overflow-hidden">
       <SceneRegion />
+      {/* The second row never grows past the window: a panel taller than it scrolls inside
+          itself, and the map tools stay in view. */}
       <div
-        className={`pointer-events-none absolute inset-0 grid grid-rows-[auto_1fr] gap-4 p-4 ${
+        className={`pointer-events-none absolute inset-0 grid grid-rows-[auto_minmax(0,1fr)] gap-4 p-4 ${
           selected ? 'grid-cols-[auto_1fr_360px]' : 'grid-cols-[auto_1fr]'
         }`}
       >

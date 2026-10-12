@@ -12,6 +12,8 @@ import { CANVAS_SETTINGS } from './canvas'
 import { Controls } from './Controls'
 import { GeofenceEditing } from './GeofenceEditing'
 import { Geofences } from './Geofences'
+import { WaylineDesigning } from './WaylineDesigning'
+import { Waylines } from './Waylines'
 import { useGroundTool } from './groundTool'
 import { Meter } from './Meter'
 import { SceneContents } from './SceneContents'
@@ -43,8 +45,14 @@ export default function Scene({ site, organizationId, origin, terrain }: Props) 
       onPointerMissed={(event) => {
         if (event.button !== 0) return
         const { use } = useGroundTool.getState()
-        if (use === null) select(null)
-        else use(event)
+        if (use === null) {
+          select(null)
+          return
+        }
+        // A click on the map takes the focus from the panel, so Enter finishes what is
+        // drawn rather than pressing the tool's button again.
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+        use(event)
       }}
     >
       <SceneContents site={site} flat={terrain === null} />
@@ -52,6 +60,8 @@ export default function Scene({ site, organizationId, origin, terrain }: Props) 
       <Aircraft origin={origin} site={site} />
       {origin !== null && <Geofences site={site} origin={origin} />}
       {origin !== null && panel === 'geofences' && <GeofenceEditing site={site} origin={origin} />}
+      {origin !== null && <Waylines site={site} origin={origin} />}
+      {origin !== null && panel === 'waylines' && <WaylineDesigning site={site} origin={origin} />}
       <Controls site={site} organizationId={organizationId} />
       <Meter />
     </Canvas>

@@ -11,6 +11,9 @@ import { CARD, QUIET_BUTTON } from './styles'
 const GeofenceDetail = lazy(() =>
   import('../plans/GeofenceDetail').then(({ GeofenceDetail: detail }) => ({ default: detail })),
 )
+const WaylineDetail = lazy(() =>
+  import('../plans/WaylineDetail').then(({ WaylineDetail: detail }) => ({ default: detail })),
+)
 
 /**
  * Whatever is selected, faded in afresh when the selection changes; nothing at all
@@ -25,7 +28,9 @@ export function Inspector() {
       ? selection.fleetId
       : selection.kind === 'geofence'
         ? selection.geofenceId
-        : `${selection.gatewaySn}/${selection.aircraftSn}`
+        : selection.kind === 'wayline'
+          ? selection.waylineId
+          : `${selection.gatewaySn}/${selection.aircraftSn}`
   return (
     <aside
       aria-label="Inspector"
@@ -49,6 +54,10 @@ export function Inspector() {
         ) : selection.kind === 'geofence' ? (
           <Suspense fallback={<Waiting>Loading the geofence…</Waiting>}>
             <GeofenceDetail geofenceId={selection.geofenceId} />
+          </Suspense>
+        ) : selection.kind === 'wayline' ? (
+          <Suspense fallback={<Waiting>Loading the wayline…</Waiting>}>
+            <WaylineDetail waylineId={selection.waylineId} />
           </Suspense>
         ) : (
           <DeviceDetail gatewaySn={selection.gatewaySn} aircraftSn={selection.aircraftSn} />

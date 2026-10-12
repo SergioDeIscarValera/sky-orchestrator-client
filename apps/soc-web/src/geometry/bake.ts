@@ -57,8 +57,12 @@ export interface BakeSettings {
   readonly origin: Geodetic
   /** The console's `max_arc_spacing_m`, for circles. */
   readonly maxArcSpacingM: number
-  /** The stack's limits, Sky Orchestrator's envelope. */
-  readonly envelope: Envelope
+  /**
+   * The stack's limits, Sky Orchestrator's envelope; null while the console does not
+   * know them (they arrive with FR-LNK-09): then no leg is split and no limit is checked,
+   * and the operation's preflight checks them before any flight.
+   */
+  readonly envelope: Envelope | null
 }
 
 export interface BakedWaypoint extends Geodetic {
@@ -78,6 +82,12 @@ export interface Baked {
   readonly durationS: number
   readonly violations: readonly Violation[]
 }
+
+/**
+ * The version of this bake, saved with every wayline it bakes (IR-WAY-01): a change to
+ * how it orders, merges or splits bumps it, so a saved wayline says what made it.
+ */
+export const BAKE_VERSION = '1.0.0'
 
 /** Points closer than this merge into the first of them (FR-WAY-07). */
 export const MERGE_M = 0.5
@@ -308,6 +318,7 @@ function merged(stops: readonly Stop[]): Stop[] {
  * the height carried along it, measured as Sky Orchestrator measures.
  */
 function split(stops: readonly Stop[], start: Stop, settings: BakeSettings): Stop[] {
+  if (settings.envelope === null) return [...stops]
   const longest = settings.envelope.maxLegM * (1 - SPLIT_SLACK)
   const geodetic = (at: Point) => geodeticAt(settings.origin, { eastM: at[0], northM: at[1] })
   const out: Stop[] = []
@@ -354,19 +365,22 @@ export function bake(design: Design, settings: BakeSettings): Baked {
     total += distanceM(previous, waypoint)
     previous = waypoint
   }
-  const found = envelopeViolations(
-    {
-      referencePoint: design.takeoff,
-      takeoffSecurityHeightM: design.takeoffSecurityHeightM,
-      speedMs: design.speedMs,
-      waypoints: waypoints.map((w) => ({
-        index: w.index,
-        position: w,
-        heightM: w.heightM,
-      })),
-    },
-    settings.envelope,
-  )
+  const found =
+    settings.envelope === null
+      ? []
+      : envelopeViolations(
+          {
+            referencePoint: design.takeoff,
+            takeoffSecurityHeightM: design.takeoffSecurityHeightM,
+            speedMs: design.speedMs,
+            waypoints: waypoints.map((w) => ({
+              index: w.index,
+              position: w,
+              heightM: w.heightM,
+            })),
+          },
+          settings.envelope,
+        )
   return {
     referencePoint: design.takeoff,
     takeoffSecurityHeightM: design.takeoffSecurityHeightM,

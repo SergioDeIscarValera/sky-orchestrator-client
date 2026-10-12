@@ -155,7 +155,7 @@ export function GeofenceEditor({ editing, origin }: Props) {
           <div className="flex items-center gap-2">
             <input
               id={ceilingId}
-              className={`${FIELD} w-28`}
+              className={FIELD.replace('w-full', 'w-28')}
               inputMode="decimal"
               value={ceilingText}
               aria-invalid={
