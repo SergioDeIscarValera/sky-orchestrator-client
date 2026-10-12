@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { readFileSync, writeFileSync } from 'node:fs'
 
-import { bake, MERGE_M, SPLIT_SLACK, type Baked, type Design, type Primitive } from './bake'
-import type { Envelope } from './limits'
+import { bake, MERGE_M, SPLIT_SLACK } from './bake'
+import { bakedToJson, designFromJson, envelopeFromSkyOrchestrator } from './designJson'
 import { eastNorth, type Geodetic } from './projection'
 import { distanceM } from './sphere'
 
@@ -118,105 +118,11 @@ const CASES: readonly { name: string; design: Json; envelope: Json }[] = [
   { name: 'nothing drawn', design: { ...BASE, primitives: [] }, envelope: ROOMY },
 ]
 
-/** A stored position, [longitude, latitude] in GeoJSON order. */
-const geodetic = (raw: unknown): Geodetic => {
-  const [longitudeDeg, latitudeDeg] = raw as [number, number]
-  return { latitudeDeg, longitudeDeg }
-}
-
-/** A position in Sky Orchestrator's envelope, which is its API's, not SOC's storage. */
-const fromSkyOrchestrator = (raw: unknown): Geodetic => {
-  const { latitude_deg: latitudeDeg, longitude_deg: longitudeDeg } = raw as {
-    latitude_deg: number
-    longitude_deg: number
-  }
-  return { latitudeDeg, longitudeDeg }
-}
-
-function designOf(raw: Json): Design {
-  const primitive = (p: Json): Primitive => {
-    const height = p.height_m === undefined ? {} : { heightM: p.height_m as number }
-    switch (p.kind) {
-      case 'route':
-      case 'points':
-        return {
-          kind: p.kind,
-          points: (p.points as Json[]).map((point) => ({
-            ...geodetic(point.position),
-            ...(point.height_m === undefined ? {} : { heightM: point.height_m as number }),
-          })),
-        }
-      case 'circle':
-        return {
-          kind: 'circle',
-          centre: geodetic(p.centre),
-          radiusM: p.radius_m as number,
-          clockwise: p.clockwise as boolean,
-          startBearingDeg: p.start_bearing_deg as number,
-          ...height,
-        }
-      default:
-        return {
-          kind: 'grid',
-          area: (p.area as Json[]).map(geodetic),
-          lineSpacingM: p.line_spacing_m as number,
-          pointSpacingM: p.point_spacing_m as number,
-          ...height,
-        }
-    }
-  }
-  return {
-    takeoff: geodetic(raw.takeoff),
-    defaultHeightM: raw.default_height_m as number,
-    takeoffSecurityHeightM: raw.takeoff_security_height_m as number,
-    speedMs: raw.speed_ms as number,
-    finishAction: raw.finish_action as Design['finishAction'],
-    primitives: (raw.primitives as Json[]).map(primitive),
-  }
-}
-
-function envelopeOf(raw: Json): Envelope {
-  return {
-    geofenceCenter: fromSkyOrchestrator(raw.geofence_center),
-    geofenceRadiusM: raw.geofence_radius_m as number,
-    maxHeightM: raw.max_height_m as number,
-    maxHomeDistanceM: raw.max_home_distance_m as number,
-    maxLegM: raw.max_leg_m as number,
-    maxTransitM: raw.max_transit_m as number,
-    maxTotalDistanceM: raw.max_total_distance_m as number,
-    maxWaypoints: raw.max_waypoints as number,
-    maxHorizontalSpeedMs: raw.max_horizontal_speed_ms as number,
-  }
-}
-
-/** The bake as design.schema.json writes it. */
-function written(baked: Baked) {
-  return {
-    schema_version: '1.0.0',
-    takeoff_security_height_m: baked.takeoffSecurityHeightM,
-    reference_point: [baked.referencePoint.longitudeDeg, baked.referencePoint.latitudeDeg],
-    speed_ms: baked.speedMs,
-    finish_action: baked.finishAction,
-    waypoints: baked.waypoints.map((w) => ({
-      index: w.index,
-      position: [w.longitudeDeg, w.latitudeDeg],
-      height_m: w.heightM,
-    })),
-    distance_m: baked.distanceM,
-    duration_s: baked.durationS,
-    violations: baked.violations.map((v) => ({
-      rule: v.rule,
-      message: v.message,
-      ...(v.waypointIndex === undefined ? {} : { waypoint_index: v.waypointIndex }),
-    })),
-  }
-}
-
 const baked = (input: (typeof CASES)[number]) =>
-  bake(designOf(input.design), {
+  bake(designFromJson(input.design), {
     origin: FARM,
     maxArcSpacingM: 10,
-    envelope: envelopeOf(input.envelope),
+    envelope: envelopeFromSkyOrchestrator(input.envelope),
   })
 
 const local = (point: Geodetic) => {
@@ -234,7 +140,7 @@ describe('the bake (FR-WAY-07)', () => {
     const { waypoints, violations } = baked(input)
     expect(violations).toEqual([])
     const where = waypoints.map(local)
-    const [route, poi] = designOf(input.design).primitives
+    const [route, poi] = designFromJson(input.design).primitives
     const indexOf = (point: Geodetic) => {
       const [east, north] = local(point)
       return where.findIndex((w) => Math.hypot(w[0] - east, w[1] - north) < 1e-6)
@@ -271,7 +177,7 @@ describe('the bake (FR-WAY-07)', () => {
         const q = path[i] ?? p
         return sum + Math.hypot(p[0] - q[0], p[1] - q[1])
       }, 0)
-    const points = designOf(input.design).primitives.flatMap((p) =>
+    const points = designFromJson(input.design).primitives.flatMap((p) =>
       p.kind === 'points' ? p.points.map(local) : [],
     )
     const permutations = (items: readonly number[]): number[][] =>
@@ -323,7 +229,7 @@ describe('the bake (FR-WAY-07)', () => {
   })
 
   it('keeps contracts/geometry/bake.json, which libs/soc-geo checks, its output', () => {
-    const cases = CASES.map((input) => ({ ...input, baked: written(baked(input)) }))
+    const cases = CASES.map((input) => ({ ...input, baked: bakedToJson(baked(input)) }))
     if (process.env.WRITE_VECTORS === '1') {
       writeFileSync(
         VECTORS,
