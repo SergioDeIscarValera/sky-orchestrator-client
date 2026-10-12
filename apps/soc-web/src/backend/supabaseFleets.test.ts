@@ -7,6 +7,8 @@ import type { StateChannel } from './supabaseFleets'
 
 const ORGANIZATION = '11111111-1111-4111-8111-111111111111'
 const FLEET_ID = '33333333-3333-4333-8333-333333333333'
+const GEOFENCE_ID = '44444444-4444-4444-8444-444444444444'
+const WAYLINE_ID = '55555555-5555-4555-8555-555555555555'
 const SPECS = 'https://www.dji.com/support/product/mavic-air-2'
 
 const FLEET_ROW = {
@@ -303,11 +305,39 @@ describe("the organization's state topic", () => {
       'device',
       'fleet',
       'command_intent',
+      'geofence',
+      'wayline',
     ])
     channel?.handlers.get('device')?.({ event: 'device', payload: { online: false } })
     expect(seen).toEqual([{ kind: 'device', payload: { online: false } }])
     stop()
     expect(channel?.unsubscribed).toBe(true)
+  })
+
+  it("passes on a geofence's and a wayline's broadcast as the database sent it", async () => {
+    const { backend, channels } = await signedIn()
+    const seen: StateEvent[] = []
+    backend.onState(ORGANIZATION, (event) => seen.push(event))
+    const channel = channels.get(`org:${ORGANIZATION}:soc:state`)
+    const geofence = {
+      id: GEOFENCE_ID,
+      name: 'Norte',
+      origin: 'drawn',
+      updated_at: '2026-10-11T10:12:00+00:00',
+      deleted_at: null,
+    }
+    const wayline = {
+      id: WAYLINE_ID,
+      name: 'Ronda',
+      updated_at: '2026-10-11T10:13:00+00:00',
+      deleted_at: '2026-10-11T10:14:00+00:00',
+    }
+    channel?.handlers.get('geofence')?.({ event: 'geofence', payload: geofence })
+    channel?.handlers.get('wayline')?.({ event: 'wayline', payload: wayline })
+    expect(seen).toEqual([
+      { kind: 'geofence', payload: geofence },
+      { kind: 'wayline', payload: wayline },
+    ])
   })
 
   it('says so on every join, since what was broadcast while away is lost', async () => {

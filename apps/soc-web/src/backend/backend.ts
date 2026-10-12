@@ -1,4 +1,5 @@
 import type { Link } from './link'
+import type { Geodetic } from '../geometry/projection'
 import type { LoadedSite } from '../scene/siteModel'
 import type { TelemetrySample } from '../telemetry/sample'
 
@@ -110,11 +111,88 @@ export type FleetChanges = Partial<FleetDraft>
 
 export type FleetField = keyof FleetDraft
 
+/** A geofence the organization drew, or generated around its waylines (IR-GEO, FR-GEO-02). */
+export type GeofenceOrigin = 'drawn' | 'generated'
+
+export interface Geofence {
+  readonly id: string
+  readonly name: string
+  /** The ring in order, not closed, at least three vertices (FR-GEO-04). */
+  readonly polygon: readonly Geodetic[]
+  /** Above the takeoff point. */
+  readonly maxHeightM: number
+  readonly origin: GeofenceOrigin
+  /** Set only when generated, from 5 to 100 m (FR-GEO-03). */
+  readonly marginM: number | null
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export interface GeofenceDraft {
+  readonly name: string
+  readonly polygon: readonly Geodetic[]
+  readonly maxHeightM: number
+  readonly origin: GeofenceOrigin
+  readonly marginM: number | null
+}
+
+export type GeofenceChanges = Partial<GeofenceDraft>
+
+export type GeofenceField = keyof GeofenceDraft
+
+/** One baked waypoint: where, how high above takeoff, and how fast when the bake set a speed. */
+export interface Waypoint {
+  readonly index: number
+  readonly position: Geodetic
+  readonly heightM: number
+  readonly speedMs?: number
+}
+
+export interface WaylineMetrics {
+  readonly waypointCount: number
+  readonly distanceM: number
+  readonly durationS: number
+}
+
+/** A wayline: its design as drawn and the baked result that flies, stored together (IR-WAY-01). */
+export interface Wayline {
+  readonly id: string
+  readonly name: string
+  readonly takeoff: Geodetic
+  readonly defaultHeightM: number
+  readonly speedMs: number
+  readonly design: Readonly<Record<string, unknown>>
+  readonly waypoints: readonly Waypoint[]
+  readonly metrics: WaylineMetrics
+  /** The version of the bake that produced `waypoints`. */
+  readonly bakeVersion: string
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export interface WaylineDraft {
+  readonly name: string
+  readonly takeoff: Geodetic
+  readonly defaultHeightM: number
+  readonly speedMs: number
+  readonly design: Readonly<Record<string, unknown>>
+  readonly waypoints: readonly Waypoint[]
+  readonly metrics: WaylineMetrics
+  readonly bakeVersion: string
+}
+
+export type WaylineChanges = Partial<WaylineDraft>
+
+export type WaylineField = keyof WaylineDraft
+
+/** Any field a write can name: a fleet's, a geofence's or a wayline's. */
+export type RefusedField = FleetField | GeofenceField | WaylineField
+
 /** A write the database refused, with the field it names when it names one. */
 export class FieldRefusedError extends BackendError {
-  readonly field: FleetField | null
+  readonly field: RefusedField | null
 
-  constructor(message: string, field: FleetField | null, code: string | null = null) {
+  constructor(message: string, field: RefusedField | null, code: string | null = null) {
     super(message, code)
     this.field = field
   }
@@ -126,7 +204,7 @@ export class FieldRefusedError extends BackendError {
  * whatever was read before then may be stale.
  */
 export interface StateEvent {
-  readonly kind: 'joined' | 'stack' | 'device' | 'fleet' | 'command_intent'
+  readonly kind: 'joined' | 'stack' | 'device' | 'fleet' | 'command_intent' | 'geofence' | 'wayline'
   readonly payload: Readonly<Record<string, unknown>>
 }
 
@@ -143,6 +221,14 @@ export interface Backend {
   registerFleet(organizationId: string, draft: FleetDraft): Promise<Fleet>
   changeFleet(fleetId: string, changes: FleetChanges): Promise<Fleet>
   retireFleet(fleetId: string): Promise<void>
+  geofences(organizationId: string): Promise<Geofence[]>
+  createGeofence(organizationId: string, draft: GeofenceDraft): Promise<Geofence>
+  changeGeofence(geofenceId: string, changes: GeofenceChanges): Promise<Geofence>
+  retireGeofence(geofenceId: string): Promise<void>
+  waylines(organizationId: string): Promise<Wayline[]>
+  createWayline(organizationId: string, draft: WaylineDraft): Promise<Wayline>
+  changeWayline(waylineId: string, changes: WaylineChanges): Promise<Wayline>
+  retireWayline(waylineId: string): Promise<void>
   onState(organizationId: string, listener: (event: StateEvent) => void): () => void
   onTelemetry(organizationId: string, listener: (sample: TelemetrySample) => void): () => void
   /** Whether the console's live topics reach it now (NFR-REL-07). */

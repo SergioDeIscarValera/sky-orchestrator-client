@@ -12,8 +12,9 @@ import {
   type FleetField,
   type StateEvent,
 } from './backend'
+import { rows } from './rows'
 
-const STATE_EVENTS = ['stack', 'device', 'fleet', 'command_intent'] as const
+const STATE_EVENTS = ['stack', 'device', 'fleet', 'command_intent', 'geofence', 'wayline'] as const
 
 /** The part of a Realtime channel the console uses, so it can be faked in tests. */
 export interface StateChannel {
@@ -145,12 +146,6 @@ export function untouched(): FieldRefusedError {
 
 function number(value: number | string | null): number | null {
   return value === null ? null : Number(value)
-}
-
-function rows<T>(schema: z.ZodMiniType<T>, data: unknown, what: string): T[] {
-  const parsed = z.array(schema).safeParse(data)
-  if (!parsed.success) throw new BackendError(`soc.${what} answered rows SOC cannot read`)
-  return parsed.data
 }
 
 function fleetOf(row: z.infer<typeof FLEET_ROW>): Fleet {

@@ -8,12 +8,25 @@ import {
   type Fleet,
   type FleetChanges,
   type FleetDraft,
+  type Geofence,
+  type GeofenceChanges,
+  type GeofenceDraft,
   type Organization,
   type SignInFailure,
   type StateEvent,
+  type Wayline,
+  type WaylineChanges,
+  type WaylineDraft,
 } from '../backend/backend'
 import type { Link } from '../backend/link'
 import { untouched } from '../backend/supabaseFleets'
+import type { Geodetic } from '../geometry/projection'
+import {
+  notAllowedRefusal,
+  refusedBy,
+  retiredRefusal,
+  untouched as untouchedPlan,
+} from '../backend/supabasePlans'
 import type { LoadedSite } from '../scene/siteModel'
 import type { TelemetrySample } from '../telemetry/sample'
 import { PASSWORD_FOR_TESTS } from './keys'
@@ -81,6 +94,85 @@ export function device(aircraftSn: string, online = true): Device {
   }
 }
 
+function byName<T extends { readonly name: string }>(a: T, b: T): number {
+  return a.name.localeCompare(b.name)
+}
+
+/** The row with this id, and the organization it belongs to. */
+function locate<T extends { readonly id: string }>(
+  rows: ReadonlyMap<string, readonly T[]>,
+  id: string,
+): [string, T] | undefined {
+  for (const [organizationId, found] of rows) {
+    const row = found.find((candidate) => candidate.id === id)
+    if (row !== undefined) return [organizationId, row]
+  }
+  return undefined
+}
+
+/** Whether a ring repeats its first position at its end, which the database refuses (FR-GEO-04). */
+function closed(ring: readonly Geodetic[]): boolean {
+  const first = ring[0]
+  const last = ring.at(-1)
+  return (
+    first !== undefined &&
+    last !== undefined &&
+    first.latitudeDeg === last.latitudeDeg &&
+    first.longitudeDeg === last.longitudeDeg
+  )
+}
+
+/** The first constraint a geofence breaks, as the database would name it (FR-GEO-04). */
+function geofenceRefusal(draft: GeofenceDraft): FieldRefusedError | null {
+  if (draft.name.trim() === '') return refusedBy('geofence_name_given')
+  if (draft.polygon.length < 3 || closed(draft.polygon)) {
+    return refusedBy('geofence_polygon_ring')
+  }
+  if (!(draft.maxHeightM > 0)) return refusedBy('geofence_max_height_positive')
+  const margin = draft.marginM
+  const fits =
+    draft.origin === 'generated' ? margin !== null && margin >= 5 && margin <= 100 : margin === null
+  return fits ? null : refusedBy('geofence_margin_when_generated')
+}
+
+/** The first constraint a wayline breaks, as the database would name it (FR-WAY-06, FR-WAY-09). */
+function waylineRefusal(draft: WaylineDraft): FieldRefusedError | null {
+  if (draft.name.trim() === '') return refusedBy('wayline_name_given')
+  if (!(draft.defaultHeightM > 0)) return refusedBy('wayline_default_height_positive')
+  if (!(draft.speedMs > 0)) return refusedBy('wayline_speed_positive')
+  const baked = draft.waypoints.length > 0 && draft.waypoints.every(({ heightM }) => heightM > 0)
+  if (!baked) return refusedBy('wayline_waypoints_baked')
+  if (draft.bakeVersion.trim() === '') return refusedBy('wayline_bake_version_given')
+  return null
+}
+
+/** What the database broadcasts for a geofence (IR-GEO), with its retirement time if retired. */
+function geofencePayload(
+  geofence: Geofence,
+  deletedAt: string | null,
+): Readonly<Record<string, unknown>> {
+  return {
+    id: geofence.id,
+    name: geofence.name,
+    origin: geofence.origin,
+    updated_at: geofence.updatedAt,
+    deleted_at: deletedAt,
+  }
+}
+
+/** What the database broadcasts for a wayline (IR-WAY), with the time it was retired, if it was. */
+function waylinePayload(
+  wayline: Wayline,
+  deletedAt: string | null,
+): Readonly<Record<string, unknown>> {
+  return {
+    id: wayline.id,
+    name: wayline.name,
+    updated_at: wayline.updatedAt,
+    deleted_at: deletedAt,
+  }
+}
+
 /** The backend in memory: accounts, their organizations, and the failures a test asks for. */
 export class FakeBackend implements Backend {
   readonly address = 'http://192.168.1.40:8000'
@@ -94,11 +186,18 @@ export class FakeBackend implements Backend {
   readonly models: AircraftModel[] = [MAVIC_AIR_2, MINI_2]
   readonly seen = new Map<string, Device[]>([[NORTH.id, [device('SOTESTUAV001')]]])
   readonly registered = new Map<string, Fleet[]>()
+  /** Geofences and waylines by organization, retired ones included: `retired` says which. */
+  readonly geofenceRows = new Map<string, Geofence[]>()
+  readonly waylineRows = new Map<string, Wayline[]>()
   private account: Account | null
   private readonly listeners = new Set<(account: Account | null) => void>()
   private readonly stateListeners = new Map<string, Set<(event: StateEvent) => void>>()
   private readonly telemetryListeners = new Map<string, Set<(sample: TelemetrySample) => void>>()
   private fleetsMade = 0
+  private plansMade = 0
+  private clock = Date.parse('2026-10-11T10:10:00Z')
+  /** The plans retired here: each stays in the database and refuses every change (FR-GEO-02). */
+  private readonly retired = new Set<string>()
 
   constructor(signedIn: Account | null = null) {
     this.account = signedIn
@@ -185,6 +284,118 @@ export class FakeBackend implements Backend {
     return Promise.resolve()
   }
 
+  geofences(organizationId: string): Promise<Geofence[]> {
+    return Promise.resolve(this.live(this.geofenceRows, organizationId).sort(byName))
+  }
+
+  createGeofence(organizationId: string, draft: GeofenceDraft): Promise<Geofence> {
+    if (!this.writes(organizationId)) return Promise.reject(notAllowedRefusal('geofence'))
+    const refused = geofenceRefusal(draft)
+    if (refused !== null) return Promise.reject(refused)
+    const at = this.stamp()
+    const geofence: Geofence = {
+      id: this.planId(),
+      name: draft.name,
+      polygon: [...draft.polygon],
+      maxHeightM: draft.maxHeightM,
+      origin: draft.origin,
+      marginM: draft.marginM,
+      createdAt: at,
+      updatedAt: at,
+    }
+    this.geofenceRows.set(organizationId, [
+      ...(this.geofenceRows.get(organizationId) ?? []),
+      geofence,
+    ])
+    this.emit(organizationId, { kind: 'geofence', payload: geofencePayload(geofence, null) })
+    return Promise.resolve(geofence)
+  }
+
+  changeGeofence(geofenceId: string, changes: GeofenceChanges): Promise<Geofence> {
+    const located = locate(this.geofenceRows, geofenceId)
+    if (located === undefined) return Promise.reject(new BackendError(`no geofence ${geofenceId}`))
+    const [organizationId, geofence] = located
+    if (!this.writes(organizationId)) return Promise.reject(untouchedPlan('geofence'))
+    if (this.retired.has(geofenceId)) return Promise.reject(retiredRefusal('geofence'))
+    const changed: Geofence = { ...geofence, ...changes, updatedAt: this.stamp() }
+    const refused = geofenceRefusal(changed)
+    if (refused !== null) return Promise.reject(refused)
+    this.replaceIn(this.geofenceRows, organizationId, changed)
+    this.emit(organizationId, { kind: 'geofence', payload: geofencePayload(changed, null) })
+    return Promise.resolve(changed)
+  }
+
+  retireGeofence(geofenceId: string): Promise<void> {
+    const located = locate(this.geofenceRows, geofenceId)
+    if (located === undefined) return Promise.reject(new BackendError(`no geofence ${geofenceId}`))
+    const [organizationId, geofence] = located
+    if (!this.writes(organizationId)) return Promise.reject(untouchedPlan('geofence'))
+    if (this.retired.has(geofenceId)) return Promise.reject(retiredRefusal('geofence'))
+    const at = this.stamp()
+    this.retired.add(geofenceId)
+    this.emit(organizationId, {
+      kind: 'geofence',
+      payload: geofencePayload({ ...geofence, updatedAt: at }, at),
+    })
+    return Promise.resolve()
+  }
+
+  waylines(organizationId: string): Promise<Wayline[]> {
+    return Promise.resolve(this.live(this.waylineRows, organizationId).sort(byName))
+  }
+
+  createWayline(organizationId: string, draft: WaylineDraft): Promise<Wayline> {
+    if (!this.writes(organizationId)) return Promise.reject(notAllowedRefusal('wayline'))
+    const refused = waylineRefusal(draft)
+    if (refused !== null) return Promise.reject(refused)
+    const at = this.stamp()
+    const wayline: Wayline = {
+      id: this.planId(),
+      name: draft.name,
+      takeoff: draft.takeoff,
+      defaultHeightM: draft.defaultHeightM,
+      speedMs: draft.speedMs,
+      design: draft.design,
+      waypoints: [...draft.waypoints],
+      metrics: draft.metrics,
+      bakeVersion: draft.bakeVersion,
+      createdAt: at,
+      updatedAt: at,
+    }
+    this.waylineRows.set(organizationId, [...(this.waylineRows.get(organizationId) ?? []), wayline])
+    this.emit(organizationId, { kind: 'wayline', payload: waylinePayload(wayline, null) })
+    return Promise.resolve(wayline)
+  }
+
+  changeWayline(waylineId: string, changes: WaylineChanges): Promise<Wayline> {
+    const located = locate(this.waylineRows, waylineId)
+    if (located === undefined) return Promise.reject(new BackendError(`no wayline ${waylineId}`))
+    const [organizationId, wayline] = located
+    if (!this.writes(organizationId)) return Promise.reject(untouchedPlan('wayline'))
+    if (this.retired.has(waylineId)) return Promise.reject(retiredRefusal('wayline'))
+    const changed: Wayline = { ...wayline, ...changes, updatedAt: this.stamp() }
+    const refused = waylineRefusal(changed)
+    if (refused !== null) return Promise.reject(refused)
+    this.replaceIn(this.waylineRows, organizationId, changed)
+    this.emit(organizationId, { kind: 'wayline', payload: waylinePayload(changed, null) })
+    return Promise.resolve(changed)
+  }
+
+  retireWayline(waylineId: string): Promise<void> {
+    const located = locate(this.waylineRows, waylineId)
+    if (located === undefined) return Promise.reject(new BackendError(`no wayline ${waylineId}`))
+    const [organizationId, wayline] = located
+    if (!this.writes(organizationId)) return Promise.reject(untouchedPlan('wayline'))
+    if (this.retired.has(waylineId)) return Promise.reject(retiredRefusal('wayline'))
+    const at = this.stamp()
+    this.retired.add(waylineId)
+    this.emit(organizationId, {
+      kind: 'wayline',
+      payload: waylinePayload({ ...wayline, updatedAt: at }, at),
+    })
+    return Promise.resolve()
+  }
+
   onState(organizationId: string, listener: (event: StateEvent) => void): () => void {
     const listeners = this.stateListeners.get(organizationId) ?? new Set()
     listeners.add(listener)
@@ -266,6 +477,37 @@ export class FakeBackend implements Backend {
       return new FieldRefusedError('This aircraft already belongs to a live fleet.', 'aircraftSn')
     }
     return null
+  }
+
+  /** The organization's rows the database holds live: a retired one is in no list. */
+  private live<T extends { readonly id: string }>(
+    rows: ReadonlyMap<string, readonly T[]>,
+    organizationId: string,
+  ): T[] {
+    return (rows.get(organizationId) ?? []).filter(({ id }) => !this.retired.has(id))
+  }
+
+  private replaceIn<T extends { readonly id: string }>(
+    rows: Map<string, T[]>,
+    organizationId: string,
+    row: T,
+  ): void {
+    rows.set(
+      organizationId,
+      (rows.get(organizationId) ?? []).map((existing) => (existing.id === row.id ? row : existing)),
+    )
+  }
+
+  /** The next plan's id: a UUID, numbered in a range of its own apart from the fleets'. */
+  private planId(): string {
+    this.plansMade += 1
+    return `00000000-0000-4000-a000-${String(this.plansMade).padStart(12, '0')}`
+  }
+
+  /** The time of the next write, a second after the last, as the database stamps each one. */
+  private stamp(): string {
+    this.clock += 1000
+    return new Date(this.clock).toISOString()
   }
 
   private writes(organizationId: string): boolean {
