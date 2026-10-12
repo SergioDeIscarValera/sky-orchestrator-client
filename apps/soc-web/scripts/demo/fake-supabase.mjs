@@ -1,11 +1,12 @@
-// The demo's Supabase: the GoTrue and PostgREST calls the console makes, answered from
-// memory, so `pnpm demo` runs the console with no server behind it (run.mjs). Fleets,
-// geofences and waylines change in memory, and a restart resets them. Realtime is not faked: this server has
-// no WebSocket upgrade, so the console shows no live telemetry and no change made from
-// another console.
+// The demo's Supabase: the GoTrue, PostgREST and Realtime calls the console makes, answered
+// from memory, so `pnpm demo` runs the console with no server behind it (run.mjs). Fleets,
+// geofences and waylines change in memory, and a restart resets them. Realtime answers the
+// console's joins and heartbeats, so its link reads up, and sends nothing live: no telemetry,
+// and no change made from another console until the console reads again.
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { WebSocketServer } from 'ws'
 
 const HOST = '127.0.0.1'
 const CATALOGUE = new URL('../../../../contracts/catalogue/aircraft-models.json', import.meta.url)
@@ -17,6 +18,10 @@ const INVALID_CREDENTIALS = {
   status: 400,
   payload: { code: 'invalid_credentials', message: 'Invalid login credentials' },
 }
+/** The socket the console's Realtime client opens, with its apikey and vsn in the query. */
+const REALTIME_PATH = '/realtime/v1/websocket'
+/** Events answered with an ok reply; the heartbeat, on topic `phoenix`, is answered too. */
+const ANSWERED_EVENTS = new Set(['phx_join', 'phx_leave', 'access_token'])
 
 const NORTH = '11111111-1111-4111-8111-111111111111'
 const ALMENDRAL = '22222222-2222-4222-8222-222222222222'
@@ -249,6 +254,22 @@ export function startFakeSupabase({ port = 0 } = {}) {
   const server = createServer((request, response) => {
     void answer(state, request, response)
   })
+  const realtime = new WebSocketServer({ noServer: true })
+  server.on('upgrade', (request, socket, head) => {
+    const { pathname } = new URL(request.url ?? '/', `http://${HOST}`)
+    // Only the console's socket is answered: any other upgrade is dropped.
+    if (pathname !== REALTIME_PATH) {
+      socket.destroy()
+      return
+    }
+    realtime.handleUpgrade(request, socket, head, (client) => {
+      client.on('message', (data, isBinary) => {
+        if (!isBinary) answerFrame(client, data.toString('utf8'))
+      })
+      // An error event nobody handles would crash the demo, so one client's error only drops it.
+      client.on('error', () => client.terminate())
+    })
+  })
   return new Promise((resolve, reject) => {
     server.once('error', reject)
     server.listen(port, HOST, () => {
@@ -258,12 +279,43 @@ export function startFakeSupabase({ port = 0 } = {}) {
         url: `http://${HOST}:${bound}`,
         close: () =>
           new Promise((done, failed) => {
+            // ws leaves its clients open when its server closes, and an open socket keeps the
+            // HTTP server from closing and the process from exiting: each is terminated first.
+            for (const client of realtime.clients) client.terminate()
+            realtime.close()
             server.close((error) => (error ? failed(error) : done()))
             server.closeAllConnections()
           }),
       })
     })
   })
+}
+
+/**
+ * Answers one text frame of the console's Realtime client (realtime-js 2.x, protocol vsn 2.0.0: a
+ * JSON array `[join_ref, ref, topic, event, payload]`). The client takes an ok reply to a join as
+ * joined and to a leave as left, and it calls the socket dead when a heartbeat gets no reply within
+ * one interval (link.ts), so each is answered at once. A join's reply names no postgres_changes:
+ * the console binds none, and the client takes such a join as joined. Any other frame is ignored,
+ * a binary user broadcast included.
+ */
+function answerFrame(client, text) {
+  const frame = frameOf(text)
+  if (frame === null) return
+  const [joinRef, ref, topic, event] = frame
+  const heartbeat = topic === 'phoenix' && event === 'heartbeat'
+  if (!heartbeat && !ANSWERED_EVENTS.has(event)) return
+  client.send(JSON.stringify([joinRef, ref, topic, 'phx_reply', { status: 'ok', response: {} }]))
+}
+
+/** The five parts of a frame, or null when the text is not one: the client sends no other text. */
+function frameOf(text) {
+  try {
+    const frame = JSON.parse(text)
+    return Array.isArray(frame) && frame.length === 5 ? frame : null
+  } catch {
+    return null
+  }
 }
 
 async function answer(state, request, response) {

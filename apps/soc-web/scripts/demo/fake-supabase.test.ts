@@ -45,6 +45,57 @@ async function fleetNamed(name: string): Promise<Fleet> {
   return fleet
 }
 
+/** Resolves once the backend's link reads up; fails at once if it reads down first. */
+function linkUp(): Promise<void> {
+  if (backend.link() === 'up') return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const stop = backend.onLink((link) => {
+      if (link === 'connecting') return
+      stop()
+      if (link === 'up') resolve()
+      else reject(new Error('the link read down before it read up'))
+    })
+  })
+}
+
+/** A socket to the demo's Realtime, opened as the console's client opens it (vsn 2.0.0). */
+function openRealtime(url: string): Promise<WebSocket> {
+  const address = new URL('/realtime/v1/websocket', url)
+  address.protocol = 'ws:'
+  address.searchParams.set('apikey', demoSupabaseKey())
+  address.searchParams.set('vsn', '2.0.0')
+  const socket = new WebSocket(address)
+  return new Promise((resolve, reject) => {
+    socket.addEventListener(
+      'open',
+      () => {
+        resolve(socket)
+      },
+      { once: true },
+    )
+    socket.addEventListener(
+      'error',
+      () => {
+        reject(new Error(`no socket at ${address.href}`))
+      },
+      { once: true },
+    )
+  })
+}
+
+/** The next frame the socket receives, parsed as the Realtime protocol's JSON. */
+function nextFrame(socket: WebSocket): Promise<unknown> {
+  return new Promise((resolve) => {
+    socket.addEventListener(
+      'message',
+      (event: MessageEvent<string>) => {
+        resolve(JSON.parse(event.data))
+      },
+      { once: true },
+    )
+  })
+}
+
 beforeAll(async () => {
   fake = await startFakeSupabase({ port: 0 })
   backend = connect(fake.url)
@@ -256,5 +307,42 @@ describe("the demo's configuration", () => {
         maxArcSpacingM: 10,
       },
     })
+  })
+})
+
+describe("the demo's Realtime, joined by the console", () => {
+  it('joins the state and telemetry topics, and the link reads up', async () => {
+    const up = linkUp()
+    const stopState = backend.onState(NORTH, () => undefined)
+    const stopTelemetry = backend.onTelemetry(NORTH, () => undefined)
+    await up
+    expect(backend.link()).toBe('up')
+    stopState()
+    stopTelemetry()
+  })
+
+  it('answers a heartbeat with an ok reply, which the link waits for', async () => {
+    const socket = await openRealtime(fake.url)
+    const reply = nextFrame(socket)
+    socket.send(JSON.stringify([null, '1', 'phoenix', 'heartbeat', {}]))
+    expect(await reply).toEqual([null, '1', 'phoenix', 'phx_reply', { status: 'ok', response: {} }])
+    socket.close()
+  })
+
+  it('ends its open sockets when it closes, so the process can exit', async () => {
+    const own = await startFakeSupabase({ port: 0 })
+    const socket = await openRealtime(own.url)
+    const closed = new Promise<void>((resolve) => {
+      socket.addEventListener(
+        'close',
+        () => {
+          resolve()
+        },
+        { once: true },
+      )
+    })
+    await own.close()
+    await closed
+    expect(socket.readyState).toBe(WebSocket.CLOSED)
   })
 })
