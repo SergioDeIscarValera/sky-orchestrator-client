@@ -130,4 +130,12 @@ describe('who changes fleets, and where a refusal shows', () => {
       ),
     ).toEqual([null, 'name', 'aircraft', 'aircraft', 'flightTime'])
   })
+
+  it("shows none of a geofence's or a wayline's refused fields on the fleet form", () => {
+    expect(
+      ['maxHeightM', 'marginM', 'takeoff', 'waypoints'].map((field) =>
+        formFieldOf(field as Parameters<typeof formFieldOf>[0]),
+      ),
+    ).toEqual([null, null, null, null])
+  })
 })
