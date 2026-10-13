@@ -304,6 +304,20 @@ def test_a_flight_that_finished_ok_after_a_stop_is_completed() -> None:
     assert ended(status="ok", result=0, break_point=paused_at(514)) is EndReason.COMPLETED
 
 
+def test_an_ok_task_is_never_given_a_break_reason() -> None:
+    # The break point of an earlier stop is kept until the mission resumes, so an ok task that
+    # did not finish with result 0 names no end reason rather than that stop.
+    assert ended(status="ok", result=999_999, break_point=paused_at(514)) is None
+
+
+def test_a_canceled_task_that_stopped_on_its_own_takes_the_break_reason() -> None:
+    # A break point means the mission flew and stopped on its own, so a cancel after it is
+    # not the cancel of FR-CMD-05, which is for a task that never flew.
+    assert ended(status="canceled", result=0, break_point=paused_at(514)) is (
+        EndReason.ENVELOPE_BREACH
+    )
+
+
 def test_a_return_home_after_a_stop_is_the_operators_return_by_its_code() -> None:
     # The break point of the earlier stop is kept through the return and the landing; the
     # result code is the more specific reading of how the task ended.

@@ -7,9 +7,9 @@ sent: nothing here clamps a percent or checks it against the schema's range. The
 not validate what the dock sends, so a message that is not JSON, has a field of the wrong
 type, or is another event raises ValueError naming the problem.
 
-The end reason is read from the result code first, then from the status, then from the break
-reason of a stop on the aircraft's own. Where the vendored contracts do not say what a code
-means, its entry in END_RESULTS says so.
+The end reason is read from the result code first, then from the status and the break reason
+of a stop on the aircraft's own (see end_reason). Where the vendored contracts do not say what
+a code means, its entry in END_RESULTS says so.
 """
 
 from __future__ import annotations
@@ -201,22 +201,23 @@ BREAK_REASONS: dict[int, EndReason] = {
 def end_reason(progress: FlightProgress) -> EndReason | None:
     """How the task ended, or None while it has not, or while no IR-OPS value says why.
 
-    The first rule that applies decides: a result code the table names, then a task that
-    ended ok with result 0, then a canceled one, then the break reason of a stop on the
-    aircraft's own. A terminal status with none of these is None rather than a guess. A
-    missing status is not terminal, so it ends nothing.
+    The first rule that applies decides: a result code the table names; a task that ended ok,
+    completed only with result 0; the break reason of a stop on the aircraft's own; a canceled
+    task with no such stop, which is the cancel FR-CMD-05 describes. Anything else that has
+    ended is None rather than a guess. A missing status is not terminal, so it ends nothing.
     """
     if progress.status not in TERMINAL:
         return None
     if progress.result is not None and progress.result in END_RESULTS:
         return END_RESULTS[progress.result]
-    if progress.status == FlightStatus.OK and progress.result == SUCCESS:
-        return EndReason.COMPLETED
+    if progress.status == FlightStatus.OK:
+        return EndReason.COMPLETED if progress.result == SUCCESS else None
+    reason = _by_break_reason(progress.break_point)
+    if reason is not None:
+        return reason
     if progress.status == FlightStatus.CANCELED:
-        # FR-CMD-05: a prepared task undone before it flies. A progress cannot tell that from a
-        # cancel mid-flight, so both take the requirement's reading.
         return EndReason.CANCELLED
-    return _by_break_reason(progress.break_point)
+    return None
 
 
 def _by_break_reason(break_point: BreakPoint | None) -> EndReason | None:
