@@ -960,6 +960,8 @@ export class FakeBackend implements Backend {
     const { organizationId, flight } = found
     if (flight.endedAt !== null)
       return Promise.reject(operationRefusals.refusedBy('command_flight_ended'))
+    if (verb === 'undo' && flight.executedAt !== null)
+      return Promise.reject(operationRefusals.refusedBy('command_undo_before_execution'))
     const key = askKey(organizationId, clientRequestId)
     const asked = this.commandsAsked.get(key)
     if (asked !== undefined) return Promise.resolve(asked)

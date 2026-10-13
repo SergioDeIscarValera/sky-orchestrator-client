@@ -47,6 +47,8 @@ class Tunables(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     geofence_warning_band_m: float
     flight_file_grace_s: int
     broadcast_max_rate_hz: int
+    stack_status_poll_ms: int
+    stack_envelope_poll_s: int
 
 
 @dataclass(frozen=True)

@@ -23,7 +23,7 @@ from soc_cloud.service import CloudService
 from soc_cloud.testing import CLOUD_CLIENT, EphemeralMosquitto
 from soc_cloud.wire import MQTT
 from soc_config import Contract
-from soc_database.harness import Tenancy
+from soc_database.harness import Operations, Tenancy
 from soc_database.realtime import RealtimeStack
 from soc_realtime import Endpoint
 from soc_realtime.socket import Connector
@@ -179,11 +179,13 @@ async def test_the_dock_asks_for_a_flight_file_and_downloads_its_exact_bytes(
     assert downloaded == kmz
 
 
+# Each intent names its organization's flight, which the requester seeds.
 INSERT_INTENT = """
 insert into soc.command_intents
   (client_request_id, organization_id, operation_id, flight_id, gateway_sn, verb, requested_at)
-values (gen_random_uuid(), $1, gen_random_uuid(), gen_random_uuid(), $2, 'return_home',
-        now() - make_interval(secs => $3))
+select gen_random_uuid(), $1, f.operation_id, f.id, $2, 'return_home',
+       now() - make_interval(secs => $3)
+  from soc.flights f where f.organization_id = $1 limit 1
 returning id
 """
 
@@ -248,6 +250,7 @@ async def requester(
     operations = await platform.postgres.connect("soc_operations", passwords["soc_operations"])
     try:
         member = await Tenancy(admin).member()
+        await Operations(admin).flown(member.organization_id)
         yield operations, member.organization_id
     finally:
         await operations.close()

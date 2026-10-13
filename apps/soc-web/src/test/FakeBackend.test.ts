@@ -636,6 +636,22 @@ describe('the operations held in memory (IR-OPS, IR-ASG, IR-OPR, IR-TRQ, IR-CMD)
     })
   })
 
+  it('undoes only a flight that does not execute yet', async () => {
+    const { backend, operation, fleet } = await prepared()
+    await backend.nameOperator(operation.id, NORTH.id, PILOT.userId, 'pilot')
+    backend.addFlight({ ...flightOf(operation.id, fleet.id), executedAt: '2026-10-11T10:10:00Z' })
+    expect(
+      await backend.requestCommand(FLIGHT, 'undo', CLIENT).catch((error: unknown) => error),
+    ).toMatchObject({
+      field: null,
+      code: '23514',
+      message: 'This flight already executes: an undo cancels only one not started yet.',
+    })
+    expect(await backend.requestCommand(FLIGHT, 'pause', OTHER_CLIENT)).toMatchObject({
+      verb: 'pause',
+    })
+  })
+
   it('refuses a command to a flight a pilot does not fly', async () => {
     const { backend, operation, fleet } = await prepared()
     backend.addFlight(flightOf(operation.id, fleet.id))
