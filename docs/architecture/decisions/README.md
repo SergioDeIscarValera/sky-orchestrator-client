@@ -41,3 +41,4 @@ Rules:
 | [0022](0022-web-test-files-share-their-workers-modules.md) | The web's test files share their worker's modules | Accepted |
 | [0023](0023-the-console-reads-its-own-configuration-file.md) | The console reads its own configuration file, checked before it starts | Accepted |
 | [0024](0024-a-wayline-is-geometry-the-operation-flies-it.md) | A wayline is geometry; the operation flies it | Accepted |
+| [0025](0025-checks-are-judged-from-what-soc-cloud-records.md) | The preflight checks are judged from what soc-cloud records | Accepted |

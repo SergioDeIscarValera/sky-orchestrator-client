@@ -101,8 +101,9 @@ Retention: while configured.
 | `name` | text | From configuration |
 | `organization_id` | uuid | The organization the stack serves: the stack's `organization` in the configuration (contract 2.0.0) |
 | `link_state` | enum | `connected`, `connecting`, `displaced`, `unreachable` |
-| `status` | jsonb | Sky Orchestrator's stack status (SO's FR-DEV-07), as last read, with its read time |
+| `status` | jsonb | Sky Orchestrator's stack status (SO's FR-DEV-07), as last read |
 | `envelope` | jsonb | The active device envelope (SO's FR-WAY-11), with its fingerprint |
+| `status_read_at`, `envelope_read_at` | timestamptz, nullable | When each was last read; a value that could not be read is null, never the previous one (`FR-LNK-08`) |
 | `updated_at` | timestamptz | |
 
 **IR-STK-01**: credentials and endpoints are configuration, never rows.
@@ -212,8 +213,12 @@ the state. Retention: permanent.
 (`IR-EVT`) with its cause and author; the current state never disagrees with the
 log, because both are written in one transaction.
 
-**IR-OPS-02**: an operation that has flown is never deleted; its definition is
-frozen once it leaves `ready`.
+**IR-OPS-02**: an operation that has flown is never deleted, except with its
+organization once Virtual Origen erases it; its log goes with it then, and only
+then. Its definition, and what it names (its wayline, geofence and fleet), stays
+as it is while a flight of it is prepared or flown, from `simulating` on, and
+once it is closed; an edit while it is preparing, simulated or ready puts it back
+to `planned` (`FR-OPS-07`).
 
 ## IR-ASG — Assignment
 
@@ -225,6 +230,7 @@ A wayline flown by a fleet within an operation. Owner: as `IR-OPS`.
 | `operation_id` | uuid | |
 | `wayline_id`, `fleet_id` | uuid | Each unique within the operation |
 | `speed_ms` | numeric, nullable | The speed the fleet flies the wayline at (`FR-WAY-10`); null while a draft has none |
+| `flight` | jsonb, nullable | The wayline as this operation flies it, `$defs.flight` of `contracts/geometry/design.schema.json`: made by the console from the bake, the operation's height, this speed and the stack's envelope (ADR-0009); validated by `soc-operations`, which builds the flight file from it |
 
 ## IR-OPR — Operator
 
@@ -250,10 +256,12 @@ One DJI flight task: one fleet flying one file, simulated or real. Owner:
 | `gateway_sn`, `aircraft_sn` | text | The wire identity flown under |
 | `mode` | enum | `simulated`, `real`, as the stack reported it at prepare (`FR-SAF-04`) |
 | `file_id` | uuid | `IR-FIL` |
+| `config_fingerprint` | text, nullable | The phone's configuration fingerprint from the stack's status at prepare (`FR-OPS-06`, `FR-OPS-07`) |
 | `geofence_snapshot` | jsonb | Polygon and ceiling at prepare (`IR-GEO-01`) |
 | `envelope_snapshot` | jsonb | The stack's envelope at prepare |
 | `prepared_at`, `executed_at`, `ended_at` | timestamptz | |
 | `took_off_at`, `landed_at` | timestamptz, nullable | From the flight mode |
+| `breached_at` | timestamptz, nullable | The sample on which soc-cloud sent its return home for a geofence breach, once per flight (`FR-SAF-01`) |
 | `end_reason` | enum, nullable | As `IR-OPS` |
 
 ## IR-FST — Flight state
@@ -268,6 +276,7 @@ The latest progress of a flight, from `flighttask_progress`. Owner: `soc-cloud`.
 | `percent` | integer | 0 to 100 |
 | `current_waypoint_index` | integer | |
 | `break_point` | jsonb, nullable | DJI's, with its reason once Sky Orchestrator sends one (SO's FR-FLT-12) |
+| `end_reason` | enum, nullable | How the task ended, once it has: from DJI's result and break reason, and from the returns `soc-cloud` sent itself (`FR-SAF-01`) |
 | `updated_at` | timestamptz | |
 
 ## IR-FIL — Flight file
@@ -277,12 +286,12 @@ Owner: `soc-operations`. Retention: as long as any flight that used it.
 | Attribute | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid | |
-| `organization_id`, `wayline_id` | uuid | |
+| `organization_id`, `operation_id`, `wayline_id` | uuid | The file is the operation's flight of the wayline |
 | `bytes` | bytea | The exact KMZ |
 | `md5` | text | Of `bytes` |
 | `size_bytes` | integer | |
 | `profile_version` | text | Version of the WPML profile written |
-| `token` | text | The unguessable serving path, 128 random bits or more |
+| `token` | text | The unguessable serving path: 128 random bits, 32 lower-case hexadecimal characters, as soc-cloud serves it |
 | `created_at` | timestamptz | |
 
 **IR-FIL-01**: the bytes are never rebuilt for an existing flight. What flew is
@@ -394,12 +403,73 @@ Owner: the baking tool (`FR-DEP-05`). Retention: until re-baked.
 | `sources` | jsonb | Datasets, dates and licences |
 | `baked_at` | timestamptz | |
 
-## IR-TRQ — Operation transition request · open
+## IR-TRQ — Operation transition request
 
 The intent `soc-operations` executes (ADR-0006): a member asking an operation to
-move (prepare checks, simulate, launch, finish), with its author, its outcome and
-its refusal reason. Specified with the operations data model in M4; until then
-the state machine of `FR-OPS-02` has no requests to execute.
+move, with its author, its outcome and its refusal reasons. Owner: the member
+creates it through `soc.request_transition`; `soc-operations` owns its outcome.
+Retention: permanent.
+
+| Attribute | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid | |
+| `client_request_id` | uuid | The browser's idempotency key, unique per organization |
+| `organization_id`, `operation_id` | uuid | |
+| `transition` | enum | `plan`, `prepare`, `unprepare`, `simulate`, `launch`, `stop`, `cancel` |
+| `requested_by` | uuid, nullable | The member; null once their profile is deleted |
+| `requested_at` | timestamptz | |
+| `request_meta` | jsonb | The session and address the request came from |
+| `status` | enum | `pending`, `running`, `accepted`, `refused`, `failed`, `expired` |
+| `reasons` | jsonb, nullable | Why it was refused or failed, each one named |
+| `decided_at` | timestamptz, nullable | |
+
+**IR-TRQ-01**: `plan`, `prepare`, `unprepare` and `cancel` need an editor or above;
+`simulate`, `launch` and `stop` need a pilot of the operation who is an editor or
+above (`FR-CMD-01`). A request moves forward only (`pending → running → accepted
+| refused | failed`; `pending → expired` when claimed after
+`command_intent_ttl_s`), each move one conditional update.
+
+## IR-CHK — Preflight check
+
+The latest judgement of one check of an operation (`FR-OPS-05`). Owner:
+`soc-operations`, which writes a check only when it changes (ADR-0025).
+Retention: with the operation.
+
+| Attribute | Type | Notes |
+| --- | --- | --- |
+| `operation_id`, `check_id` | uuid, text | Primary key; `check_id` is `PF-…` |
+| `state` | enum | `pass`, `fail`, `unknown` |
+| `blocking` | boolean | `PF-CLOCK` warns only |
+| `value` | jsonb, nullable | The measured value it was judged on |
+| `detail` | text, nullable | Why, in words |
+| `evaluated_at` | timestamptz | |
+
+## IR-SMP — An aircraft's latest sample
+
+What `soc-cloud` last received from each aircraft, as broadcast
+(`contracts/broadcast/telemetry.schema.json`), so the checks are judged on what
+the console shows (ADR-0025). Owner: `soc-cloud`. Retention: the latest only.
+
+| Attribute | Type | Notes |
+| --- | --- | --- |
+| `aircraft_sn` | text | Primary key |
+| `gateway_sn`, `organization_id` | text, uuid | Its stack and the stack's organization |
+| `sample` | jsonb | The sample as broadcast |
+| `sampled_at`, `received_at` | timestamptz | The aircraft's own time, and when `soc-cloud` wrote it |
+
+## IR-DRY — Dry run
+
+A flight file judged by a stack's Sky Orchestrator without storing it
+(`FR-LNK-09`, `PF-SO-DRYRUN`). Owner: `soc-operations` asks, `soc-cloud` judges.
+Retention: permanent.
+
+| Attribute | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid | |
+| `organization_id`, `file_id`, `gateway_sn` | uuid, uuid, text | The file and the stack that judged it |
+| `status` | enum | `pending`, `valid`, `rejected`, `failed` |
+| `verdict` | jsonb, nullable | Sky Orchestrator's report, every problem with its waypoint index |
+| `requested_at`, `judged_at` | timestamptz | |
 
 ## IR-INC — Incident · reserved
 
@@ -475,3 +545,4 @@ this document updated first.
 | 2026-10-10 | IR-CFG: the environment is declared in the contract, files hold every key, IR-CFG-02 and IR-CFG-03 (ADR-0019). |
 | 2026-10-10 | IR-CMD-01 covers what was asked; IR-CMD-02, `soc-cloud`'s four verbs (migration 0004). |
 | 2026-10-10 | IR-TRQ opened: the operation transition request ADR-0006 names had no entity. |
+| 2026-10-13 | M4's data model (migration 0010): IR-TRQ specified; IR-CHK, IR-SMP and IR-DRY added (ADR-0025); IR-ASG's `flight`, IR-FIL's `operation_id`, IR-FLT's `config_fingerprint` and IR-STK's read times. |

@@ -9,7 +9,7 @@ from typing import Any
 import asyncpg
 import pytest
 
-from soc_database.harness import EphemeralPostgres, Member, Tenancy, acting_as
+from soc_database.harness import EphemeralPostgres, Flown, Member, Operations, Tenancy, acting_as
 
 GATEWAY = "SOTESTDOCK01"
 INSERT = """
@@ -30,6 +30,23 @@ FORWARD = [
 STATUSES = ["pending", "sent", "accepted", "refused", "failed", "timed_out", "expired"]
 
 
+#: One flight per organization, made by the admin, for the intents the tests ask about.
+_FLIGHTS: dict[uuid.UUID, Flown] = {}
+_OPERATIONS: list[Operations] = []
+
+
+@pytest.fixture(autouse=True)
+def operations(admin: asyncpg.Connection) -> None:
+    _FLIGHTS.clear()
+    _OPERATIONS[:] = [Operations(admin)]
+
+
+async def flight_of(organization_id: uuid.UUID) -> Flown:
+    if organization_id not in _FLIGHTS:
+        _FLIGHTS[organization_id] = await _OPERATIONS[0].flown(organization_id)
+    return _FLIGHTS[organization_id]
+
+
 async def request(
     connection: asyncpg.Connection,
     member: Member,
@@ -38,12 +55,13 @@ async def request(
     requested_at: Any = None,
     client_request_id: uuid.UUID | None = None,
 ) -> asyncpg.Record:
+    flown = await flight_of(member.organization_id)
     row = await connection.fetchrow(
         INSERT,
         client_request_id or uuid.uuid4(),
         member.organization_id,
-        uuid.uuid4(),
-        uuid.uuid4(),
+        flown.operation_id,
+        flown.flight_id,
         GATEWAY,
         verb,
         json.dumps({}),
