@@ -949,10 +949,55 @@ begin
     me, coalesce(meta, '{}')
   )
   returning * into asked;
-  perform soc.log_event(target.operation_id, 'command_requested', 'operator',
-                        jsonb_build_object('verb', wanted), me, target.id, target.fleet_id, asked.id);
   return asked;
 end;
+$$;
+
+-- FR-CMD-06, FR-LOG-02: every command is logged when asked, by a pilot or by
+-- soc-operations, and again when it settles; soc-operations hears each settling and
+-- moves its flights and operations on it.
+create function soc.command_intent_is_logged()
+returns trigger
+language plpgsql
+security definer
+set search_path = soc, pg_temp
+as $$
+declare
+  fleet uuid;
+begin
+  select fleet_id into fleet from soc.flights where id = new.flight_id;
+  if tg_op = 'INSERT' then
+    perform soc.log_event(new.operation_id, 'command_requested',
+                          case when new.requested_by is null then 'soc-operations' else 'operator' end::soc.event_source,
+                          jsonb_build_object('verb', new.verb), new.requested_by, new.flight_id, fleet, new.id);
+  elsif new.status is distinct from old.status and new.status <> 'sent' then
+    perform soc.log_event(new.operation_id, 'command_outcome', 'soc-cloud',
+                          jsonb_build_object('verb', new.verb, 'status', new.status, 'result', new.result),
+                          null, new.flight_id, fleet, new.id, null,
+                          case when new.status = 'accepted' then 'info' else 'warning' end::soc.event_severity);
+    perform pg_notify('soc_command_outcomes', new.id::text);
+  end if;
+  return null;
+end;
+$$;
+
+create trigger command_intent_is_logged
+  after insert or update on soc.command_intents
+  for each row execute function soc.command_intent_is_logged();
+
+-- ADR-0008: where each stack's dock downloads flight files, from soc-cloud's
+-- configuration, so the prepare soc-operations asks for carries the file's whole URL.
+alter table soc.stacks add column flight_files_url text
+  constraint stack_flight_files_url check (flight_files_url is null or flight_files_url ~ '^http://');
+
+create function soc.record_stack_files_url(gateway text, url text)
+returns void
+language sql
+security definer
+set search_path = soc, pg_temp
+as $$
+  update soc.stacks set flight_files_url = url
+   where gateway_sn = gateway and flight_files_url is distinct from url;
 $$;
 
 -- --- soc-cloud's record (ADR-0025) ---------------------------------------------------
@@ -1544,6 +1589,7 @@ revoke execute on function soc.record_flight_progress(uuid, soc.flight_status, i
 revoke execute on function soc.record_flight_moment(uuid, text, timestamptz, integer) from public;
 revoke execute on function soc.record_dry_run(uuid, soc.dry_run_status, jsonb) from public;
 revoke execute on function soc.record_checks(uuid, jsonb) from public;
+revoke execute on function soc.record_stack_files_url(text, text) from public;
 
 grant execute on function soc.is_terminal(soc.operation_state) to authenticated, soc_cloud, soc_operations;
 grant execute on function soc.is_frozen(soc.operation_state) to authenticated, soc_cloud, soc_operations;
@@ -1564,3 +1610,4 @@ grant execute on function soc.record_flight_progress(uuid, soc.flight_status, in
   integer, jsonb) to soc_cloud;
 grant execute on function soc.record_flight_moment(uuid, text, timestamptz, integer) to soc_cloud;
 grant execute on function soc.record_dry_run(uuid, soc.dry_run_status, jsonb) to soc_cloud;
+grant execute on function soc.record_stack_files_url(text, text) to soc_cloud;
