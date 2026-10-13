@@ -14,6 +14,7 @@ The skeleton every later part plugs into:
 | --- | --- |
 | Settings: the contract's keys for `soc-cloud` as typed views, the environment, each stack's secrets; fail closed | `settings.py` |
 | The wire contract: Sky Orchestrator's vendored DJI schemas, every outgoing message checked first (`FR-LNK-10`) | `wire.py` |
+| The typed client for Sky Orchestrator's wayline API: stack status, the envelope and a dry run of a flight file, a nullable field None when absent or null (`FR-LNK-08`, `FR-LNK-09`); not wired into the service yet | `so_api.py` |
 | The database link, supervised, as `soc_cloud` | `service.py`, through `soc-db` |
 | The Realtime socket, joined to every served organization's telemetry topic | `service.py`, through `soc-realtime` |
 | One MQTT v5 link per stack as `cloud-client`, persistent session, supervised (`FR-LNK-01`) | `link/stack.py` |
