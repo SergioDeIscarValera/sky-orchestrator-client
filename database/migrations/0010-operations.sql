@@ -100,7 +100,7 @@ insert into soc.event_kinds (kind, severity, sources, payload) values
   ('took_off', 'info', array['aircraft']::soc.event_source[], array['mode_code']::text[]),
   ('automatic_return', 'warning', array['aircraft']::soc.event_source[], array['mode_code']::text[]),
   ('landed', 'info', array['aircraft']::soc.event_source[], array['mode_code']::text[]),
-  ('command_requested', 'info', array['operator', 'soc-operations']::soc.event_source[], array['verb']::text[]),
+  ('command_requested', 'info', array['operator', 'soc-operations', 'soc-cloud']::soc.event_source[], array['verb']::text[]),
   ('command_outcome', 'info', array['soc-cloud']::soc.event_source[], array['verb', 'status', 'result']::text[]),
   ('geofence_warning', 'warning', array['soc-cloud']::soc.event_source[], array['position', 'height_m', 'distance_to_boundary_m']::text[]),
   ('geofence_breach', 'safety', array['soc-cloud']::soc.event_source[], array['position', 'height_m', 'distance_outside_m', 'sampled_at']::text[]),
@@ -316,6 +316,35 @@ create trigger operation_events_are_kept
   before truncate on soc.operation_events
   for each statement execute function soc.operation_event_is_kept();
 
+-- IR-OPS-02: an organization erased takes its operations, their flights and their log. Its
+-- cascade reaches the waylines, fleets and geofences before the operations that name them,
+-- so the first of those it removes takes the organization's operations first; otherwise
+-- they would still name what is being removed. Removed while its organization lives, a
+-- wayline, fleet or geofence an operation names is refused by the key, as before.
+create function soc.organization_erased_takes_operations()
+returns trigger
+language plpgsql
+security definer
+set search_path = soc, pg_temp
+as $$
+begin
+  if not exists (select 1 from public.organizations where id = old.organization_id) then
+    delete from soc.operations where organization_id = old.organization_id;
+  end if;
+  return old;
+end;
+$$;
+
+create trigger organization_erased_takes_operations
+  before delete on soc.waylines
+  for each row execute function soc.organization_erased_takes_operations();
+create trigger organization_erased_takes_operations
+  before delete on soc.fleets
+  for each row execute function soc.organization_erased_takes_operations();
+create trigger organization_erased_takes_operations
+  before delete on soc.geofences
+  for each row execute function soc.organization_erased_takes_operations();
+
 -- IR-EVT-01, IR-EVT-02: an entry is what the contract lists for its kind: a source it
 -- names, every payload key it names, and its severity, which a writer may raise (a
 -- refused command is logged as a warning) but never lower; safety is only a safety
@@ -403,6 +432,9 @@ as $$
 declare
   logged soc.operation_events;
 begin
+  if not exists (select 1 from soc.operations where id = operation) then
+    raise exception 'operation % does not exist', operation using errcode = 'no_data_found';
+  end if;
   if not soc.is_open(operation) then
     raise exception 'operation %: closed, its log takes nothing more', operation
       using errcode = 'check_violation', constraint = 'operation_closed';
@@ -778,9 +810,10 @@ begin
       using errcode = 'check_violation', constraint = 'operation_definition_frozen';
   end if;
   if tg_op <> 'DELETE' and not exists (
-    select 1 from public.memberships
-     where organization_id = new.organization_id and profile_id = new.profile_id
-       and deleted_at is null
+    select 1 from public.memberships m
+      join public.organizations o on o.id = m.organization_id
+     where m.organization_id = new.organization_id and m.profile_id = new.profile_id
+       and m.deleted_at is null and o.deleted_at is null
   ) then
     raise exception 'operation %: an operator is a live member of its organization', operation
       using errcode = 'check_violation', constraint = 'operator_live_member';
@@ -1175,7 +1208,9 @@ begin
   end if;
   if tg_op = 'INSERT' then
     perform soc.log_event(new.operation_id, 'command_requested',
-                          case when new.requested_by is null then 'soc-operations' else 'operator' end::soc.event_source,
+                          case when new.requested_by is not null then 'operator'
+                               when new.status = 'sent' then 'soc-cloud'
+                               else 'soc-operations' end::soc.event_source,
                           jsonb_build_object('verb', new.verb), new.requested_by, new.flight_id, fleet, new.id);
   elsif new.status is distinct from old.status and new.status <> 'sent' then
     perform soc.log_event(new.operation_id, 'command_outcome', 'soc-cloud',
@@ -1392,8 +1427,9 @@ $$;
 -- FR-SAF-01, ADR-0010: soc-cloud's own return home, sent the moment a sample of an
 -- executing flight is outside its geofence, recorded as the command it sent (already
 -- sent, its reply settled by soc.record_command_reply) with the breach in the log, in one
--- transaction. Once per flight: a second breach of the same flight records nothing, and
--- the flight keeps when it was breached, so a restarted soc-cloud never sends it twice.
+-- transaction. Once per flight, and never for a flight that ended: a second breach of the
+-- same flight records nothing, and the flight keeps when it was breached, so a restarted
+-- soc-cloud never sends it twice.
 create function soc.record_geofence_breach(
   flight uuid, intent uuid, outside jsonb, sampled timestamptz
 )
@@ -1406,7 +1442,7 @@ declare
   target soc.flights;
 begin
   update soc.flights set breached_at = sampled
-   where id = flight and breached_at is null
+   where id = flight and breached_at is null and ended_at is null
   returning * into target;
   if not found then
     return false;

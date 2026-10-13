@@ -82,7 +82,7 @@
     },
     "command_requested": {
       "severity": "info",
-      "sources": ["operator", "soc-operations"],
+      "sources": ["operator", "soc-operations", "soc-cloud"],
       "requirement": "FR-CMD-06",
       "payload": ["verb"]
     },
