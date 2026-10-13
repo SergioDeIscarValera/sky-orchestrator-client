@@ -1307,7 +1307,9 @@ end;
 $$;
 
 -- FR-LNK-07: the latest progress of a flight; a change of status is logged and
--- announced to soc-operations, which moves the operation.
+-- announced to soc-operations, which moves the operation. A task that ended on a return
+-- home after soc-cloud sent one for a geofence breach ended because of the breach: the
+-- dock names it as the operator's return (322283), only the flight knows why it was sent.
 create function soc.record_flight_progress(
   flight uuid,
   reported soc.flight_status,
@@ -1329,6 +1331,9 @@ begin
   select * into target from soc.flights where id = flight;
   if not found then
     return;
+  end if;
+  if ended = 'operator_return' and target.breached_at is not null then
+    ended := 'geofence_breach';
   end if;
   select status into before from soc.flight_states where flight_id = flight;
   insert into soc.flight_states (flight_id, organization_id, status, result, percent,
