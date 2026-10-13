@@ -375,11 +375,12 @@ async def test_a_sweep_watches_the_flights_not_ended_and_ends_the_rest() -> None
 
 async def test_a_flight_watched_while_a_sweep_reads_is_not_ended_by_it() -> None:
     async with watching() as cloud:
-        late = cloud.store.add(flight())
+        late = flight()
 
         def prepared_meanwhile() -> None:
-            # Its prepare is heard while the sweep's read, which did not see it, is on.
-            cloud.store.ended.add(late.id)
+            # Committed with its prepare after the sweep's read began, so the read did not
+            # see it, and heard while that read is on.
+            cloud.store.add(late)
             cloud.monotonic.now += 1
             cloud.watch._watch(late)
 
