@@ -471,8 +471,20 @@ def on_progress(snapshot: Snapshot, flight_id: uuid.UUID) -> Decision:
         return accepted(Move("in_flight", "flight in progress"))
     if status not in TERMINAL or flight.ended:
         return accepted()
+    if state == "launching" and not flight.took_off:
+        # The task ended before it flew (an undo, a refusal at the phone): the launch did
+        # not settle into a flight, and the operation may launch again (FR-OPS-09).
+        reason = _end_reason(snapshot, flight)
+        return accepted(
+            EndFlight(flight.id, reason),
+            Move("ready", f"the launch ended {status} before take-off: {reason}"),
+        )
     actions: list[Action] = []
-    if state in {"launching", "in_flight", "paused"}:
+    if state == "launching":
+        # It took off with no progress in flight heard: in flight first, the lifecycle's way.
+        actions.append(Move("in_flight", "flight in progress"))
+        state = "in_flight"
+    if state in {"in_flight", "paused"}:
         actions.append(Move("returning", f"flight {status}"))
     elif state != "returning":
         return accepted()

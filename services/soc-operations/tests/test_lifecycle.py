@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from soc_operations.lifecycle import (
+    TERMINAL,
     BuildFile,
     Command,
     EndFlight,
@@ -30,6 +33,8 @@ from soc_operations.lifecycle import (
     on_tick,
 )
 from soc_operations.testing import ENVELOPE, operation
+
+LIFECYCLE = Path(__file__).resolve().parents[3] / "contracts" / "operations" / "lifecycle.json"
 
 FINGERPRINT = "a" * 64
 FILE = File(id=uuid.uuid4(), md5="0" * 32, token="0f" * 16)
@@ -428,12 +433,58 @@ def test_a_stop_closes_aborted_with_the_operators_stop() -> None:
     )
 
 
-def test_a_task_ended_before_take_off_closes_at_once() -> None:
+def test_a_launch_whose_task_ended_before_take_off_is_ready_to_launch_again() -> None:
     never = flight(mode="real", state=FlightState("canceled", 0, "cancelled"))
-    assert moves(on_progress(snapshot("launching", flights=(never,)), never.id)) == [
+    decision = on_progress(snapshot("launching", flights=(never,)), never.id)
+    end, move = decision.actions
+    assert end == EndFlight(never.id, "cancelled")
+    assert isinstance(move, Move) and move.to == "ready"
+    assert "before take-off" in move.cause
+
+
+def test_a_flight_that_ended_in_flight_unheard_moves_by_the_lifecycles_own_steps() -> None:
+    """Launching never goes straight to returning: contracts/operations/lifecycle.json."""
+    landed = flight(
+        mode="real", took_off=True, landed=True, state=FlightState("ok", 0, "completed")
+    )
+    assert moves(on_progress(snapshot("launching", flights=(landed,)), landed.id)) == [
+        "in_flight",
         "returning",
-        "aborted",
+        "completed",
     ]
+    flying = dataclasses.replace(landed, landed=False)
+    assert moves(on_progress(snapshot("launching", flights=(flying,)), flying.id)) == [
+        "in_flight",
+        "returning",
+    ]
+
+
+def test_every_move_a_decision_asks_is_one_the_lifecycle_lists() -> None:
+    """Each progress, in each state, asks only moves contracts/operations/lifecycle.json has."""
+    contract = json.loads(LIFECYCLE.read_text(encoding="utf-8"))
+    listed = {(each["from"], each["to"]) for each in contract["transitions"]}
+    for state in contract["states"]:
+        for status in ("in_progress", "paused", *sorted(TERMINAL)):
+            for took_off, landed in ((False, False), (True, False), (True, True)):
+                for mode in ("simulated", "real"):
+                    current = flight(
+                        mode=mode,
+                        took_off=took_off,
+                        landed=landed,
+                        state=FlightState(status, 0, None),
+                    )
+                    decision = on_progress(snapshot(state, flights=(current,)), current.id)
+                    at = state
+                    for to in moves(decision):
+                        assert (at, to) in listed, (state, status, took_off, landed, mode, to)
+                        at = to
+        for verb in ("prepare", "execute"):
+            for status, result in (("accepted", 0), ("refused", 314010), ("refused", 319999),
+                                   ("timed_out", None)):  # fmt: skip
+                current = flight()
+                outcome = Outcome(verb, current.id, status, result)
+                for to in moves(on_outcome(snapshot(state, flights=(current,)), outcome)):
+                    assert (state, to) in listed, (state, verb, status, to)
 
 
 # --- Readiness ----------------------------------------------------------------------------
