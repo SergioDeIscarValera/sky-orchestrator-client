@@ -1,0 +1,36 @@
+# A released version, from GHCR instead of built here (ADR-0031). Layered over
+# compose.yaml, which keeps everything else: configuration, volumes, health,
+# and each service's profile.
+#
+#   docker login ghcr.io
+#   SO_VERSION=v0.3.0 docker compose -f infra/compose/compose.yaml \
+#     -f infra/compose/compose.release.yaml up -d
+#
+# pull_policy: always takes the published image and never builds; a version that
+# was never published fails here, before anything starts. The images are the
+# ones tools/release_images.py publishes; tools/tests/test_release_images.py
+# holds this file to that list.
+#
+# fake-bridge is the one test image (NFR-TEST-07, ADR-0039): a client's CI runs a
+# released stack with it, without building the application. compose.yaml keeps
+# it in the fake-bridge profile, so a deployment never pulls or starts it unless
+# COMPOSE_PROFILES names that profile, and the default never does.
+services:
+  fake-bridge:
+    image: ghcr.io/sergiodeiscarvalera/sky-orchestrator/fake-bridge:${SO_VERSION:?name the release to run}
+    pull_policy: always
+  phone-link:
+    image: ghcr.io/sergiodeiscarvalera/sky-orchestrator/phone-link:${SO_VERSION:?name the release to run}
+    pull_policy: always
+  so-bridge:
+    image: ghcr.io/sergiodeiscarvalera/sky-orchestrator/so-bridge:${SO_VERSION:?name the release to run}
+    pull_policy: always
+  so-fleet:
+    image: ghcr.io/sergiodeiscarvalera/sky-orchestrator/so-fleet:${SO_VERSION:?name the release to run}
+    pull_policy: always
+  so-gateway:
+    image: ghcr.io/sergiodeiscarvalera/sky-orchestrator/so-gateway:${SO_VERSION:?name the release to run}
+    pull_policy: always
+  so-wayline:
+    image: ghcr.io/sergiodeiscarvalera/sky-orchestrator/so-wayline:${SO_VERSION:?name the release to run}
+    pull_policy: always

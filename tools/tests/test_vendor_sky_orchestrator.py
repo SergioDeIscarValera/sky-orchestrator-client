@@ -23,13 +23,29 @@ SOURCE_FILES = {
     "contracts/wayline/openapi.yaml": "openapi: 3.1.0\n",
     "contracts/wayline/README.md": "# Wayline\n",
     "contracts/config/so-config.schema.json": "{}\n",
+    "infra/compose/compose.yaml": "services: {}\n",
+    "infra/compose/compose.release.yaml": "services: {}\n",
+    "infra/compose/.env.example": "SO_BIND=127.0.0.1\n",
+    "infra/mosquitto/acl": "user cloud-client\n",
+    "infra/mosquitto/entrypoint.sh": '#!/bin/sh\nexec "$@"\n',
+    "infra/mosquitto/mosquitto.conf": "allow_anonymous false\n",
 }
-VENDORED = [
+EXECUTABLES = ("infra/mosquitto/entrypoint.sh",)
+CONTRACTS = [
     "mqtt/dji-envelope.schema.json",
     "mqtt/examples/sys.update_topo.json",
     "mqtt/sys/update_topo.schema.json",
     "wayline/openapi.yaml",
 ]
+STACK = {
+    "config/so-config.schema.json": "contracts/config/so-config.schema.json",
+    "stack/compose/compose.release.yaml": "infra/compose/compose.release.yaml",
+    "stack/compose/compose.yaml": "infra/compose/compose.yaml",
+    "stack/mosquitto/acl": "infra/mosquitto/acl",
+    "stack/mosquitto/entrypoint.sh": "infra/mosquitto/entrypoint.sh",
+    "stack/mosquitto/mosquitto.conf": "infra/mosquitto/mosquitto.conf",
+}
+VENDORED = sorted([*CONTRACTS, *STACK])
 
 
 def git(directory: Path, *arguments: str) -> str:
@@ -54,6 +70,8 @@ class Workspace:
             target = self.source / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(text, encoding="utf-8")
+            if path in EXECUTABLES:
+                target.chmod(0o755)
         self.commit = self.commit_all("first")
 
     def commit_all(self, message: str) -> str:
@@ -110,7 +128,7 @@ class Vendoring(unittest.TestCase):
     def test_the_wanted_files_are_copied_byte_for_byte_with_their_hashes(self) -> None:
         files = self.workspace.vendor()
         self.assertEqual(sorted(files), VENDORED)
-        for path in VENDORED:
+        for path in CONTRACTS:
             with self.subTest(path=path):
                 original = (self.workspace.source / "contracts" / path).read_bytes()
                 self.assertEqual((self.workspace.destination / path).read_bytes(), original)
@@ -145,6 +163,27 @@ class Vendoring(unittest.TestCase):
         self.assertFalse((self.workspace.destination / "mqtt/sys/update_topo.schema.json").exists())
         self.assertEqual(vso.problems(self.workspace.destination), [])
 
+    def test_the_released_stack_keeps_its_layout_and_its_executable_entrypoint(self) -> None:
+        files = self.workspace.vendor()
+        for here, upstream in STACK.items():
+            with self.subTest(path=here):
+                original = (self.workspace.source / upstream).read_bytes()
+                self.assertEqual((self.workspace.destination / here).read_bytes(), original)
+                self.assertEqual(files[here], vso.sha256(original))
+        entrypoint = self.workspace.destination / "stack" / "mosquitto" / "entrypoint.sh"
+        self.assertTrue(entrypoint.stat().st_mode & 0o111)
+        # The compose file reaches the broker's files as ../mosquitto, as upstream.
+        self.assertEqual(
+            (self.workspace.destination / "stack" / "compose").parent / "mosquitto",
+            entrypoint.parent,
+        )
+
+    def test_nothing_else_of_the_infrastructure_is_taken(self) -> None:
+        self.workspace.vendor()
+        self.assertFalse(
+            (self.workspace.destination / "stack" / "compose" / ".env.example").exists()
+        )
+
 
 class Checking(unittest.TestCase):
     def setUp(self) -> None:
@@ -171,6 +210,16 @@ class Checking(unittest.TestCase):
         (self.destination / "mqtt/sys/extra.schema.json").write_text("{}\n")
         self.assertEqual(
             vso.problems(self.destination), ["mqtt/sys/extra.schema.json is not in the manifest"]
+        )
+
+    def test_an_entrypoint_that_lost_its_executable_bit_is_named(self) -> None:
+        workspace = Workspace()
+        self.addCleanup(workspace.close)
+        workspace.vendor()
+        (workspace.destination / "stack" / "mosquitto" / "entrypoint.sh").chmod(0o644)
+        self.assertEqual(
+            vso.problems(workspace.destination),
+            ["stack/mosquitto/entrypoint.sh is not executable, and the stack runs it"],
         )
 
     def test_a_missing_manifest_is_named(self) -> None:
