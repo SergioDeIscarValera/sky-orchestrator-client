@@ -900,6 +900,27 @@ begin
 end;
 $$;
 
+-- --- The organization's members, to name operators (FR-OPS-01, IR-OPR) --------------
+
+-- Who an operation can name as its pilots and observers: the organization's live
+-- members, with their role, to a member of that organization only.
+create function soc.organization_members(organization uuid)
+returns table (profile_id uuid, display_name text, email text, role public.role)
+language sql
+stable
+security definer
+set search_path = soc, public, pg_temp
+as $$
+  select m.profile_id, p.display_name, p.email::text, m.role
+    from public.memberships m
+    join public.profiles p on p.id = m.profile_id
+   where m.organization_id = organization
+     and m.deleted_at is null
+     and p.deleted_at is null
+     and soc.is_live_member(organization)
+   order by coalesce(p.display_name, p.email::text);
+$$;
+
 -- --- Pilots' commands (FR-CMD-01 to FR-CMD-05) ---------------------------------------
 
 -- A pilot of the operation who is an editor or above commands its aircraft in flight.
@@ -1596,12 +1617,14 @@ revoke execute on function soc.record_flight_progress(uuid, soc.flight_status, i
 revoke execute on function soc.record_flight_moment(uuid, text, timestamptz, integer) from public;
 revoke execute on function soc.record_dry_run(uuid, soc.dry_run_status, jsonb) from public;
 revoke execute on function soc.record_checks(uuid, jsonb) from public;
+revoke execute on function soc.organization_members(uuid) from public;
 revoke execute on function soc.record_stack_files_url(text, text) from public;
 
 grant execute on function soc.is_terminal(soc.operation_state) to authenticated, soc_cloud, soc_operations;
 grant execute on function soc.is_frozen(soc.operation_state) to authenticated, soc_cloud, soc_operations;
 grant execute on function soc.request_transition(uuid, soc.transition, uuid, jsonb) to authenticated;
 grant execute on function soc.request_command(uuid, soc.command_verb, uuid, jsonb) to authenticated;
+grant execute on function soc.organization_members(uuid) to authenticated;
 grant execute on function soc.log_event(uuid, text, soc.event_source, jsonb, uuid, uuid, uuid, uuid,
   timestamptz, soc.event_severity) to soc_operations, soc_cloud;
 grant execute on function soc.move_operation(uuid, soc.operation_state, text, soc.event_source, uuid,
