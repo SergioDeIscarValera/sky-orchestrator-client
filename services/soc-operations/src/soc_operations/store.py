@@ -29,6 +29,7 @@ from soc_operations.lifecycle import (
     BuildFile,
     Command,
     EndFlight,
+    Executed,
     File,
     Flight,
     FlightState,
@@ -318,6 +319,12 @@ async def apply(
                 await _prepare_flight(connection, loaded, mode, payload)
             case Command(verb=verb, flight_id=flight, payload=payload):
                 await _command(connection, loaded, flight, verb, payload)
+            case Executed(flight_id=flight):
+                await connection.execute(
+                    "update soc.flights set executed_at = now()"
+                    " where id = $1 and executed_at is null",
+                    flight,
+                )
             case EndFlight(flight_id=flight, end_reason=reason):
                 await _end_flight(connection, loaded, flight, reason)
             case Log(kind=kind, payload=payload):

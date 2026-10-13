@@ -13,6 +13,7 @@ from soc_operations.lifecycle import (
     BuildFile,
     Command,
     EndFlight,
+    Executed,
     File,
     Flight,
     FlightState,
@@ -227,6 +228,9 @@ def test_an_execute_accepted_puts_a_launch_in_flight() -> None:
         snapshot("simulating", flights=(current,)), Outcome("execute", current.id, "accepted", 0)
     )
     assert moves(simulating) == []
+    # From then on the flight flies: soc-cloud watches it (FR-SAF-01).
+    assert Executed(current.id) in decision.actions
+    assert simulating.actions == (Executed(current.id),)
 
 
 def test_a_refused_prepare_returns_to_ready_with_its_meaning() -> None:

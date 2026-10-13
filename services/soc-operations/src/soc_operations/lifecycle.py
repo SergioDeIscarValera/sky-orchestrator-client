@@ -152,6 +152,13 @@ class Command:
 
 
 @dataclass(frozen=True)
+class Executed:
+    """Sky Orchestrator accepted the flight's execute: it flies from now, and soc-cloud watches."""
+
+    flight_id: uuid.UUID
+
+
+@dataclass(frozen=True)
 class EndFlight:
     flight_id: uuid.UUID
     end_reason: str
@@ -163,7 +170,7 @@ class Log:
     payload: Mapping[str, Any]
 
 
-type Action = Move | BuildFile | PrepareFlight | Command | EndFlight | Log
+type Action = Move | BuildFile | PrepareFlight | Command | Executed | EndFlight | Log
 
 
 @dataclass(frozen=True)
@@ -366,8 +373,8 @@ def on_outcome(snapshot: Snapshot, outcome: Outcome) -> Decision:
         if outcome.verb == "prepare":
             return accepted(Command("execute", flight.id, {"flight_id": str(flight.id)}))
         if snapshot.state == "launching":
-            return accepted(Move("in_flight", "executing"))
-        return accepted()
+            return accepted(Executed(flight.id), Move("in_flight", "executing"))
+        return accepted(Executed(flight.id))
     if outcome.verb == "execute" and outcome.result == OUTCOME_UNKNOWN:
         # Sky Orchestrator gave up on the phone, which may have started: the progress
         # settles it (DEP-27). Nothing moves until it does.
