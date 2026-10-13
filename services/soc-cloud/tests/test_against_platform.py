@@ -414,20 +414,33 @@ def flight_progress(gateway: str, flight: uuid.UUID, status: str, result: int = 
 
 
 class Returns:
-    """The dock's services topic: when each return home arrived; each is answered 0."""
+    """The flight's dock: announces its aircraft, and notes when each service arrived, each
+    answered 0."""
 
-    def __init__(self, client: aiomqtt.Client, serial: str) -> None:
+    def __init__(self, client: aiomqtt.Client, serial: str, aircraft: str) -> None:
         self.client = client
         self.serial = serial
+        self.aircraft = aircraft
         self.arrived: list[tuple[str, float]] = []
 
     async def serve(self) -> None:
         await self.client.subscribe(f"thing/product/{self.serial}/services", qos=1)
-        announcer = asyncio.create_task(Dock(self.client, self.serial)._announce())
+        announcer = asyncio.create_task(self._announce())
         try:
             await self._answer()
         finally:
             announcer.cancel()
+
+    async def _announce(self) -> None:
+        # Its own aircraft, never the example's: other tests own that one's device row.
+        announcement = json.loads((MQTT / "examples" / "sys.update_topo.json").read_text())
+        announcement["data"]["sub_devices"][0]["sn"] = self.aircraft
+        while True:
+            message = {**announcement, "tid": str(uuid.uuid4())}
+            await self.client.publish(
+                f"sys/product/{self.serial}/status", json.dumps(message), qos=1
+            )
+            await asyncio.sleep(0.5)
 
     async def _answer(self) -> None:
         async for message in self.client.messages:
@@ -458,7 +471,7 @@ async def test_a_breach_returns_the_aircraft_within_100_ms_once_across_a_restart
         tunables = {"telemetry_batch_s": 1}
         at = 1_791_000_000_000
         async with broker.dock(identifier="flight-dock") as client:
-            returns = Returns(client, gateway)
+            returns = Returns(client, gateway, aircraft)
             answering = asyncio.create_task(returns.serve())
             async with running_service(
                 platform, broker, passwords, connector, tmp_path, ports, tunables
