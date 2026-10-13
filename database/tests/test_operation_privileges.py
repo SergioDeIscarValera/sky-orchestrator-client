@@ -84,6 +84,12 @@ GRANTS = [
     ),
     pytest.param("soc.commanding_pilots(uuid)", {"soc_operations"}, id="commanding_pilots"),
     pytest.param("soc.organization_members(uuid)", {"authenticated"}, id="organization_members"),
+    pytest.param("soc.is_open(uuid)", {"soc_cloud", "soc_operations"}, id="is_open"),
+    pytest.param(
+        "soc.record_geofence_breach(uuid,uuid,jsonb,timestamptz)",
+        {"soc_cloud"},
+        id="record_geofence_breach",
+    ),
 ]
 
 
