@@ -30,6 +30,9 @@ from xml.parsers import expat
 from xml.sax.saxutils import escape
 
 WPML_NAMESPACE = "http://www.dji.com/wpmz/1.0.2"
+#: The version of the WPML profile this builder writes, kept with every file it builds
+#: (IR-FIL): a file is never rebuilt, so what flew says which profile it was written in.
+PROFILE_VERSION = "1.0.0"
 KML_NAMESPACE = "http://www.opengis.net/kml/2.2"
 TEMPLATE_PATH = "wpmz/template.kml"
 WAYLINES_PATH = "wpmz/waylines.wpml"
