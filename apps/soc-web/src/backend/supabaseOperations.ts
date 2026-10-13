@@ -446,7 +446,7 @@ export function operationOperations(client: SupabaseClient) {
       const { data, error } = await soc()
         .from('flights')
         .select(
-          'id, operation_id, mode, fleet_id, gateway_sn, aircraft_sn, prepared_at, executed_at, took_off_at, landed_at, ended_at, end_reason',
+          'id, operation_id, mode, fleet_id, gateway_sn, aircraft_sn, prepared_at, executed_at, took_off_at, landed_at, ended_at, end_reason, breached_at',
         )
         .eq('operation_id', operationId)
         .order('prepared_at', { ascending: false })

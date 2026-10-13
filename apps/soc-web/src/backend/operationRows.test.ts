@@ -49,6 +49,18 @@ describe('the rows the state topic carries whole (IR-CHK, IR-EVT)', () => {
     })
   })
 
+  it('reads a broadcast that carries a key SOC does not read as the same row without it', () => {
+    // A column the database adds later must never fail a broadcast SOC already reads.
+    expect(checkBroadcast({ ...CHECK_PAYLOAD, column_added_later: { anything: true } })).toEqual(
+      checkBroadcast(CHECK_PAYLOAD),
+    )
+    expect(eventBroadcast({ ...EVENT_PAYLOAD, column_added_later: 1 })).toEqual(
+      eventBroadcast(EVENT_PAYLOAD),
+    )
+    expect(checkBroadcast(CHECK_PAYLOAD)).not.toBeNull()
+    expect(eventBroadcast(EVENT_PAYLOAD)).not.toBeNull()
+  })
+
   it('reads no check from a payload it cannot read, so the checks are read again', () => {
     expect(checkBroadcast({ ...CHECK_PAYLOAD, check_id: 'GNSS' })).toBeNull()
     expect(checkBroadcast({ ...CHECK_PAYLOAD, state: 'maybe' })).toBeNull()

@@ -379,6 +379,7 @@ function flightOf(operationId: string, fleetId: string, id = FLIGHT): Flight {
     landedAt: null,
     endedAt: null,
     endReason: null,
+    breachedAt: null,
   }
 }
 
@@ -744,5 +745,19 @@ describe("a fleet's wire identity while its aircraft flies (migration 0010, FR-F
       name: 'Norte alta',
       aircraftSn: 'SOTESTUAV001',
     })
+  })
+})
+
+describe("a flight's breach time on the state topic (FR-SAF-01)", () => {
+  it('announces a flight with the time of its geofence breach, as the database broadcasts it', async () => {
+    const { backend, operation, fleet } = await prepared()
+    const seen: StateEvent[] = []
+    backend.onState(NORTH.id, (event) => seen.push(event))
+    backend.addFlight({ ...flightOf(operation.id, fleet.id), breachedAt: STAMP })
+    expect(seen.at(-1)).toMatchObject({
+      kind: 'flight',
+      payload: { id: FLIGHT, operation_id: operation.id, breached_at: STAMP },
+    })
+    expect(await backend.flights(operation.id)).toMatchObject([{ id: FLIGHT, breachedAt: STAMP }])
   })
 })

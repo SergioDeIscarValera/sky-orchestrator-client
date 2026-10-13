@@ -321,6 +321,7 @@ function flightPayload(flight: Flight): Readonly<Record<string, unknown>> {
     landed_at: flight.landedAt,
     ended_at: flight.endedAt,
     end_reason: flight.endReason,
+    breached_at: flight.breachedAt,
   }
 }
 

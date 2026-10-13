@@ -141,6 +141,7 @@ const FLIGHT_ROW = {
   landed_at: null,
   ended_at: null,
   end_reason: null,
+  breached_at: null,
 }
 
 const COMMAND_ROW = {
@@ -378,6 +379,7 @@ describe('the operations through PostgREST (IR-OPS, IR-ASG, IR-OPR)', () => {
         landedAt: null,
         endedAt: null,
         endReason: null,
+        breachedAt: null,
       },
     ])
     supabase.answers.set('GET /rest/v1/flight_states', {
@@ -434,6 +436,24 @@ describe('the operations through PostgREST (IR-OPS, IR-ASG, IR-OPR)', () => {
     ])
     expect(last(supabase).url.searchParams.get('select')).toBe(
       'gateway_sn,name,link_state,envelope,envelope_read_at',
+    )
+  })
+
+  it('reads a flight with its breach time, a column SOC does not read is no reason to refuse it', async () => {
+    const { backend, supabase } = await signedIn()
+    supabase.answers.set('GET /rest/v1/flights', {
+      status: 200,
+      body: [{ ...FLIGHT_ROW, breached_at: STAMP, column_added_later: { anything: true } }],
+    })
+    expect(await backend.flights(OPERATION_ID)).toMatchObject([
+      { id: FLIGHT_ID, breachedAt: STAMP },
+    ])
+    supabase.answers.set('GET /rest/v1/flights', {
+      status: 200,
+      body: [{ ...FLIGHT_ROW, breached_at: 42 }],
+    })
+    await expect(backend.flights(OPERATION_ID)).rejects.toThrow(
+      'soc.flights answered rows SOC cannot read',
     )
   })
 

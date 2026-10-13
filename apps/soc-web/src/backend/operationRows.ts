@@ -167,6 +167,8 @@ export const FLIGHT_ROW = z.object({
   landed_at: z.nullable(z.string()),
   ended_at: z.nullable(z.string()),
   end_reason: z.nullable(END_REASON),
+  // When soc-cloud sent its return home on a geofence breach (FR-SAF-01); null otherwise.
+  breached_at: z.nullable(z.string()),
 })
 
 export const FLIGHT_STATE_ROW = z.object({
@@ -302,6 +304,7 @@ export function flightOf(row: z.infer<typeof FLIGHT_ROW>): Flight {
     landedAt: row.landed_at,
     endedAt: row.ended_at,
     endReason: row.end_reason,
+    breachedAt: row.breached_at,
   }
 }
 

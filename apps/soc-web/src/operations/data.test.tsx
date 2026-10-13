@@ -21,6 +21,7 @@ import {
   useEvents,
   useFlightStates,
   useOperation,
+  useFlights,
   useOperations,
   useStacks,
 } from './data'
@@ -217,6 +218,37 @@ describe("the operation's log and checks, kept current from the state topic (FR-
     })
     await soon(() => {
       expect([events.mock.calls.length, checks.mock.calls.length]).toEqual([2, 2])
+    })
+  })
+
+  it('reads the flights again when one changes, its breach time and a key it does not read included', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await backend.createOperation(NORTH.id, DRAFT)
+    const reads = vi.spyOn(backend, 'flights')
+    const { wrapper } = opened(backend)
+    renderHook(
+      () => {
+        useLiveState()
+        return useFlights(operation.id)
+      },
+      { wrapper },
+    )
+    await soon(() => {
+      expect(reads).toHaveBeenCalledOnce()
+    })
+    act(() => {
+      backend.emit(NORTH.id, {
+        kind: 'flight',
+        payload: {
+          id: '88888888-8888-4888-8888-888888888888',
+          operation_id: operation.id,
+          breached_at: '2026-10-11T10:30:00+00:00',
+          column_added_later: true,
+        },
+      })
+    })
+    await soon(() => {
+      expect(reads).toHaveBeenCalledTimes(2)
     })
   })
 

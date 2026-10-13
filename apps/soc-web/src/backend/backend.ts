@@ -371,6 +371,8 @@ export interface Flight {
   readonly landedAt: string | null
   readonly endedAt: string | null
   readonly endReason: EndReason | null
+  /** When soc-cloud sent its return home on a geofence breach (FR-SAF-01), or null. */
+  readonly breachedAt: string | null
 }
 
 /** The latest progress of a flight, as soc-cloud reports it (IR-FST). */
