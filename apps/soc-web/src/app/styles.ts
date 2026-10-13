@@ -38,6 +38,8 @@ export const PILL_TONE = {
   flying: 'bg-primary-subtle text-primary-emphasis',
   caution: 'bg-warning-subtle text-warning-emphasis',
   bad: 'bg-danger-subtle text-danger-emphasis',
+  /** On an alert, where a danger fill would vanish: a card-coloured chip with danger text. */
+  alarm: 'bg-surface text-danger-emphasis',
   muted: 'border-border text-muted border',
 } as const
 
