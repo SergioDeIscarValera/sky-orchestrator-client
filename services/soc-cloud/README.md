@@ -14,6 +14,7 @@ The skeleton every later part plugs into:
 | --- | --- |
 | Settings: the contract's keys for `soc-cloud` as typed views, the environment, each stack's secrets; fail closed | `settings.py` |
 | The wire contract: Sky Orchestrator's vendored DJI schemas, every outgoing message checked first (`FR-LNK-10`) | `wire.py` |
+| The typed client for Sky Orchestrator's wayline API: stack status, the envelope and a dry run of a flight file, a nullable field None when absent or null (`FR-LNK-08`, `FR-LNK-09`); not wired into the service yet | `so_api.py` |
 | The database link, supervised, as `soc_cloud` | `service.py`, through `soc-db` |
 | The Realtime socket, joined to every served organization's telemetry topic | `service.py`, through `soc-realtime` |
 | One MQTT v5 link per stack as `cloud-client`, persistent session, supervised (`FR-LNK-01`) | `link/stack.py` |
@@ -25,6 +26,7 @@ The skeleton every later part plugs into:
 | `update_topo` acknowledged with `status_reply` (`FR-LNK-11`); `flighttask_resource_get` answered on `requests_reply` (`FR-LNK-04`) | `link/stack.py` |
 | Flight files kept as exact bytes in memory, offered with their MD5, served at `/files/<128-bit token>.kmz` on `SOC_FLIGHT_FILES_PORT`, retired `flight_file_grace_s` after the flight ends (`FR-LNK-05`, `NFR-SEC-06`, [ADR-0008](../../docs/architecture/decisions/0008-flight-files-served-on-sky-orchestrators-network.md)) | `files.py` |
 | Command intents put on the wire: announced by `pg_notify`, swept on every reconnection, checked against their schema, claimed or expired, published with tid = intent and bid = flight, settled by their `services_reply` or timed out (`FR-LNK-06`, ADR-0006) | `commands.py` |
+| `flighttask_progress` decoded as sent (status, result, percent, waypoint, break point, media count), and each finished task's end reason (`FR-LNK-07`); the link does not read it yet | `link/progress.py` |
 | `/health` and `/ready` on `SOC_HEALTH_PORT`, one entry per part: `database`, `realtime`, `flight_files`, `stack:<name>` (`NFR-OBS-02`) | `service.py`, through `soc-supervision` |
 | The process: JSON logs, SIGTERM and SIGINT stop it cleanly | `__main__.py` |
 
