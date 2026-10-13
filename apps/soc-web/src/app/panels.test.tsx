@@ -156,9 +156,9 @@ describe('the view in the URL (NFR-UX-03)', () => {
     expect(window.location.search).toBe('')
   })
 
-  it('opens the panel a shared link names, and says when its content arrives', async () => {
+  it('opens the operations panel a shared link names, empty until one is made', async () => {
     await openAt('?panel=operations')
-    expect(await screen.findByText('Operations arrive in M4.')).toBeInTheDocument()
+    expect(await screen.findByText('No operations yet.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Operations' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -186,7 +186,7 @@ describe('the view in the URL (NFR-UX-03)', () => {
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'Operations' }))
     })
-    expect(await screen.findByText('Operations arrive in M4.')).toBeInTheDocument()
+    expect(await screen.findByText('No operations yet.')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Fleet' })).toBeNull()
   })
 })
@@ -211,6 +211,23 @@ describe('changing the panel drops the selection (NFR-UX-03)', () => {
     await user.click(screen.getByRole('button', { name: 'Geofences' }))
     expect(await screen.findByRole('heading', { name: 'Geofences' })).toBeVisible()
     expect([params().get('panel'), params().get('wayline')]).toEqual(['geofences', null])
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+    })
+  })
+
+  it('drops an operation when the rail opens geofences', async () => {
+    const backend = new FakeBackend(NEIGHBOUR)
+    const operation = await backend.createOperation(NORTH.id, {
+      name: 'North corridor',
+      geofenceId: null,
+      takeoffSecurityHeightM: null,
+    })
+    const { user } = await openAt(`?panel=operations&operation=${operation.id}`, backend)
+    await within(inspector()).findByRole('heading', { name: 'North corridor' })
+    await user.click(screen.getByRole('button', { name: 'Geofences' }))
+    expect(await screen.findByRole('heading', { name: 'Geofences' })).toBeVisible()
+    expect([params().get('panel'), params().get('operation')]).toEqual(['geofences', null])
     await waitFor(() => {
       expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
     })
