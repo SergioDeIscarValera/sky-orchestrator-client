@@ -34,6 +34,16 @@ not exist, without a geometry library at run time
   position, the transit and the distance from home. The console's flight reports
   the same violations with the same codes (`src/geometry/limits.ts`).
 
+- **The cloud geofence's judgement of a sample** (`soc_geo.fence`, FR-SAF-01,
+  ADR-0010): `geofence_of` checks a stored ring once, that it is a simple polygon, and
+  places it on the local frame; `judge` then says where one telemetry sample stands
+  against it: `inside`, `warning` (within the band of the boundary), `outside` (off the
+  polygon, or above the ceiling) or `unknown` (a missing or non-finite position or
+  height, never inside). A point on the boundary is not outside, and a height at the
+  ceiling is not above it, as SO passes a value at its limit. A breach that the position
+  or the height proves stays outside when the other is missing. A ring that is not
+  simple is refused, never judged.
+
 ## What the console generates, checked here
 
 The console's TypeScript is the only generator (ADR-0009); its outputs are kept
