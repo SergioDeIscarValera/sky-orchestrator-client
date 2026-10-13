@@ -1,0 +1,132 @@
+{
+  "description": "The closed list of operation event kinds (IR-EVT-02, FR-LOG-02): what an operation's append-only log can hold. Each kind names its severity, the units that may write it, and the keys its payload always carries; a payload may carry more. safety is reserved for FR-SAF events, so a filter on it is exact (IR-EVT-01). The database refuses a kind outside this list (database/migrations/0010-operations.sql); a gate test holds both to this file. A new kind is a contract change.",
+  "x-version": "1.0.0",
+  "kinds": {
+    "operation_created": {
+      "severity": "info",
+      "sources": ["operator"],
+      "requirement": "FR-OPS-01",
+      "payload": ["name"]
+    },
+    "operation_state_changed": {
+      "severity": "info",
+      "sources": ["operator", "soc-operations", "soc-cloud"],
+      "requirement": "FR-OPS-02",
+      "payload": ["from", "to", "cause"]
+    },
+    "operation_definition_changed": {
+      "severity": "info",
+      "sources": ["operator", "soc-operations"],
+      "requirement": "FR-OPS-07",
+      "payload": ["what"]
+    },
+    "transition_requested": {
+      "severity": "info",
+      "sources": ["operator"],
+      "requirement": "FR-OPS-02",
+      "payload": ["transition"]
+    },
+    "transition_refused": {
+      "severity": "warning",
+      "sources": ["soc-operations"],
+      "requirement": "FR-OPS-03",
+      "payload": ["transition", "reasons"]
+    },
+    "checks_at_simulation": {
+      "severity": "info",
+      "sources": ["soc-operations"],
+      "requirement": "FR-LOG-02",
+      "payload": ["checks"]
+    },
+    "checks_at_launch": {
+      "severity": "info",
+      "sources": ["soc-operations"],
+      "requirement": "FR-LOG-02",
+      "payload": ["checks"]
+    },
+    "flight_prepared": {
+      "severity": "info",
+      "sources": ["soc-operations"],
+      "requirement": "FR-SAF-04",
+      "payload": ["mode", "md5"]
+    },
+    "flight_status_changed": {
+      "severity": "info",
+      "sources": ["soc-cloud"],
+      "requirement": "FR-LNK-07",
+      "payload": ["status", "percent", "result"]
+    },
+    "flight_ended": {
+      "severity": "info",
+      "sources": ["soc-operations"],
+      "requirement": "FR-LOG-02",
+      "payload": ["status", "result", "end_reason"]
+    },
+    "took_off": {
+      "severity": "info",
+      "sources": ["aircraft"],
+      "requirement": "FR-LOG-02",
+      "payload": ["mode_code"]
+    },
+    "automatic_return": {
+      "severity": "warning",
+      "sources": ["aircraft"],
+      "requirement": "FR-LOG-02",
+      "payload": ["mode_code"]
+    },
+    "landed": {
+      "severity": "info",
+      "sources": ["aircraft"],
+      "requirement": "FR-LOG-02",
+      "payload": ["mode_code"]
+    },
+    "command_requested": {
+      "severity": "info",
+      "sources": ["operator", "soc-operations"],
+      "requirement": "FR-CMD-06",
+      "payload": ["verb"]
+    },
+    "command_outcome": {
+      "severity": "info",
+      "sources": ["soc-cloud"],
+      "requirement": "FR-CMD-06",
+      "payload": ["verb", "status", "result"]
+    },
+    "geofence_warning": {
+      "severity": "warning",
+      "sources": ["soc-cloud"],
+      "requirement": "FR-SAF-01",
+      "payload": ["position", "height_m", "distance_to_boundary_m"]
+    },
+    "geofence_breach": {
+      "severity": "safety",
+      "sources": ["soc-cloud"],
+      "requirement": "FR-SAF-01",
+      "payload": ["position", "height_m", "distance_outside_m", "sampled_at"]
+    },
+    "telemetry_stale": {
+      "severity": "safety",
+      "sources": ["soc-cloud"],
+      "requirement": "FR-SAF-06",
+      "payload": ["last_sampled_at"]
+    },
+    "telemetry_fresh": {
+      "severity": "info",
+      "sources": ["soc-cloud"],
+      "requirement": "FR-LOG-02",
+      "payload": ["sampled_at"]
+    },
+    "fleet_offline": {
+      "severity": "warning",
+      "sources": ["soc-cloud"],
+      "requirement": "FR-LOG-02",
+      "payload": ["aircraft_sn"]
+    },
+    "fleet_online": {
+      "severity": "info",
+      "sources": ["soc-cloud"],
+      "requirement": "FR-LOG-02",
+      "payload": ["aircraft_sn"]
+    }
+  }
+}
