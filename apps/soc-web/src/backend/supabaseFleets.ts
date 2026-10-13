@@ -14,7 +14,21 @@ import {
 } from './backend'
 import { rows } from './rows'
 
-const STATE_EVENTS = ['stack', 'device', 'fleet', 'command_intent', 'geofence', 'wayline'] as const
+/** Every broadcast on the organization's state topic (ADR-0007), each passed on as it was sent. */
+const STATE_EVENTS = [
+  'stack',
+  'device',
+  'fleet',
+  'command_intent',
+  'geofence',
+  'wayline',
+  'operation',
+  'flight',
+  'flight_state',
+  'operation_event',
+  'transition_request',
+  'operation_check',
+] as const
 
 /** The part of a Realtime channel the console uses, so it can be faked in tests. */
 export interface StateChannel {
@@ -114,6 +128,8 @@ const NOT_NULL: Readonly<Record<string, { field: FleetField; message: string }>>
   },
 }
 const NOT_ALLOWED = '42501'
+/** The words the trigger raises fleet_identity_in_flight with: PostgREST sends no constraint name. */
+const FLYING = 'its aircraft is flying'
 
 export function refusal(error: PostgrestError): BackendError {
   const constraint = /constraint "([^"]+)"/.exec(error.message)?.[1]
@@ -130,7 +146,20 @@ export function refusal(error: PostgrestError): BackendError {
   if (error.message.includes('a retired fleet does not change')) {
     return new FieldRefusedError('A retired fleet does not change.', null, error.code)
   }
+  if (error.message.includes(FLYING)) return flyingRefusal(error.code)
   return new BackendError(error.message, error.code)
+}
+
+/**
+ * The wire identity of a fleet whose aircraft flies: the trigger refuses its change and names no
+ * field, since the gateway and the aircraft serials are both the identity (migration 0010, FR-FLE-05).
+ */
+export function flyingRefusal(code: string | null = '23514'): FieldRefusedError {
+  return new FieldRefusedError(
+    'This aircraft is flying: its wire identity stays until its flight ends.',
+    null,
+    code,
+  )
 }
 
 /**

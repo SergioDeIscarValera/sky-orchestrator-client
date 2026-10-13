@@ -10,6 +10,7 @@ import { z } from '../schema'
 import type { RuntimeConfiguration } from '../config/runtime'
 import { createLinkTracker, HEARTBEAT_MS, reporting } from './link'
 import { fleetOperations, type ChannelFactory } from './supabaseFleets'
+import { operationOperations } from './supabaseOperations'
 import { planOperations } from './supabasePlans'
 import { loadSite } from '../scene/siteModel'
 import { telemetryOperations } from './supabaseTelemetry'
@@ -100,6 +101,7 @@ export function supabaseBackend(
     address: configuration.supabaseUrl,
     ...fleetOperations(client, channel),
     ...planOperations(client),
+    ...operationOperations(client),
     ...telemetryOperations(channel),
     siteModel: (organizationId: string) => loadSite(organizationId),
 
