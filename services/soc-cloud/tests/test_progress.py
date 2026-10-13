@@ -232,7 +232,7 @@ END_RESULT_CASES = [
     pytest.param(321775, EndReason.LINK_LOST, id="321775"),
     pytest.param(322282, EndReason.PILOT_TAKEOVER, id="322282"),
     pytest.param(322283, EndReason.OPERATOR_RETURN, id="322283"),
-    pytest.param(321000, None, id="321000"),
+    pytest.param(321000, EndReason.AIRCRAFT_FAULT, id="321000"),
 ]
 
 

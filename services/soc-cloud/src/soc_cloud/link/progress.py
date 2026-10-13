@@ -8,8 +8,8 @@ not validate what the dock sends, so a message that is not JSON, has a field of 
 type, or is another event raises ValueError naming the problem.
 
 The end reason is read from the result code first, then from the status and the break reason
-of a stop on the aircraft's own (see end_reason). Where the vendored contracts do not say what
-a code means, its entry in END_RESULTS says so.
+of a stop on the aircraft's own (see end_reason). The codes' meanings are Sky Orchestrator's
+(its ADR-0028), named beside each entry of END_RESULTS.
 """
 
 from __future__ import annotations
@@ -162,26 +162,21 @@ TERMINAL: frozenset[FlightStatus] = frozenset(
 # The envelope's result: 0 is success, anything else is one of DJI's error codes (dji-envelope).
 SUCCESS = 0
 
-#: Sky Orchestrator's end results, by the DJI `result` they arrive with. None means IR-OPS has
-#: no end reason for the result. Each entry says where its meaning comes from.
+#: Sky Orchestrator's end results, by the DJI `result` they arrive with (Sky Orchestrator's
+#: ADR-0028 and so_gateway/tasks.py, which name each one; FR-LNK-07). A task the operator
+#: ended ends `canceled`, the others `failed`; the result says why.
 END_RESULTS: dict[int, EndReason | None] = {
-    # Documented: FR-CMD-03 ends the flight `canceled` with the operator's return as its end
-    # reason, 322283, and the M4 session notes (dependencies.md) agree. It is the code of a
-    # return home, so SOC's own return after a geofence breach (FR-SAF-01) ends with it too.
-    # This table cannot tell the two apart: the caller must take the cause from the return
-    # it sent.
+    # USER_SEND_RTH, "RTH command sent by user" (FR-CMD-03). SOC's own return after a
+    # geofence breach (FR-SAF-01) ends with it too: this table cannot tell the two apart,
+    # so the caller takes the cause from the return it sent.
     322283: EndReason.OPERATOR_RETURN,
-    # UNCONFIRMED: the vendored contracts define none of the four codes below. FR-LNK-07 lists
-    # the reasons envelope breach, low battery, link lost, pilot takeover, operator return,
-    # other, and its acceptance lists the codes in that same order, so the pairing is by
-    # position and not stated. Sky Orchestrator must confirm it.
-    321514: EndReason.ENVELOPE_BREACH,
-    321773: EndReason.LOW_BATTERY,
-    321775: EndReason.LINK_LOST,
-    322282: EndReason.PILOT_TAKEOVER,
-    # UNCONFIRMED, as the four above. Paired with "other" in FR-LNK-07, which IR-OPS has no
-    # value for: no end reason.
-    321000: None,
+    321514: EndReason.ENVELOPE_BREACH,  # DISTANCE_LIMIT
+    321773: EndReason.LOW_BATTERY,  # LOW_POWER_RTH
+    321775: EndReason.LINK_LOST,  # AIRCRAFT_SIGNAL_LOST
+    322282: EndReason.PILOT_TAKEOVER,  # USER_CONTROL
+    # TASK_ERROR: a task the aircraft ended on its own, or its executor failed. FR-LNK-07's
+    # "other"; IR-OPS's honest value for it is an aircraft fault.
+    321000: EndReason.AIRCRAFT_FAULT,
 }
 
 #: DJI's FlighttaskBreakReasonEnum, for the reasons the vendored progress schema gives in words
@@ -221,7 +216,9 @@ def end_reason(progress: FlightProgress) -> EndReason | None:
 
 
 def _by_break_reason(break_point: BreakPoint | None) -> EndReason | None:
-    reason = break_point.break_reason if break_point is not None else None
-    if reason is None or reason not in BREAK_REASONS:
+    if break_point is None:
         return None
-    return BREAK_REASONS[reason]
+    # A missing reason is in no table: None, never another reason.
+    if break_point.break_reason not in BREAK_REASONS:
+        return None
+    return BREAK_REASONS[break_point.break_reason]
