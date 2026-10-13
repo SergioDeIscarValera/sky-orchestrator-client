@@ -131,11 +131,14 @@ class Runner:
     async def _sweep(self) -> None:
         """What was announced while away: requests still pending, operations still active."""
         async with self.database.transaction() as connection:
-            await connection.execute(
-                "update soc.transition_requests set status = 'failed', decided_at = now(),"
-                " reasons = '[\"soc-operations stopped while deciding it\"]'::jsonb"
-                " where status = 'running'"
-            )
+            # Left running by a crash: what was decided rolled back with it, so it failed.
+            for row in await connection.fetch(
+                "select id from soc.transition_requests where status = 'running'"
+            ):
+                await connection.execute(
+                    "select * from soc.decide_transition_request($1, 'failed', $2::jsonb)",
+                    row["id"], json.dumps(["soc-operations stopped while deciding it"]),
+                )  # fmt: skip
             pending = await connection.fetch(
                 "select id from soc.transition_requests where status = 'pending'"
                 " order by requested_at"
