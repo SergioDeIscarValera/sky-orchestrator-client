@@ -25,3 +25,22 @@ export const MENU = 'rounded-card bg-surface shadow-card border-border z-50 min-
 
 export const MENU_ITEM =
   'text-heading data-[highlighted]:bg-primary-subtle data-[highlighted]:text-primary-emphasis flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm outline-none'
+
+/** A status pill: a subtle fill with emphasis text, as the design system derives them. */
+export const PILL =
+  'rounded-pill inline-flex h-6 shrink-0 items-center px-2.5 text-xs font-medium whitespace-nowrap'
+
+/** A pill's tone: each is a pair of tokens the theme already tests for contrast, no new colour. */
+export const PILL_TONE = {
+  neutral: 'bg-page text-heading',
+  progress: 'bg-info-subtle text-info-emphasis',
+  good: 'bg-success-subtle text-success-emphasis',
+  flying: 'bg-primary-subtle text-primary-emphasis',
+  caution: 'bg-warning-subtle text-warning-emphasis',
+  bad: 'bg-danger-subtle text-danger-emphasis',
+  /** On an alert, where a danger fill would vanish: a card-coloured chip with danger text. */
+  alarm: 'bg-surface text-danger-emphasis',
+  muted: 'border-border text-muted border',
+} as const
+
+export type PillTone = keyof typeof PILL_TONE

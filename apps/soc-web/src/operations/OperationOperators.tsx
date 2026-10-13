@@ -12,7 +12,8 @@ import {
   useOperators,
   useRemoveOperator,
 } from './data'
-import { memberName, operatorRoleWord, roleWord } from './format'
+import { roleName } from '../organizations/format'
+import { memberName, operatorRoleWord } from './format'
 import { operatorsOpen } from './definition'
 
 /** What a member is named in the operation: no operator, or a role. */
@@ -113,7 +114,7 @@ export function OperationOperators({
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-heading truncate text-sm font-medium">{label}</p>
-                  <p className="text-muted text-xs">{roleWord(member.role)}</p>
+                  <p className="text-muted text-xs">{roleName(member.role)}</p>
                 </div>
                 {editable ? (
                   <span className="w-44 shrink-0">

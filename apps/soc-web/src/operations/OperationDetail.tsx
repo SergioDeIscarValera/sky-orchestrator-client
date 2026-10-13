@@ -15,7 +15,8 @@ import { OperationDefinition, type Choices } from './OperationDefinition'
 import { OperationFlight } from './OperationFlight'
 import { OperationLog } from './OperationLog'
 import { OperationOperators } from './OperationOperators'
-import { stateTone, stateWord } from './format'
+import { STATE_TONE, STATE_WORDS } from './format'
+import { OperationPill } from './OperationPill'
 
 /**
  * An operation in the inspector (M4): its state, its definition and the flight its assignment
@@ -80,11 +81,7 @@ export function OperationDetail({ operationId }: { readonly operationId: string 
         <h3 id={heading} className="min-w-0 text-lg font-semibold break-words">
           {current.name}
         </h3>
-        <span
-          className={`rounded-pill inline-flex h-6 shrink-0 items-center px-2.5 text-xs font-medium whitespace-nowrap ${stateTone(current.state)}`}
-        >
-          {stateWord(current.state)}
-        </span>
+        <OperationPill tone={STATE_TONE[current.state]}>{STATE_WORDS[current.state]}</OperationPill>
       </div>
       <OperationDefinition
         operation={current}
