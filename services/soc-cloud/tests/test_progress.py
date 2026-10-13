@@ -11,11 +11,16 @@ import msgspec
 import pytest
 
 from soc_cloud.link.progress import (
+    BREAK_REASONS,
+    END_RESULTS,
     PROGRESS,
+    TERMINAL,
     BreakPoint,
+    EndReason,
     FlightProgress,
     FlightStatus,
     decode_progress,
+    end_reason,
 )
 from soc_cloud.wire import MQTT, WireContract
 
@@ -215,3 +220,141 @@ def test_another_event_is_refused_by_name() -> None:
 def test_a_message_without_a_method_is_refused() -> None:
     with pytest.raises(ValueError, match="method is None"):
         decode_progress(raw({"data": {}}))
+
+
+def ended(**changes: Any) -> EndReason | None:
+    return end_reason(decode_progress(raw(message(**changes))))
+
+
+END_RESULT_CASES = [
+    pytest.param(321514, EndReason.ENVELOPE_BREACH, id="321514"),
+    pytest.param(321773, EndReason.LOW_BATTERY, id="321773"),
+    pytest.param(321775, EndReason.LINK_LOST, id="321775"),
+    pytest.param(322282, EndReason.PILOT_TAKEOVER, id="322282"),
+    pytest.param(322283, EndReason.OPERATOR_RETURN, id="322283"),
+    pytest.param(321000, None, id="321000"),
+]
+
+
+@pytest.mark.parametrize("status", sorted(TERMINAL), ids=str)
+@pytest.mark.parametrize(("code", "reason"), END_RESULT_CASES)
+def test_each_sky_orchestrator_end_result_maps_to_its_end_reason(
+    code: int, reason: EndReason | None, status: FlightStatus
+) -> None:
+    assert ended(status=status, result=code) is reason
+
+
+def test_ok_with_result_zero_is_completed() -> None:
+    assert ended(status="ok", result=0) is EndReason.COMPLETED
+
+
+def test_a_canceled_task_is_cancelled() -> None:
+    assert ended(status="canceled", result=0) is EndReason.CANCELLED
+
+
+@pytest.mark.parametrize("status", sorted(set(FlightStatus) - TERMINAL), ids=str)
+@pytest.mark.parametrize("result", [0, 322283, 321514])
+def test_a_status_that_does_not_end_the_task_gives_no_end_reason(
+    status: FlightStatus, result: int
+) -> None:
+    assert ended(status=status, result=result) is None
+
+
+def test_a_missing_status_ends_nothing_whatever_the_result() -> None:
+    lacking = message(result=322283)
+    del lacking["data"]["output"]["status"]
+    assert end_reason(decode_progress(raw(lacking))) is None
+
+
+def test_a_missing_result_is_not_completed() -> None:
+    lacking = message(status="ok")
+    del lacking["data"]["result"]
+    assert end_reason(decode_progress(raw(lacking))) is None
+
+
+@pytest.mark.parametrize("status", ["failed", "rejected", "timeout", "partially_done"])
+def test_a_terminal_status_with_no_known_code_or_reason_gives_none(status: str) -> None:
+    assert ended(status=status, result=999_999) is None
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        pytest.param(514, EndReason.ENVELOPE_BREACH, id="514"),
+        pytest.param(773, EndReason.LOW_BATTERY, id="773"),
+        pytest.param(775, EndReason.LINK_LOST, id="775"),
+        pytest.param(1282, EndReason.PILOT_TAKEOVER, id="1282"),
+        pytest.param(2, EndReason.AIRCRAFT_FAULT, id="2"),
+    ],
+)
+def test_a_stop_on_the_aircraft_own_takes_the_end_reason_of_its_break_reason(
+    reason: int, expected: EndReason
+) -> None:
+    assert ended(status="failed", result=999_999, break_point=paused_at(reason)) is expected
+
+
+@pytest.mark.parametrize("reason", [0, 1564, 65534], ids=str)
+def test_break_reasons_with_no_ir_ops_value_end_nothing(reason: int) -> None:
+    assert ended(status="failed", result=999_999, break_point=paused_at(reason)) is None
+
+
+def test_a_flight_that_finished_ok_after_a_stop_is_completed() -> None:
+    # The break point is kept until the mission resumes (FR-FLT-12), so a resumed flight
+    # that finishes ok still carries the reason it stopped for.
+    assert ended(status="ok", result=0, break_point=paused_at(514)) is EndReason.COMPLETED
+
+
+def test_a_return_home_after_a_stop_is_the_operators_return_by_its_code() -> None:
+    # The break point of the earlier stop is kept through the return and the landing; the
+    # result code is the more specific reading of how the task ended.
+    assert ended(status="canceled", result=322283, break_point=paused_at(514)) is (
+        EndReason.OPERATOR_RETURN
+    )
+
+
+def test_terminal_statuses_are_the_six_that_end_a_task() -> None:
+    ending = {
+        FlightStatus.OK,
+        FlightStatus.FAILED,
+        FlightStatus.CANCELED,
+        FlightStatus.REJECTED,
+        FlightStatus.TIMEOUT,
+        FlightStatus.PARTIALLY_DONE,
+    }
+    running = {FlightStatus.SENT, FlightStatus.IN_PROGRESS, FlightStatus.PAUSED}
+    assert ending == TERMINAL
+    assert set(FlightStatus) - TERMINAL == running
+
+
+def test_end_reason_is_exactly_irops_end_reason() -> None:
+    documented = requirement_values("information-requirements.md", "## IR-OPS ", "end_reason")
+    assert [reason.value for reason in EndReason] == documented
+
+
+def test_the_end_result_table_holds_each_code_of_the_acceptance() -> None:
+    text = (REQUIREMENTS / "functional-requirements.md").read_text(encoding="utf-8")
+    listed = re.search(r"end results \(([\d,\s]+)\)", text)
+    assert listed is not None
+    assert set(END_RESULTS) == {int(code) for code in re.findall(r"\d+", listed.group(1))}
+
+
+def test_return_home_is_documented_as_322283() -> None:
+    text = (REQUIREMENTS / "functional-requirements.md").read_text(encoding="utf-8")
+    assert re.search(r"operator's return as its end\s+reason \(`322283`\)", text)
+
+
+DOCUMENTED_BREAK_REASONS = [
+    (514, "an envelope breach", EndReason.ENVELOPE_BREACH),
+    (773, "low battery", EndReason.LOW_BATTERY),
+    (775, "a lost link", EndReason.LINK_LOST),
+    (1282, "a pilot takeover", EndReason.PILOT_TAKEOVER),
+    (2, "an aircraft fault", EndReason.AIRCRAFT_FAULT),
+]
+
+
+def test_the_break_reason_table_matches_the_words_of_the_vendored_schema() -> None:
+    schema = (MQTT / "events" / "flighttask_progress.schema.json").read_text(encoding="utf-8")
+    for code, words, reason in DOCUMENTED_BREAK_REASONS:
+        assert f"{code} {words}" in schema
+        assert BREAK_REASONS[code] is reason
+    assert set(BREAK_REASONS) == {code for code, _, _ in DOCUMENTED_BREAK_REASONS}

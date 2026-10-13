@@ -1,10 +1,15 @@
-"""One flighttask_progress from the dock, decoded as sent (FR-LNK-07).
+"""One flighttask_progress from the dock, decoded as sent, and how its task ended (FR-LNK-07).
 
 The dock publishes the event while a task is unfinished and once when it finishes. A field
-the message lacks decodes to None, never to a default (FR-SAF-03). A value that arrives is
-carried as sent: nothing here clamps a percent or checks it against the schema's range.
-The link does not validate what the dock sends, so a message that is not JSON, has a field
-of the wrong type, or is another event raises ValueError naming the problem.
+the message lacks decodes to None, never to a default (FR-SAF-03): a progress with no status
+is not terminal, and one with no result is not completed. A value that arrives is carried as
+sent: nothing here clamps a percent or checks it against the schema's range. The link does
+not validate what the dock sends, so a message that is not JSON, has a field of the wrong
+type, or is another event raises ValueError naming the problem.
+
+The end reason is read from the result code first, then from the status, then from the break
+reason of a stop on the aircraft's own. Where the vendored contracts do not say what a code
+means, its entry in END_RESULTS says so.
 """
 
 from __future__ import annotations
@@ -28,6 +33,25 @@ class FlightStatus(StrEnum):
     REJECTED = "rejected"
     TIMEOUT = "timeout"
     PARTIALLY_DONE = "partially_done"
+
+
+class EndReason(StrEnum):
+    """IR-OPS's end_reason, with exactly its values; IR-FLT's end_reason takes the same.
+
+    Two of them come from SOC's own commands and events rather than from a progress:
+    operator_stop (FR-CMD-04) and geofence_breach (FR-SAF-01).
+    """
+
+    COMPLETED = "completed"
+    OPERATOR_STOP = "operator_stop"
+    OPERATOR_RETURN = "operator_return"
+    GEOFENCE_BREACH = "geofence_breach"
+    ENVELOPE_BREACH = "envelope_breach"
+    LOW_BATTERY = "low_battery"
+    LINK_LOST = "link_lost"
+    PILOT_TAKEOVER = "pilot_takeover"
+    AIRCRAFT_FAULT = "aircraft_fault"
+    CANCELLED = "cancelled"
 
 
 class BreakPoint(msgspec.Struct, frozen=True, kw_only=True):
@@ -119,3 +143,84 @@ def _flatten(message: _Message) -> FlightProgress:
         media_count=ext.media_count if ext is not None else None,
         break_point=ext.break_point if ext is not None else None,
     )
+
+
+#: The statuses that end a task. The schema names DJI's enum without saying which of its values
+#: end a task. sent, in_progress and paused do not: a paused flight resumes (FR-CMD-02). ok ends
+#: it (a resumed flight ends ok, FR-CMD-02) and so does canceled (FR-CMD-05). failed, rejected,
+#: timeout and partially_done are terminal by their names only; Sky Orchestrator must confirm.
+TERMINAL: frozenset[FlightStatus] = frozenset(
+    {
+        FlightStatus.OK,
+        FlightStatus.FAILED,
+        FlightStatus.CANCELED,
+        FlightStatus.REJECTED,
+        FlightStatus.TIMEOUT,
+        FlightStatus.PARTIALLY_DONE,
+    }
+)
+# The envelope's result: 0 is success, anything else is one of DJI's error codes (dji-envelope).
+SUCCESS = 0
+
+#: Sky Orchestrator's end results, by the DJI `result` they arrive with. None means IR-OPS has
+#: no end reason for the result. Each entry says where its meaning comes from.
+END_RESULTS: dict[int, EndReason | None] = {
+    # Documented: FR-CMD-03 ends the flight `canceled` with the operator's return as its end
+    # reason, 322283, and the M4 session notes (dependencies.md) agree. It is the code of a
+    # return home, so SOC's own return after a geofence breach (FR-SAF-01) ends with it too.
+    # This table cannot tell the two apart: the caller must take the cause from the return
+    # it sent.
+    322283: EndReason.OPERATOR_RETURN,
+    # UNCONFIRMED: the vendored contracts define none of the four codes below. FR-LNK-07 lists
+    # the reasons envelope breach, low battery, link lost, pilot takeover, operator return,
+    # other, and its acceptance lists the codes in that same order, so the pairing is by
+    # position and not stated. Sky Orchestrator must confirm it.
+    321514: EndReason.ENVELOPE_BREACH,
+    321773: EndReason.LOW_BATTERY,
+    321775: EndReason.LINK_LOST,
+    322282: EndReason.PILOT_TAKEOVER,
+    # UNCONFIRMED, as the four above. Paired with "other" in FR-LNK-07, which IR-OPS has no
+    # value for: no end reason.
+    321000: None,
+}
+
+#: DJI's FlighttaskBreakReasonEnum, for the reasons the vendored progress schema gives in words
+#: (FR-FLT-12): why a mission stopped on its own. Kept apart from END_RESULTS: a break reason
+#: and a result code are different number spaces, so one table would read a result 2 as an
+#: aircraft fault. 0 (an operator's pause, which ends nothing), 1564 (the flight code's own
+#: failsafe) and 65534 (the aircraft acting on its own) have no IR-OPS value and are left out.
+BREAK_REASONS: dict[int, EndReason] = {
+    514: EndReason.ENVELOPE_BREACH,
+    773: EndReason.LOW_BATTERY,
+    775: EndReason.LINK_LOST,
+    1282: EndReason.PILOT_TAKEOVER,
+    2: EndReason.AIRCRAFT_FAULT,
+}
+
+
+def end_reason(progress: FlightProgress) -> EndReason | None:
+    """How the task ended, or None while it has not, or while no IR-OPS value says why.
+
+    The first rule that applies decides: a result code the table names, then a task that
+    ended ok with result 0, then a canceled one, then the break reason of a stop on the
+    aircraft's own. A terminal status with none of these is None rather than a guess. A
+    missing status is not terminal, so it ends nothing.
+    """
+    if progress.status not in TERMINAL:
+        return None
+    if progress.result is not None and progress.result in END_RESULTS:
+        return END_RESULTS[progress.result]
+    if progress.status == FlightStatus.OK and progress.result == SUCCESS:
+        return EndReason.COMPLETED
+    if progress.status == FlightStatus.CANCELED:
+        # FR-CMD-05: a prepared task undone before it flies. A progress cannot tell that from a
+        # cancel mid-flight, so both take the requirement's reading.
+        return EndReason.CANCELLED
+    return _by_break_reason(progress.break_point)
+
+
+def _by_break_reason(break_point: BreakPoint | None) -> EndReason | None:
+    reason = break_point.break_reason if break_point is not None else None
+    if reason is None or reason not in BREAK_REASONS:
+        return None
+    return BREAK_REASONS[reason]
