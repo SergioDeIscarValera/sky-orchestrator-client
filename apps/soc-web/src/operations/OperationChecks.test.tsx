@@ -44,6 +44,7 @@ describe('an operation preflight checks (FR-OPS-04, FR-OPS-05)', () => {
     )
     expect(screen.getAllByText('Unknown')).toHaveLength(CHECK_ORDER.length)
     expect(screen.queryByText('Pass')).toBeNull()
+    expect(screen.getByRole('region', { name: 'Checks' })).toContainElement(await list())
   })
 
   it("shows each judgement's state, its measured value and its detail, the last two muted", async () => {

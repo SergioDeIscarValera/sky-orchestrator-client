@@ -7,6 +7,7 @@ import { useEvents } from './data'
 import { Failure } from './Failure'
 import { eventWords, inlineWords, localClock, SEVERITY_WORDS } from './format'
 import { OperationPill } from './OperationPill'
+import { Section } from './Section'
 
 /** How near the bottom a member must be for the log to follow the newest entry, in pixels. */
 const FOLLOW_WITHIN_PX = 8
@@ -22,8 +23,11 @@ export function OperationLog({ operationId }: { readonly operationId: string }) 
   if (events.isError) {
     return <Failure message={events.error.message} onRetry={() => void events.refetch()} />
   }
-  if (events.data.length === 0) return <Waiting>None</Waiting>
-  return <Entries events={events.data} />
+  return (
+    <Section title="Log">
+      {events.data.length === 0 ? <Waiting>None</Waiting> : <Entries events={events.data} />}
+    </Section>
+  )
 }
 
 function Entries({ events }: { readonly events: readonly OperationEvent[] }) {

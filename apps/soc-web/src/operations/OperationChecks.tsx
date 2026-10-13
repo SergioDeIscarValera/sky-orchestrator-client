@@ -4,6 +4,7 @@ import { Failure } from './Failure'
 import { checksShown, shownChecks, type ShownCheck } from './checks'
 import { CHECK_STATE_TONE, CHECK_STATE_WORDS, checkWords, valueWords } from './format'
 import { OperationPill } from './OperationPill'
+import { Section } from './Section'
 
 /**
  * An operation's preflight checks in FR-OPS-05's order, each with its state and what it measured
@@ -16,7 +17,11 @@ export function OperationChecks({ operationId }: { readonly operationId: string 
     return <Failure message={operation.error.message} onRetry={() => void operation.refetch()} />
   }
   if (operation.data === undefined || !checksShown(operation.data.state)) return null
-  return <Judgements operationId={operationId} />
+  return (
+    <Section title="Checks">
+      <Judgements operationId={operationId} />
+    </Section>
+  )
 }
 
 /** The checks are read only once they show, so a draft or a closed operation reads none. */

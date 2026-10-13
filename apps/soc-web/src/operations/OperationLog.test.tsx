@@ -208,6 +208,7 @@ describe('an operation log (FR-LOG-02, FR-LOG-03)', () => {
     renderFor(backend, operation.id)
     expect(await screen.findByText('None')).toBeVisible()
     expect(screen.queryByRole('log')).toBeNull()
+    expect(screen.getByRole('region', { name: 'Log' })).toContainElement(screen.getByText('None'))
   })
 
   it('says it is loading while the log is read', async () => {
