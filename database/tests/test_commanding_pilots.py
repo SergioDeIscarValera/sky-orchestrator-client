@@ -61,6 +61,7 @@ async def member_with(tenancy: Tenancy, organization_id: uuid.UUID, role: str) -
         pytest.param("editor", "observer", None, 0, id="editor-observer"),
         pytest.param("editor", "pilot", "membership", 0, id="removed-membership"),
         pytest.param("editor", "pilot", "organization", 0, id="retired-organization"),
+        pytest.param("editor", "pilot", "profile", 0, id="retired-profile"),
     ],
 )
 async def test_only_a_live_editor_or_owner_who_pilots_the_operation_counts(
@@ -82,6 +83,10 @@ async def test_only_a_live_editor_or_owner_who_pilots_the_operation_counts(
         await tenancy.soft_delete_membership(member)
     elif retire == "organization":
         await tenancy.soft_delete_organization(owner.organization_id)
+    elif retire == "profile":
+        await admin.execute(
+            "update public.profiles set deleted_at = now() where id = $1", member.user_id
+        )
     assert await soc_operations.fetchval(COUNT, operation) == counted
 
 
