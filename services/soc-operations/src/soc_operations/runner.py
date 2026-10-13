@@ -46,6 +46,8 @@ log = soc_log.get(__name__)
 #: How often the checks of a preparing, simulated or ready operation are judged again.
 TICK_S = 1.0
 JUDGED = ("preparing", "simulated", "ready")
+#: The connection away, or lost in the middle of the tick's query: the next tick tries again.
+LOST = (DatabaseUnavailableError, OSError, asyncpg.InterfaceError, asyncpg.PostgresError)
 #: Waiting on a flight that may not have started (lifecycle.on_tick).
 WAITING = ("simulating", "launching")
 CONCERNS = ("soc_aircraft_samples", "soc_stack_views", "soc_dry_run_results")
@@ -164,8 +166,9 @@ class Runner:
                         " where state = any($1::soc.operation_state[])",
                         [*JUDGED, *WAITING],
                     )
-            except DatabaseUnavailableError:
-                # The connection's own supervisor reports it; the next tick tries again.
+            except LOST as error:
+                # The connection's own supervisor reports and replaces it; the tick goes on.
+                log.warning("tick_missed", error=str(error))
                 continue
             for row in rows:
                 self._judge_later(row["id"])
