@@ -4,6 +4,7 @@ import type {
   CommandStatus,
   CommandVerb,
   EventSeverity,
+  FlightMode,
   FlightStatus,
   Member,
   OperationState,
@@ -221,7 +222,47 @@ export const FLIGHT_STATUS_WORDS: Readonly<Record<FlightStatus, string>> = {
   partially_done: 'Partly done',
 }
 
+/** A flight status's tone: flying while it flies, caution when it is paused or partly done, bad when it failed. */
+export const FLIGHT_STATUS_TONE: Readonly<Record<FlightStatus, PillTone>> = {
+  sent: 'progress',
+  in_progress: 'flying',
+  paused: 'caution',
+  ok: 'good',
+  failed: 'bad',
+  canceled: 'muted',
+  rejected: 'bad',
+  timeout: 'bad',
+  partially_done: 'caution',
+}
+
+/** A command's status tone: progress while it is sent, good once accepted, bad when refused, failed or timed out. */
+export const COMMAND_STATUS_TONE: Readonly<Record<CommandStatus, PillTone>> = {
+  pending: 'progress',
+  sent: 'progress',
+  accepted: 'good',
+  refused: 'bad',
+  failed: 'bad',
+  timed_out: 'bad',
+  expired: 'muted',
+}
+
+/** A flight's mode as words: a real flight in the danger tone, a simulated one in info (FR-SAF-04). */
+export const FLIGHT_MODE_WORDS: Readonly<Record<FlightMode, string>> = {
+  simulated: 'Simulated',
+  real: 'Real',
+}
+
+export const FLIGHT_MODE_TONE: Readonly<Record<FlightMode, PillTone>> = {
+  simulated: 'progress',
+  real: 'bad',
+}
+
 const FIGURE = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 })
+
+/** A percent as words, such as `42.5%`. */
+export function formatPercent(value: number): string {
+  return `${FIGURE.format(value)}%`
+}
 
 export function isEventKind(kind: string): kind is EventKind {
   return Object.hasOwn(EVENT_WORDS, kind)
@@ -252,7 +293,7 @@ function joined(parts: readonly (string | null)[]): string | null {
 
 /** A flight's percent as words, or null when soc-cloud did not report one. */
 function percentWords(value: unknown): string | null {
-  return typeof value === 'number' ? `${FIGURE.format(value)}%` : null
+  return typeof value === 'number' ? formatPercent(value) : null
 }
 
 /**
@@ -375,4 +416,14 @@ export function memberName(member: Member): string {
   if (name !== '') return name
   if (member.email !== null && member.email.trim() !== '') return member.email
   return member.profileId
+}
+
+/**
+ * Who asked a command, as words: SOC for one with no requester (SOC's own), else the member's name, else
+ * their profile id when the member is not among those read (a member who has left the organization).
+ */
+export function requesterWords(requestedBy: string | null, members: readonly Member[]): string {
+  if (requestedBy === null) return 'SOC'
+  const member = members.find(({ profileId }) => profileId === requestedBy)
+  return member === undefined ? requestedBy : memberName(member)
 }
