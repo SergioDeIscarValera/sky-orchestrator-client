@@ -59,11 +59,13 @@ def environment(
     passwords: dict[str, str],
     directory: Path,
     ports: list[int],
+    tunables: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     values: dict[str, Any] = {
         **Contract.read().starting_file(settings.SERVICE),
         "served_organizations": ["6f1c2b9e-4d2a-4c1e-9a7b-2f3e4d5c6b7a"],
         "stacks": [stack_on(broker, ports[1])],
+        **(tunables or {}),
     }
     path = directory / "soc-cloud.json"
     path.write_text(json.dumps(values), encoding="utf-8")
@@ -103,8 +105,9 @@ async def running_service(
     connector: Connector,
     directory: Path,
     ports: list[int],
+    tunables: dict[str, Any] | None = None,
 ) -> AsyncIterator[tuple[CloudService, dict[str, Any]]]:
-    loaded = settings.load(environment(platform, broker, passwords, directory, ports))
+    loaded = settings.load(environment(platform, broker, passwords, directory, ports, tunables))
     loaded = replace(loaded, realtime=Endpoint(platform.base, loaded.realtime.key))
     service = CloudService(loaded, realtime_connector=connector, bind_host="127.0.0.1")
     task = asyncio.create_task(service.run())
@@ -386,3 +389,173 @@ async def test_every_sample_reaches_the_farms_members_in_order_and_no_one_else(
     p95_ms = statistics.quantiles(latencies_ms, n=20)[-1]
     print(f"telemetry p95 {p95_ms:.1f} ms, max {latencies_ms[-1]:.1f} ms")
     assert p95_ms <= 150, f"p95 from the dock to a member was {p95_ms:.1f} ms"
+
+
+# --- A flight: its geofence, its moments, its track (FR-SAF-01, FR-LOG-02, FR-TEL-04) ----
+
+INSIDE = (41.6523, -4.7245)
+OUTSIDE = (41.6523, -4.7262)
+
+
+def osd(gateway: str, at_ms: int, where: tuple[float, float], mode: int) -> str:
+    message = json.loads((MQTT / "examples" / "osd.aircraft.json").read_text())
+    message.update(tid=str(uuid.uuid4()), timestamp=at_ms, gateway=gateway)
+    message["data"].update(latitude=where[0], longitude=where[1], elevation=30.0, mode_code=mode)
+    return json.dumps(message)
+
+
+def flight_progress(gateway: str, flight: uuid.UUID, status: str, result: int = 0) -> str:
+    message = json.loads((MQTT / "examples" / "events.flighttask_progress.json").read_text())
+    message.update(tid=str(uuid.uuid4()), bid=str(flight), gateway=gateway)
+    message["data"]["result"] = result
+    message["data"]["output"]["status"] = status
+    message["data"]["output"]["ext"]["flight_id"] = str(flight)
+    return json.dumps(message)
+
+
+class Returns:
+    """The dock's services topic: when each return home arrived; each is answered 0."""
+
+    def __init__(self, client: aiomqtt.Client, serial: str) -> None:
+        self.client = client
+        self.serial = serial
+        self.arrived: list[tuple[str, float]] = []
+
+    async def serve(self) -> None:
+        await self.client.subscribe(f"thing/product/{self.serial}/services", qos=1)
+        announcer = asyncio.create_task(Dock(self.client, self.serial)._announce())
+        try:
+            await self._answer()
+        finally:
+            announcer.cancel()
+
+    async def _answer(self) -> None:
+        async for message in self.client.messages:
+            assert isinstance(message.payload, bytes)
+            service = json.loads(message.payload)
+            self.arrived.append((service["method"], time.monotonic()))
+            reply = {**{key: service[key] for key in ("tid", "bid", "timestamp", "method")}}
+            reply["data"] = {"result": 0}
+            await self.client.publish(
+                f"thing/product/{self.serial}/services_reply", json.dumps(reply), qos=1
+            )
+
+
+async def test_a_breach_returns_the_aircraft_within_100_ms_once_across_a_restart(
+    platform: RealtimeStack,
+    broker: EphemeralMosquitto,
+    passwords: dict[str, str],
+    connector: Connector,
+    tmp_path: Path,
+    unused_tcp_port_factory: Callable[[], int],
+) -> None:
+    admin = await platform.postgres.connect("supabase_admin")
+    try:
+        flown = await Operations(admin).flown((await Tenancy(admin).member()).organization_id)
+        gateway, aircraft, flight = flown.gateway_sn, flown.aircraft_sn, flown.flight_id
+        topic, events = f"thing/product/{aircraft}/osd", f"thing/product/{gateway}/events"
+        ports = [unused_tcp_port_factory(), unused_tcp_port_factory()]
+        tunables = {"telemetry_batch_s": 1}
+        at = 1_791_000_000_000
+        async with broker.dock(identifier="flight-dock") as client:
+            returns = Returns(client, gateway)
+            answering = asyncio.create_task(returns.serve())
+            async with running_service(
+                platform, broker, passwords, connector, tmp_path, ports, tunables
+            ) as (service, _):
+                await until(lambda: service.links[0].serves(gateway), 10)
+                await until(lambda: service.flights.watched(flight) is not None, 10)
+                await client.publish(events, flight_progress(gateway, flight, "in_progress"), qos=1)
+                await until(
+                    lambda: getattr(service.flights.watched(flight), "executing", False), 10
+                )
+                for step, mode in enumerate([0, 4, 5, 5, 5]):
+                    await client.publish(topic, osd(gateway, at + step * 400, INSIDE, mode), qos=1)
+                    await asyncio.sleep(0.05)
+                sent = time.monotonic()
+                await client.publish(topic, osd(gateway, at + 2400, OUTSIDE, 5), qos=1)
+                for step in range(1, 4):
+                    await client.publish(
+                        topic, osd(gateway, at + 2400 + step * 200, OUTSIDE, 9), qos=1
+                    )
+                await until(lambda: len(returns.arrived) == 1, 5)
+                await asyncio.sleep(1.5)
+            # A restart reads the breach back: samples outside send nothing more.
+            async with running_service(
+                platform, broker, passwords, connector, tmp_path, ports, tunables
+            ) as (service, _):
+                await until(lambda: getattr(service.flights.watched(flight), "breached", False), 10)
+                for step in range(3):
+                    await client.publish(
+                        topic, osd(gateway, at + 4000 + step * 200, OUTSIDE, 9), qos=1
+                    )
+                await asyncio.sleep(0.5)
+                await client.publish(
+                    events, flight_progress(gateway, flight, "failed", 322283), qos=1
+                )
+                await asyncio.sleep(0.3)
+                await client.publish(topic, osd(gateway, at + 6000, INSIDE, 0), qos=1)
+                await asyncio.sleep(1.5)
+            answering.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await answering
+        (method, arrived), *more = returns.arrived
+        assert (method, more) == ("return_home", [])
+        reaction_ms = (arrived - sent) * 1000
+        print(f"geofence return {reaction_ms:.1f} ms after the sample left the dock")
+        assert reaction_ms < 100, f"the return reached the dock {reaction_ms:.1f} ms after"
+
+        row = await admin.fetchrow(
+            "select took_off_at, landed_at, breached_at from soc.flights where id = $1", flight
+        )
+        assert row is not None
+        assert None not in (row["took_off_at"], row["landed_at"], row["breached_at"])
+        state = await admin.fetchrow(
+            "select status::text as status, end_reason::text as reason"
+            " from soc.flight_states where flight_id = $1",
+            flight,
+        )
+        assert state is not None
+        assert (state["status"], state["reason"]) == ("failed", "geofence_breach")
+        intent = await admin.fetchrow(
+            "select status::text as status, result from soc.command_intents"
+            " where flight_id = $1 and verb = 'return_home'",
+            flight,
+        )
+        assert intent is not None and (intent["status"], intent["result"]) == ("accepted", 0)
+        events_logged = await admin.fetch(
+            "select kind, severity::text as severity, source::text as source"
+            " from soc.operation_events where flight_id = $1 order by recorded_at",
+            flight,
+        )
+        kinds = [event["kind"] for event in events_logged]
+        assert sorted(kinds) == sorted(
+            [
+                "flight_status_changed",
+                "took_off",
+                "command_requested",
+                "geofence_breach",
+                "command_outcome",
+                "automatic_return",
+                "flight_status_changed",
+                "landed",
+            ]
+        ), kinds
+        # The aircraft's own return may be heard while the breach is being recorded.
+        assert kinds[:2] == ["flight_status_changed", "took_off"], kinds
+        assert kinds[-2:] == ["flight_status_changed", "landed"], kinds
+        breach = [kind for kind in kinds if kind.startswith(("command", "geofence"))]
+        assert breach == ["command_requested", "geofence_breach", "command_outcome"], kinds
+        sources = {event["kind"]: (event["severity"], event["source"]) for event in events_logged}
+        assert sources["geofence_breach"] == ("safety", "soc-cloud")
+        assert sources["command_requested"] == ("info", "soc-cloud")
+        track = await admin.fetchval(
+            "select count(*) from soc.telemetry_samples where flight_id = $1", flight
+        )
+        assert track >= 5
+        latest = await admin.fetchval(
+            "select sample from soc.aircraft_samples where aircraft_sn = $1", aircraft
+        )
+        assert json.loads(latest)["latitude_deg"] == INSIDE[0]
+    finally:
+        await admin.close()
