@@ -290,7 +290,7 @@ Owner: `soc-operations`. Retention: as long as any flight that used it.
 | `md5` | text | Of `bytes` |
 | `size_bytes` | integer | |
 | `profile_version` | text | Version of the WPML profile written |
-| `token` | text | The unguessable serving path, 128 random bits or more |
+| `token` | text | The unguessable serving path: 128 random bits, 32 lower-case hexadecimal characters, as soc-cloud serves it |
 | `created_at` | timestamptz | |
 
 **IR-FIL-01**: the bytes are never rebuilt for an existing flight. What flew is

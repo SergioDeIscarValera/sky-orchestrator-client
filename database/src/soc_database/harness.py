@@ -297,7 +297,7 @@ class Operations:
             " size_bytes, profile_version, token)"
             " values ($1, $2, $3, $4, $5, $6, '1.0.0', $7) returning id",
             organization_id, operation_id, wayline_id, file, hashlib.md5(file).hexdigest(),  # noqa: S324 - DJI's fingerprint
-            len(file), secrets.token_urlsafe(16),
+            len(file), secrets.token_hex(16),
         )  # fmt: skip
         flight_id = await admin.fetchval(
             "insert into soc.flights (organization_id, operation_id, assignment_id, fleet_id,"
