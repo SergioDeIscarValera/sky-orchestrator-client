@@ -24,6 +24,7 @@ import pytest
 from soc_config import Contract
 from soc_database.harness import EphemeralPostgres, Tenancy, impersonate
 from soc_operations import settings, store
+from soc_operations.judging import judged
 from soc_operations.runner import Runner
 from soc_operations.testing import ENVELOPE, FLIGHT, ROUTE, SQUARE
 
@@ -184,10 +185,9 @@ async def answer(
     return flight
 
 
-@pytest.fixture
-async def running(
-    migrated: EphemeralPostgres, passwords: dict[str, str], tmp_path: Path
-) -> AsyncIterator[None]:
+def runner_of(
+    migrated: EphemeralPostgres, passwords: dict[str, str], tmp_path: Path, judge: Any
+) -> Runner:
     path = tmp_path / "soc-operations.json"
     starting = {
         **Contract.read().starting_file(settings.SERVICE),
@@ -204,8 +204,27 @@ async def running(
             "SOC_DB_PASSWORD_SOC_OPERATIONS": passwords["soc_operations"],
         }
     )
-    runner = Runner(loaded.database, loaded.tunables, all_pass, tick_s=0.1)
-    task = asyncio.create_task(runner.run())
+    return Runner(loaded.database, loaded.tunables, judge, tick_s=0.1)
+
+
+@pytest.fixture
+async def judging(
+    migrated: EphemeralPostgres, passwords: dict[str, str], tmp_path: Path
+) -> AsyncIterator[None]:
+    task = asyncio.create_task(runner_of(migrated, passwords, tmp_path, judged).run())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+
+@pytest.fixture
+async def running(
+    migrated: EphemeralPostgres, passwords: dict[str, str], tmp_path: Path
+) -> AsyncIterator[None]:
+    task = asyncio.create_task(runner_of(migrated, passwords, tmp_path, all_pass).run())
     try:
         yield
     finally:
@@ -282,6 +301,12 @@ async def test_an_operation_flies_from_draft_to_completed(
         ("simulated", "completed"),
         ("real", "completed"),
     ]
+    ended = await admin.fetch(
+        "select payload ->> 'end_reason' as reason from soc.operation_events"
+        " where operation_id = $1 and kind = 'flight_ended' order by recorded_at",
+        operation,
+    )
+    assert [row["reason"] for row in ended] == ["completed", "completed"]
     moves = await admin.fetch(
         "select payload ->> 'to' as moved from soc.operation_events"
         " where operation_id = $1 and kind = 'operation_state_changed' order by recorded_at",
@@ -348,3 +373,44 @@ async def test_a_refused_launch_returns_to_ready_with_sky_orchestrators_meaning(
         operation,
     )
     assert "has not completed a simulation on this stack" in cause
+
+
+async def test_the_real_checks_are_written_and_gate_the_simulation(
+    admin: asyncpg.Connection, judging: None
+) -> None:
+    """FR-OPS-04, FR-OPS-05: preparing writes the sixteen checks, and with no aircraft sample
+    yet the simulated pass is refused naming every blocking check that is not passing."""
+    del judging
+    seeded = await seed(admin)
+    operation = seeded.operation_id
+    await ask(admin, seeded, "plan")
+    await reached(admin, operation, "planned")
+    await ask(admin, seeded, "prepare")
+    await reached(admin, operation, "preparing")
+
+    async def sixteen() -> bool:
+        count = await admin.fetchval(
+            "select count(*) from soc.operation_checks where operation_id = $1", operation
+        )
+        return bool(count == 16)
+
+    await until(sixteen)
+    unknown = await admin.fetchval(
+        "select state::text from soc.operation_checks where operation_id = $1"
+        " and check_id = 'PF-FRESH'",
+        operation,
+    )
+    assert unknown == "unknown"
+    request = await ask(admin, seeded, "simulate")
+
+    async def decided() -> Any:
+        return await admin.fetchrow(
+            "select status::text, reasons from soc.transition_requests where id = $1"
+            " and status not in ('pending', 'running')",
+            request,
+        )
+
+    row = await until(decided)
+    assert row["status"] == "refused"
+    assert any(reason.startswith("PF-FRESH") for reason in json.loads(row["reasons"]))
+    assert await state_of(admin, operation) == "preparing"

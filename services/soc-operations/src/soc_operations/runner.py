@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -282,10 +283,21 @@ async def _record(
             "check_id": check.check_id,
             "state": check.state,
             "blocking": check.blocking,
-            "value": getattr(check, "value", None),
+            "value": _finite(getattr(check, "value", None)),
             "detail": check.detail,
             "evaluated_at": datetime.now(UTC).isoformat(),
         }
         for check in checks
     ]
     await connection.execute("select soc.record_checks($1, $2::jsonb)", operation, json.dumps(rows))
+
+
+def _finite(value: Any) -> Any:
+    """The value with every number that is not finite as null: jsonb holds no NaN."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: _finite(each) for key, each in value.items()}
+    if isinstance(value, list | tuple):
+        return [_finite(each) for each in value]
+    return value

@@ -130,16 +130,7 @@ async def load(connection: asyncpg.Connection, operation_id: uuid.UUID) -> Loade
         """,
         operation_id,
     )
-    pilots = await connection.fetchval(
-        """
-        select count(*) from soc.operators p
-          join public.memberships m
-            on m.organization_id = p.organization_id and m.profile_id = p.profile_id
-         where p.operation_id = $1 and p.role = 'pilot' and m.deleted_at is null
-           and m.role in ('owner', 'editor')
-        """,
-        operation_id,
-    )
+    pilots = await connection.fetchval("select soc.commanding_pilots($1)", operation_id)
     geofence = (
         None
         if row["polygon"] is None
@@ -328,16 +319,37 @@ async def apply(
             case Command(verb=verb, flight_id=flight, payload=payload):
                 await _command(connection, loaded, flight, verb, payload)
             case EndFlight(flight_id=flight, end_reason=reason):
-                await connection.execute(
-                    "update soc.flights set ended_at = now(), end_reason = $2::soc.end_reason"
-                    " where id = $1 and ended_at is null",
-                    flight, reason,
-                )  # fmt: skip
+                await _end_flight(connection, loaded, flight, reason)
             case Log(kind=kind, payload=payload):
                 await connection.execute(
                     "select soc.log_event($1, $2, $3::soc.event_source, $4::jsonb)",
                     operation, kind, SOURCE, json.dumps(payload),
                 )  # fmt: skip
+
+
+async def _end_flight(
+    connection: asyncpg.Connection, loaded: Loaded, flight: uuid.UUID, reason: str
+) -> None:
+    """The flight ended, and its end logged with how its task ended (FR-LOG-02)."""
+    ended = await connection.fetchval(
+        "update soc.flights set ended_at = now(), end_reason = $2::soc.end_reason"
+        " where id = $1 and ended_at is null returning fleet_id",
+        flight, reason,
+    )  # fmt: skip
+    if ended is None:
+        return
+    flown = next((each for each in loaded.snapshot.flights if each.id == flight), None)
+    state = None if flown is None else flown.state
+    await connection.execute(
+        "select soc.log_event($1, 'flight_ended', 'soc-operations', $2::jsonb, null, $3, $4)",
+        loaded.snapshot.operation_id,
+        json.dumps({
+            "status": None if state is None else state.status,
+            "result": None if state is None else state.result,
+            "end_reason": reason,
+        }),
+        flight, ended,
+    )  # fmt: skip
 
 
 async def _build_file(connection: asyncpg.Connection, loaded: Loaded) -> None:
