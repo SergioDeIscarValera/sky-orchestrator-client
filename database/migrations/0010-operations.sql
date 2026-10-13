@@ -239,6 +239,9 @@ create table soc.flight_states (
   percent                integer check (percent is null or percent between 0 and 100),
   current_waypoint_index integer check (current_waypoint_index is null or current_waypoint_index >= 0),
   break_point            jsonb check (break_point is null or jsonb_typeof(break_point) = 'object'),
+  -- How the task ended, once it has, as soc-cloud reads it: from DJI's result and break
+  -- reason, and from the returns it sent itself (a geofence breach, FR-SAF-01).
+  end_reason             soc.end_reason,
   updated_at             timestamptz not null default now()
 );
 
@@ -1107,7 +1110,8 @@ create function soc.record_flight_progress(
   dji_result integer,
   done_percent integer,
   waypoint integer,
-  breakpoint jsonb
+  breakpoint jsonb,
+  ended soc.end_reason default null
 )
 returns void
 language plpgsql
@@ -1124,17 +1128,19 @@ begin
   end if;
   select status into before from soc.flight_states where flight_id = flight;
   insert into soc.flight_states (flight_id, organization_id, status, result, percent,
-                                 current_waypoint_index, break_point, updated_at)
-  values (flight, target.organization_id, reported, dji_result, done_percent, waypoint, breakpoint, now())
+                                 current_waypoint_index, break_point, end_reason, updated_at)
+  values (flight, target.organization_id, reported, dji_result, done_percent, waypoint, breakpoint,
+          ended, now())
   on conflict (flight_id) do update set
     status = excluded.status, result = excluded.result, percent = excluded.percent,
     current_waypoint_index = excluded.current_waypoint_index, break_point = excluded.break_point,
-    updated_at = excluded.updated_at;
+    end_reason = excluded.end_reason, updated_at = excluded.updated_at;
   if before is distinct from reported then
     perform soc.log_event(target.operation_id, 'flight_status_changed', 'soc-cloud',
                           jsonb_build_object('status', reported, 'percent', done_percent,
                                              'result', dji_result,
-                                             'break_point', breakpoint),
+                                             'break_point', breakpoint,
+                                             'end_reason', ended),
                           null, flight, target.fleet_id);
     perform pg_notify('soc_flight_progress', flight::text);
   end if;
@@ -1338,6 +1344,7 @@ begin
       'percent', new.percent,
       'current_waypoint_index', new.current_waypoint_index,
       'break_point', new.break_point,
+      'end_reason', new.end_reason,
       'updated_at', new.updated_at
     ),
     'flight_state',
@@ -1585,7 +1592,7 @@ revoke execute on function soc.record_aircraft_sample(text, text, jsonb, timesta
 revoke execute on function soc.record_stack_status(text, jsonb) from public;
 revoke execute on function soc.record_stack_envelope(text, jsonb) from public;
 revoke execute on function soc.record_flight_progress(uuid, soc.flight_status, integer, integer,
-  integer, jsonb) from public;
+  integer, jsonb, soc.end_reason) from public;
 revoke execute on function soc.record_flight_moment(uuid, text, timestamptz, integer) from public;
 revoke execute on function soc.record_dry_run(uuid, soc.dry_run_status, jsonb) from public;
 revoke execute on function soc.record_checks(uuid, jsonb) from public;
@@ -1607,7 +1614,7 @@ grant execute on function soc.record_aircraft_sample(text, text, jsonb, timestam
 grant execute on function soc.record_stack_status(text, jsonb) to soc_cloud;
 grant execute on function soc.record_stack_envelope(text, jsonb) to soc_cloud;
 grant execute on function soc.record_flight_progress(uuid, soc.flight_status, integer, integer,
-  integer, jsonb) to soc_cloud;
+  integer, jsonb, soc.end_reason) to soc_cloud;
 grant execute on function soc.record_flight_moment(uuid, text, timestamptz, integer) to soc_cloud;
 grant execute on function soc.record_dry_run(uuid, soc.dry_run_status, jsonb) to soc_cloud;
 grant execute on function soc.record_stack_files_url(text, text) to soc_cloud;
