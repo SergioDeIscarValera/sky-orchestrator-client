@@ -15,6 +15,7 @@ import {
   storedFlight,
   type Choices,
 } from './definition'
+import { FlightConsole } from './FlightConsole'
 import { OperationActions } from './OperationActions'
 import { OperationChecks } from './OperationChecks'
 import { OperationDefinition } from './OperationDefinition'
@@ -22,6 +23,7 @@ import { OperationFlight } from './OperationFlight'
 import { OperationLog } from './OperationLog'
 import { OperationOperators } from './OperationOperators'
 import { STATE_TONE, STATE_WORDS } from './format'
+import { CONSOLE_STATES } from './moves'
 import { OperationPill } from './OperationPill'
 
 /**
@@ -89,6 +91,12 @@ export function OperationDetail({ operationId }: { readonly operationId: string 
         </h3>
         <OperationPill tone={STATE_TONE[current.state]}>{STATE_WORDS[current.state]}</OperationPill>
       </div>
+      {CONSOLE_STATES.includes(current.state) && (
+        <FlightConsole
+          operation={current}
+          waypoints={flight === null ? null : flight.waypoints.length}
+        />
+      )}
       <OperationDefinition
         operation={current}
         assignment={assignment}
