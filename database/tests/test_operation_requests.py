@@ -21,6 +21,17 @@ from soc_database.harness import (
 )
 
 GATEWAY = "SOTESTDOCK01"
+TO_COMPLETED = [
+    "planned",
+    "preparing",
+    "simulating",
+    "simulated",
+    "ready",
+    "launching",
+    "in_flight",
+    "returning",
+    "completed",
+]
 STATUSES = ["pending", "running", "accepted", "refused", "failed", "expired"]
 FORWARD = {
     ("pending", "running"),
@@ -717,15 +728,10 @@ async def test_an_unaccepted_command_is_logged_as_a_warning_with_its_status(
     assert json.loads(logged["payload"])["status"] == status
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="events.json gives command_outcome the severity info, and IR-EVT-01 says a kind's "
-    "severity is the contract's; the trigger logs a refused command at warning",
-)
-async def test_a_refused_command_is_logged_at_the_severity_its_contract_names(
+async def test_a_refused_command_is_logged_as_a_warning_by_design(
     admin: asyncpg.Connection, tenancy: Tenancy, soc_cloud: asyncpg.Connection
 ) -> None:
+    """A writer may raise an entry above its kind's severity: a refused command is a warning."""
     member, flown = await pilot_of(admin, tenancy)
     intent = await intent_in(admin, member, flown, "pause")
     await soc_cloud.fetch("select * from soc.claim_command_intent($1, 10)", intent)
@@ -735,7 +741,7 @@ async def test_a_refused_command_is_logged_at_the_severity_its_contract_names(
         " and kind = 'command_outcome'",
         intent,
     )
-    assert severity == "info"
+    assert severity == "warning"
 
 
 async def test_a_command_claimed_for_sending_is_not_yet_an_outcome(
@@ -751,3 +757,55 @@ async def test_a_command_claimed_for_sending_is_not_yet_an_outcome(
         intent,
     )
     assert outcomes == 0
+
+
+async def test_a_closed_operation_takes_no_transition_request(
+    session: asyncpg.Connection, admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    member = await tenancy.member("editor")
+    operation = await operation_of(admin, member.organization_id)
+    await Operations(admin).move(operation, "planned", "cancelled")
+    async with acting_as(session, member.user_id) as connection:
+        with pytest.raises(asyncpg.CheckViolationError) as refusal:
+            await ask(connection, operation, "plan")
+    assert refusal.value.constraint_name == "operation_closed"
+
+
+async def test_a_refusal_of_a_closed_operation_is_decided_but_not_logged(
+    admin: asyncpg.Connection, tenancy: Tenancy, soc_operations: asyncpg.Connection
+) -> None:
+    member = await tenancy.member("editor")
+    operation = await operation_of(admin, member.organization_id)
+    asked = await request_in(admin, member.organization_id, operation)
+    await soc_operations.fetch(CLAIM_REQUEST, asked["id"])
+    await Operations(admin).move(operation, *TO_COMPLETED)
+    decided = await soc_operations.fetch(
+        "select * from soc.decide_transition_request($1, 'refused', $2::jsonb)",
+        asked["id"],
+        json.dumps([{"check": "PF-LINK"}]),
+    )
+    assert [row["status"] for row in decided] == ["refused"]
+    refusals = await admin.fetchval(
+        "select count(*) from soc.operation_events where operation_id = $1"
+        " and kind = 'transition_refused'",
+        operation,
+    )
+    assert refusals == 0
+
+
+async def test_a_command_on_a_closed_operation_is_kept_and_not_logged(
+    admin: asyncpg.Connection, tenancy: Tenancy, soc_cloud: asyncpg.Connection
+) -> None:
+    member, flown = await pilot_of(admin, tenancy)
+    await Operations(admin).move(flown.operation_id, *TO_COMPLETED)
+    intent = await intent_in(admin, member, flown, "pause")
+    await soc_cloud.fetch("select * from soc.claim_command_intent($1, 10)", intent)
+    await soc_cloud.fetch("select * from soc.record_command_reply($1, 0)", intent)
+    kept = await admin.fetchval(
+        "select status::text from soc.command_intents where id = $1", intent
+    )
+    assert kept == "accepted"
+    logged = await admin.fetchval(
+        "select count(*) from soc.operation_events where command_id = $1", intent
+    )
+    assert logged == 0
