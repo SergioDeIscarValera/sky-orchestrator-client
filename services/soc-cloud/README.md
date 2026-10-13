@@ -23,12 +23,13 @@ The skeleton every later part plugs into:
 | Topology and presence: online while listed by `update_topo` and reported online by the dock (`FR-LNK-02`) | `link/topology.py` |
 | Each aircraft OSD as one sample at its own time, a missing field unavailable (`FR-LNK-03`) | `link/telemetry.py` |
 | Live telemetry to the browsers: each sample as a `sample` event on its stack's organization's `org:<id>:soc:telemetry` (`contracts/broadcast/telemetry.schema.json`), at most `broadcast_max_rate_hz` per aircraft with the latest sample winning, on the socket or through Realtime's HTTP endpoint (`FR-TEL-01`, `NFR-RES-07`) | `fanout.py`, through `soc-realtime` |
-| The latencies it can see, logged every minute as one `latency` line with each one's count, p50, p95 and p99: `telemetry_hold_ms` (read to broadcast), `telemetry_age_ms` (the aircraft's timestamp to the read, with the remote controller's clock offset in it), `command_publish_ms` (request to publish) and `command_reply_ms` (publish to DJI's reply) (`NFR-OBS-04`) | `latency.py` |
+| The latencies it can see, logged every minute as one `latency` line with each one's count, p50, p95 and p99: `telemetry_hold_ms` (read to broadcast), `telemetry_age_ms` (the aircraft's timestamp to the read, with the remote controller's clock offset in it), `command_publish_ms` (request to publish), `command_reply_ms` (publish to DJI's reply) and `geofence_return_ms` (a breaching sample read to its return home published) (`NFR-OBS-04`) | `latency.py` |
 | What each stack reports, recorded for the console: its link state per dock, the devices it announces with their presence, each aircraft's firmware from `state`; only the latest of each, stacks before their devices, everything again after the database comes back (`FR-FLE-02`, `FR-LNK-02`, `IR-STK`, `IR-DEV`) | `presence.py`, through `soc.record_stack`, `soc.record_topology`, `soc.record_firmware` |
 | `update_topo` acknowledged with `status_reply` (`FR-LNK-11`); `flighttask_resource_get` answered on `requests_reply` (`FR-LNK-04`) | `link/stack.py` |
 | Flight files kept as exact bytes in memory, offered with their MD5, served at `/files/<128-bit token>.kmz` on `SOC_FLIGHT_FILES_PORT`, retired `flight_file_grace_s` after the flight ends (`FR-LNK-05`, `NFR-SEC-06`, [ADR-0008](../../docs/architecture/decisions/0008-flight-files-served-on-sky-orchestrators-network.md)) | `files.py` |
 | Command intents put on the wire: announced by `pg_notify`, swept on every reconnection, checked against their schema, claimed or expired, published with tid = intent and bid = flight, settled by their `services_reply` or timed out (`FR-LNK-06`, ADR-0006) | `commands.py` |
-| `flighttask_progress` decoded as sent (status, result, percent, waypoint, break point, media count), and each finished task's end reason (`FR-LNK-07`); the link does not read it yet | `link/progress.py` |
+| `flighttask_progress` decoded as sent (status, result, percent, waypoint, break point, media count), and each finished task's end reason (`FR-LNK-07`); read from `events` by the link and handed to the flights | `link/progress.py`, `link/stack.py` |
+| The flights: each watched from its prepare, its file kept under the database's token before the prepare goes out, until soc-operations ends it (read again every 5 s and on every connection). While it executes, every sample judged against its geofence snapshot: the first outside sends `return_home` on the wire before any write, then records it with the breach, once per flight, across a restart (`FR-SAF-01`, ADR-0010); entering the warning band logs `geofence_warning`. Take-off, landing and the aircraft's own return from its flight mode; the track at the first sample of each second, one insert every `telemetry_batch_s`; no sample for `telemetry_stale_after_ms` logs `telemetry_stale` once and sends nothing (`FR-SAF-06`), the next sample `telemetry_fresh`; the aircraft going offline or online logged. Each progress recorded with its end reason. Every aircraft's latest sample recorded as broadcast, for the checks (ADR-0025). Records written in order, once, through a database that goes away | `flights.py`, through `soc.record_flight_progress`, `soc.record_flight_moment`, `soc.record_geofence_breach`, `soc.record_aircraft_sample`, `soc.log_event` and `soc.telemetry_samples` |
 | `/health` and `/ready` on `SOC_HEALTH_PORT`, one entry per part: `database`, `realtime`, `flight_files`, `stack:<name>` (`NFR-OBS-02`) | `service.py`, through `soc-supervision` |
 | The process: JSON logs, SIGTERM and SIGINT stop it cleanly | `__main__.py` |
 
@@ -113,7 +114,21 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
   and stopping the clock, a timeout, an expiry, a schema refusal, a command
   waiting for its dock and running when the dock is announced, one expiring when
   it never is, a publish lost after the claim timing out, the sweep running
-  what was missed and settling what was left sent.
+  what was missed and settling what was left sent; a prepare going out only
+  once its file is kept, failed when it cannot be; every reply recorded
+  reported as settled; soc-cloud's own return published before any record,
+  its reply held until the record and settling it once, a never-recorded one
+  let go, one recorded late timing out from when it was sent.
+- The flights, against fakes of the store and the wire: the file kept under the
+  database's token; executing from the execute accepted or a progress in
+  flight; the first sample outside, or above the ceiling, returning the
+  aircraft once, before any write, tried again when the publish failed, never
+  again across a restart; the warning band warned once per entry, an unknown
+  sample not inside; take-off, return and landing from the mode, none invented
+  after a restart; the first sample of each second in one insert, ten minutes
+  at 5 Hz with jitter storing 600 ± 1 (`FR-TEL-04`); telemetry stale once and
+  no command, fresh again; each progress with its end reason; presence logged;
+  records in order and once through a database away, busy or refusing.
 - On the container lane, the service starts from a written file and environment
   against Postgres and Realtime v2.102.3 with SOC's migrations and the broker,
   and answers `/ready` with every part up; then the dock asks for a flight's
@@ -121,7 +136,15 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
   100 commands committed by `soc_operations` reach the wire with **p95 under
   50 ms from commit to claim**, each published once and accepted; a command
   committed while `soc-cloud` was away runs once when it returns, and a stale one
-  expires.
+  expires. A flight crossing its geofence through the broker is returned
+  **2.5 ms** after the dock published the sample (`FR-SAF-01` asks 100 ms), once,
+  and once again across a restart; its take-off, breach, command, return,
+  progress and landing land in the log as `soc_cloud`, the breach as safety and
+  the task's end as `geofence_breach`; its track and latest sample are stored.
+- On the container lane, the flights' store as `soc_cloud`: the flights not
+  ended with what was seen of them, a file's bytes and token, a track sample
+  written twice ignored rather than refusing its batch, the latest sample kept
+  and announced, a closed operation's log left alone, a breach once.
 - In the console end to end (`infra/e2e`), the service runs in its process on
   one stack behind Kong, as on the mini-PC, while a dock announces and flies an
   aircraft: the console shows it within 2 s and every sample reaches Chrome in
@@ -158,5 +181,14 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
 | A dry run announced while the service is away | Found by the sweep on the next connection and judged then |
 | A dry run the database refuses to record | `dry_run_refused` is logged; the run stays pending until the next sweep |
 | `soc-cloud` restarts with commands in flight | The sweep runs what is pending, times out what was sent too long ago, and waits for the replies of the rest |
+| A prepare whose flight or file is not in the database, or whose token cannot be served | `failed` before anything is sent, with `flight_file_not_found` or `flight_file_not_kept` |
+| A sample outside the geofence of an executing flight | `return_home` is published at once, before any write (2.5 ms from the dock's sample to the dock's services topic on a local broker); the breach and the command are recorded after, and its reply, even one heard first, settles the command once recorded. Later samples outside send nothing, and neither does a restart: the flight keeps `breached_at` |
+| The return home cannot be published (no link to the dock, the broker dropped) | `geofence_return_not_sent` is logged; the next sample outside tries again. The device's own geofence and link-loss policy still apply (NFR-SAF-01) |
+| A flight's geofence snapshot that cannot be judged against | `flight_geofence_unusable` is logged when the flight is watched; its samples are not judged. soc-operations validated it before the prepare, so this is a bug, never a flight's normal state |
+| No sample of an executing flight for `telemetry_stale_after_ms` | `telemetry_stale` (safety) is logged once and nothing is sent: link loss is the device's policy (FR-SAF-06). A flight on the ground after its task ended is not watched for it |
+| The database away while flights report | The progress, moments, breaches and log entries wait in order and are written when it is back, each once; the track waits for the next batch; only each aircraft's latest sample is kept |
+| The database refuses a flight's record | `flight_record_refused` names it and the next record is written; a refused breach lets its command's reply go, and the command times out in the database's sweep |
+| A progress with no status or naming no flight | `flight_progress_unusable` is logged and nothing is recorded |
+| A track sample written twice (redelivered after a reconnection) | The second is ignored by the database, never refused with its batch |
 | A bug in a supervised part | The process ends with status 1 and a `service_failed` line, and the container restarts |
 | SIGTERM | Every link closes and the process exits with status 0 |

@@ -15,7 +15,7 @@ from pathlib import Path
 import msgspec
 import pytest
 
-from soc_cloud import fanout
+from soc_cloud import fanout, flights
 from soc_cloud.link import messages, progress, telemetry
 from soc_cloud.link.messages import AircraftOsd, Battery, PositionState
 
@@ -26,6 +26,7 @@ MAPPING = [
     (Path(telemetry.__file__), None),
     (Path(progress.__file__), None),
     (Path(fanout.__file__), "payload"),
+    (Path(flights.__file__), "_keep_in_track"),
 ]
 #: Every measurement the broadcast carries; the rest identify and time the sample.
 MEASUREMENTS = (

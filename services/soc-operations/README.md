@@ -23,15 +23,16 @@ gate, and the flight files `soc-cloud` serves.
 | The process: JSON logs, SIGTERM and SIGINT stop it cleanly | `__main__.py` |
 | The fixtures the tests share: the golden route, its flight and a stack's envelope | `testing.py` |
 
-## What this branch does not yet do
+## What it does not do yet
 
 | Not yet | Arrives with |
 | --- | --- |
-| `soc-cloud` writes the stack's status, envelope and flight files address (`soc.record_stack_status`, `soc.record_stack_envelope`, `soc.record_stack_files_url`); until the envelope is written, no operation can be planned | `soc-cloud`'s flights |
-| `soc-cloud` writes the aircraft's samples, and the flight's progress and moments (take-off, landing), from the wire | `soc-cloud`'s flights |
-| `soc-cloud` asks Sky Orchestrator's dry run for each pending `soc.dry_runs` row and records its verdict (`SoApi.validate` exists; nothing calls it yet) | `soc-cloud`'s flights |
 | The console: creating, planning and flying an operation, its controls, and its log | the console (M4) |
 | The flight end to end, against Sky Orchestrator's fake bridge stack | M4 |
+
+`soc-cloud` writes what the checks read (the stack's status and envelope with
+their read times, each aircraft's latest sample), asks Sky Orchestrator's dry runs,
+and records each flight's progress, take-off and landing from the wire.
 
 ## The lifecycle
 
