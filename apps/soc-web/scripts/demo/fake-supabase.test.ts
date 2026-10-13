@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { FieldRefusedError, type Backend, type Fleet } from '../../src/backend/backend'
 import { bake } from '../../src/geometry/bake'
-import { designFromJson } from '../../src/geometry/designJson'
+import { designFromJson, envelopeFromSkyOrchestrator } from '../../src/geometry/designJson'
 import { supabaseBackend } from '../../src/backend/supabase'
 import { parseRuntimeConfiguration } from '../../src/config/runtime'
 import { PASSWORD_FOR_TESTS } from '../../src/test/keys'
@@ -345,5 +345,171 @@ describe("the demo's Realtime, joined by the console", () => {
     await own.close()
     await closed
     expect(socket.readyState).toBe(WebSocket.CLOSED)
+  })
+})
+
+describe("the demo's operations, read and written through the console backend (migration 0010)", () => {
+  const DEMO_PILOT = '6f1c2a52-34c5-4d7b-9a43-0b0f9e1d2c11'
+  const NORTE_1 = '33333333-3333-4333-8333-333333333333'
+  const CORRIDOR = '55555555-5555-4555-8555-555555555555'
+  const CLIENT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  const OTHER_CLIENT = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  const FLIGHT = '88888888-8888-4888-8888-888888888888'
+
+  /** The seeded operation of Finca Norte, found by its name: the lists keep no order of their own here. */
+  async function corridorOperation() {
+    const operation = (await backend.operations(NORTH)).find(
+      ({ name }) => name === 'North corridor',
+    )
+    if (operation === undefined) throw new Error('the demo has no North corridor operation')
+    return operation
+  }
+
+  it('answers the one operation of Finca Norte: a draft named for its corridor, flown by Norte 1', async () => {
+    const operation = await corridorOperation()
+    expect(operation).toMatchObject({
+      state: 'draft',
+      endReason: null,
+      createdBy: DEMO_PILOT,
+      takeoffSecurityHeightM: null,
+    })
+    expect(await backend.operations(ALMENDRAL)).toEqual([])
+    expect(await backend.assignments(operation.id)).toEqual([
+      expect.objectContaining({
+        operationId: operation.id,
+        waylineId: CORRIDOR,
+        fleetId: NORTE_1,
+        speedMs: null,
+        flight: null,
+      }),
+    ])
+    expect(await backend.operators(operation.id)).toEqual([
+      { operationId: operation.id, profileId: DEMO_PILOT, role: 'pilot' },
+    ])
+    expect(await backend.events(operation.id)).toEqual([])
+    expect(await backend.members(NORTH)).toEqual([
+      { profileId: DEMO_PILOT, displayName: null, email: EMAIL, role: 'owner' },
+    ])
+  })
+
+  it('answers the lab stack with the envelope its dock reported, and the replay stacks with none', async () => {
+    const stacks = await backend.stacks(NORTH)
+    const lab = stacks.find(({ name }) => name === 'lab')
+    expect(lab).toMatchObject({
+      gatewaySn: 'SOTESTDOCK01',
+      linkState: 'connected',
+      envelopeReadAt: '2026-10-11T12:40:00+00:00',
+    })
+    // The envelope reads as Sky Orchestrator's own, strictly: the same limits the bake checks.
+    expect(envelopeFromSkyOrchestrator(lab?.envelope)).toMatchObject({
+      maxHeightM: 120,
+      maxHorizontalSpeedMs: 15,
+    })
+    expect(stacks.filter(({ name }) => name === 'replay')).toEqual([
+      expect.objectContaining({ envelope: null, envelopeReadAt: null }),
+      expect.objectContaining({ envelope: null, envelopeReadAt: null }),
+    ])
+  })
+
+  it('creates an operation as a draft, changes its name, and lists it with the others', async () => {
+    const created = await backend.createOperation(NORTH, {
+      name: 'Trial corridor',
+      geofenceId: null,
+      takeoffSecurityHeightM: 40,
+    })
+    expect(created).toMatchObject({
+      name: 'Trial corridor',
+      state: 'draft',
+      takeoffSecurityHeightM: 40,
+      endReason: null,
+    })
+    expect(
+      await backend.changeOperation(created.id, { name: 'Trial corridor, west' }),
+    ).toMatchObject({ id: created.id, name: 'Trial corridor, west', takeoffSecurityHeightM: 40 })
+    expect((await backend.operations(NORTH)).map(({ id }) => id)).toContain(created.id)
+  })
+
+  it('changes an operator role, removes it, and names it again', async () => {
+    const operation = await corridorOperation()
+    expect(await backend.changeOperator(operation.id, DEMO_PILOT, 'observer')).toEqual({
+      operationId: operation.id,
+      profileId: DEMO_PILOT,
+      role: 'observer',
+    })
+    expect(await backend.changeOperator(operation.id, DEMO_PILOT, 'pilot')).toMatchObject({
+      role: 'pilot',
+    })
+    await backend.removeOperator(operation.id, DEMO_PILOT)
+    expect(await backend.operators(operation.id)).toEqual([])
+    await expect(backend.removeOperator(operation.id, DEMO_PILOT)).rejects.toThrow(
+      'Nothing changed',
+    )
+    expect(await backend.nameOperator(operation.id, NORTH, DEMO_PILOT, 'pilot')).toMatchObject({
+      role: 'pilot',
+    })
+  })
+
+  it('unassigns the seeded assignment and assigns it again, its speed and flight as given', async () => {
+    const operation = await corridorOperation()
+    const [seeded] = await backend.assignments(operation.id)
+    if (seeded === undefined) throw new Error('the demo has no assignment')
+    await backend.unassign(seeded.id)
+    expect(await backend.assignments(operation.id)).toEqual([])
+    const again = await backend.assign(operation.id, NORTH, {
+      waylineId: CORRIDOR,
+      fleetId: NORTE_1,
+      speedMs: 12,
+      flight: { schema_version: '2.2.0' },
+    })
+    expect(await backend.changeAssignment(again.id, { speedMs: 10 })).toMatchObject({
+      speedMs: 10,
+      flight: { schema_version: '2.2.0' },
+    })
+    expect(await backend.assignments(operation.id)).toEqual([
+      expect.objectContaining({ id: again.id, speedMs: 10 }),
+    ])
+  })
+
+  it('asks a transition through the RPC once per client request id, and a pilot may ask to simulate', async () => {
+    const operation = await corridorOperation()
+    const plan = await backend.requestTransition(operation.id, 'plan', CLIENT)
+    expect(plan).toMatchObject({
+      transition: 'plan',
+      status: 'pending',
+      operationId: operation.id,
+      requestedBy: DEMO_PILOT,
+    })
+    expect(await backend.requestTransition(operation.id, 'plan', CLIENT)).toEqual(plan)
+    expect(await backend.requests(operation.id)).toEqual([plan])
+    expect(await backend.requestTransition(operation.id, 'simulate', OTHER_CLIENT)).toMatchObject({
+      transition: 'simulate',
+      status: 'pending',
+    })
+  })
+
+  it('refuses a command for a flight the demo does not fly, as the database refuses a stranger', async () => {
+    const operation = await corridorOperation()
+    const refused = await backend
+      .requestCommand(FLIGHT, 'pause', CLIENT)
+      .catch((error: unknown) => error)
+    expect(refused).toBeInstanceOf(FieldRefusedError)
+    expect(refused).toMatchObject({
+      code: '42501',
+      message: 'Only a pilot of the operation commands its aircraft.',
+    })
+    expect(await backend.commands(operation.id)).toEqual([])
+  })
+
+  it('answers a browser preflight for the DELETE the console sends to unassign and remove', async () => {
+    const response = await fetch(`${fake.url}/rest/v1/assignments`, {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'http://localhost:5199',
+        'access-control-request-method': 'DELETE',
+        'access-control-request-headers': 'authorization, apikey, content-type, prefer',
+      },
+    })
+    expect(response.status).toBe(204)
+    expect(response.headers.get('access-control-allow-methods')).toContain('DELETE')
   })
 })
