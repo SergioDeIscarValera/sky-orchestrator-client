@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 
 import { PILL_TONE } from '../app/styles'
+import { checksOfTable } from '../test/requirements'
 import {
   CHECK_ORDER,
   CHECK_STATE_TONE,
@@ -28,28 +29,11 @@ import {
 /** The copy of contracts/events/events.json the console holds, as the database names the kinds (IR-EVT-02). */
 const COPY = new URL('../test/contracts/events.json', import.meta.url)
 const CONTRACT = new URL('../../../../contracts/events/events.json', import.meta.url)
-const REQUIREMENTS = new URL(
-  '../../../../docs/requirements/functional-requirements.md',
-  import.meta.url,
-)
 
 const kindsOf = (path: URL) =>
   Object.keys(
     (JSON.parse(readFileSync(path, 'utf8')) as { kinds: Record<string, unknown> }).kinds,
   ).sort()
-
-/** The checks of FR-OPS-05's table, in order, and the rows that say a check does not block. */
-function tableOfChecks(): { ids: string[]; notBlocking: string[] } {
-  const section = readFileSync(REQUIREMENTS, 'utf8')
-    .split('### FR-OPS-05')[1]
-    ?.split('**Acceptance**')[0]
-  if (section === undefined) throw new Error('FR-OPS-05 is not in the requirements')
-  const rows = [...section.matchAll(/^\| `(PF-[A-Z-]+)` \| (.+) \|$/gm)]
-  return {
-    ids: rows.map((row) => row[1] ?? ''),
-    notBlocking: rows.filter((row) => /not blocking/.test(row[2] ?? '')).map((row) => row[1] ?? ''),
-  }
-}
 
 describe("an operation's words (FR-OPS-02, FR-OPS-05, FR-LOG-02)", () => {
   it('names each state and gives it a tone', () => {
@@ -102,7 +86,7 @@ describe("an operation's words (FR-OPS-02, FR-OPS-05, FR-LOG-02)", () => {
   })
 
   it("names every check of FR-OPS-05's table, in the table's order", () => {
-    const table = tableOfChecks()
+    const table = checksOfTable()
     expect(table.ids).toHaveLength(16)
     expect([...CHECK_ORDER]).toEqual(table.ids)
     expect(Object.keys(CHECK_WORDS).sort()).toEqual([...table.ids].sort())
