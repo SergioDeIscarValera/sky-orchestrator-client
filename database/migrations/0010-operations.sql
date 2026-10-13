@@ -474,7 +474,8 @@ begin
     raise exception 'operation % does not exist', operation using errcode = 'no_data_found';
   end if;
   if not exists (
-    select 1 from soc.operation_moves where from_state = current.state and to_state = move_operation.to_state
+    select 1 from soc.operation_moves m
+     where m.from_state = current.state and m.to_state = move_operation.to_state
   ) then
     raise exception 'operation %: % cannot become %', operation, current.state, to_state
       using errcode = 'check_violation', constraint = 'operation_moves_by_the_lifecycle';
