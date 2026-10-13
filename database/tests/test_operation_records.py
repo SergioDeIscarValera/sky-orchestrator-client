@@ -538,6 +538,47 @@ async def test_a_moment_on_a_closed_operation_is_kept_on_the_flight_but_not_logg
     )
 
 
+RECORD_BREACH = "select soc.record_geofence_breach($1, $2, $3::jsonb, $4)"
+BREACH_OUTSIDE = json.dumps(
+    {"position": [-4.7300, 41.6500], "height_m": 42.5, "distance_outside_m": 12.5}
+)
+
+
+@pytest.mark.parametrize(
+    ("breached", "ended", "kept"),
+    [
+        pytest.param(True, "operator_return", "geofence_breach", id="a-breach-names-the-return"),
+        pytest.param(False, "operator_return", "operator_return", id="an-operator-return-stays"),
+        pytest.param(True, "pilot_takeover", "pilot_takeover", id="a-takeover-after-a-breach"),
+        pytest.param(True, "low_battery", "low_battery", id="a-battery-end-after-a-breach"),
+        pytest.param(True, None, None, id="no-end-stays-null"),
+    ],
+)
+async def test_a_return_home_after_a_breach_ends_the_flight_as_the_breach(
+    breached: bool,
+    ended: str | None,
+    kept: str | None,
+    soc_cloud: asyncpg.Connection,
+    admin: asyncpg.Connection,
+    tenancy: Tenancy,
+) -> None:
+    flown = await Operations(admin).flown((await tenancy.member("owner")).organization_id)
+    if breached:
+        recorded = await soc_cloud.fetchval(
+            RECORD_BREACH, flown.flight_id, uuid.uuid4(), BREACH_OUTSIDE, NOW
+        )
+        assert recorded is True
+    await soc_cloud.execute(
+        RECORD_PROGRESS_ENDED, flown.flight_id, "canceled", 0, 40, 2, None, ended
+    )
+    state = await admin.fetchval(
+        "select end_reason::text from soc.flight_states where flight_id = $1", flown.flight_id
+    )
+    assert state == kept
+    entries = await admin.fetch(ENTRIES_OF_FLIGHT, flown.flight_id)
+    assert json.loads(entries[-1]["payload"])["end_reason"] == kept
+
+
 async def test_record_checks_refuses_a_write_on_a_closed_operation(
     soc_operations: asyncpg.Connection, admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
