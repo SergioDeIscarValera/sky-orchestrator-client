@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -26,6 +27,7 @@ from soc_operations.lifecycle import (
     on_outcome,
     on_progress,
     on_request,
+    on_tick,
 )
 from soc_operations.testing import ENVELOPE, operation
 
@@ -284,7 +286,45 @@ def test_an_execute_with_an_unknown_outcome_waits_for_the_progress() -> None:
         snapshot("launching", flights=(current,)), Outcome("execute", current.id, "refused", 319999)
     )
     assert moves(decision) == []
-    assert not any(isinstance(action, EndFlight) for action in decision.actions)
+    # The database logged the outcome as soc-cloud's; soc-operations may not log that kind.
+    assert decision.accepted and decision.actions == ()
+
+
+REPLIED = datetime(2026, 10, 13, 10, 0, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(("state", "back"), [("simulating", "preparing"), ("launching", "ready")])
+def test_an_unknown_outcome_with_no_progress_after_10_s_never_started(
+    state: str, back: str
+) -> None:
+    """DEP-27: the execute's deadline was 3 s on the phone, so silence means it did not fly."""
+    current = flight(outcome_unknown_since=REPLIED)
+    waiting = snapshot(state, flights=(current,))
+    assert on_tick(waiting, REPLIED + timedelta(seconds=9.9)).actions == ()
+    decision = on_tick(waiting, REPLIED + timedelta(seconds=10))
+    undo, end, move = decision.actions
+    assert undo == Command("undo", current.id, {"flight_ids": [str(current.id)]})
+    assert end == EndFlight(current.id, "cancelled")
+    assert isinstance(move, Move) and move.to == back
+    assert "no progress" in move.cause
+
+
+@pytest.mark.parametrize(
+    ("state", "changes"),
+    [
+        ("simulating", {"state": FlightState("in_progress", 0, None)}),
+        ("simulating", {"ended": True}),
+        ("simulating", {"outcome_unknown_since": None}),
+        ("preparing", {}),
+        ("in_flight", {}),
+    ],
+)
+def test_a_flight_that_reported_or_ended_or_was_answered_is_not_given_up(
+    state: str, changes: dict[str, Any]
+) -> None:
+    current = flight(**{"outcome_unknown_since": REPLIED, **changes})
+    later = REPLIED + timedelta(minutes=5)
+    assert on_tick(snapshot(state, flights=(current,)), later).actions == ()
 
 
 def test_a_simulation_refused_goes_back_to_preparing() -> None:

@@ -12,6 +12,9 @@ database, the wire or the clock, so the whole lifecycle is tested without them.
   flight, paused, returning, and closed once the aircraft has landed (FR-OPS-10).
 - The checks, judged continuously, move a simulated operation to ready and back
   (FR-OPS-07).
+- An execute whose outcome Sky Orchestrator could not learn waits for the flight's
+  progress; with none `OUTCOME_SETTLES_WITHIN_S` after, the flight never started, and the
+  operation goes back as after a refusal (DEP-27).
 
 The moves are the lifecycle's own (contracts/operations/lifecycle.json); the database
 refuses any other.
@@ -23,6 +26,7 @@ import math
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Protocol
 
 from soc_operations.results import meaning
@@ -37,6 +41,10 @@ GO_HOME, KEEP_WAYLINE_ON_RC_LOSS = 0, 0
 LEAST_RTH_ALTITUDE_M = 20
 #: The result of an execute whose outcome Sky Orchestrator could not learn (DEP-27).
 OUTCOME_UNKNOWN = 319999
+#: An execute carries a deadline 3 s ahead on the phone's clock, refused past it (DEP-27):
+#: a flight whose execute's outcome is unknown and that has reported no progress this long
+#: after the reply never started.
+OUTCOME_SETTLES_WITHIN_S = 10.0
 
 
 class Check(Protocol):
@@ -75,6 +83,8 @@ class Flight:
     landed: bool
     ended: bool
     state: FlightState | None
+    #: When an execute of it was answered with an unknown outcome (DEP-27), if one was.
+    outcome_unknown_since: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -377,8 +387,8 @@ def on_outcome(snapshot: Snapshot, outcome: Outcome) -> Decision:
         return accepted(Executed(flight.id))
     if outcome.verb == "execute" and outcome.result == OUTCOME_UNKNOWN:
         # Sky Orchestrator gave up on the phone, which may have started: the progress
-        # settles it (DEP-27). Nothing moves until it does.
-        return accepted(Log("command_outcome", _told(outcome, snapshot)))
+        # settles it, or its absence does (on_tick, DEP-27). The database logged the outcome.
+        return accepted()
     told = _told(outcome, snapshot)
     back = "preparing" if snapshot.state == "simulating" else "ready"
     actions: list[Action] = [EndFlight(flight.id, "cancelled")]
@@ -387,6 +397,31 @@ def on_outcome(snapshot: Snapshot, outcome: Outcome) -> Decision:
         actions.insert(0, Command("undo", flight.id, {"flight_ids": [str(flight.id)]}))
     actions.append(Move(back, f"{outcome.verb} {outcome.status}: {told['meaning']}"))
     return Decision(True, (str(told["meaning"]),), tuple(actions))
+
+
+def on_tick(snapshot: Snapshot, now: datetime) -> Decision:
+    """A flight whose execute's outcome stayed unknown, with no progress since: it never
+    started, so it is undone and ended cancelled, and the operation goes back (DEP-27)."""
+    if snapshot.state not in {"simulating", "launching"}:
+        return accepted()
+    for flight in snapshot.flights:
+        since = flight.outcome_unknown_since
+        if flight.ended or flight.state is not None or since is None:
+            continue
+        if (now - since).total_seconds() < OUTCOME_SETTLES_WITHIN_S:
+            continue
+        why = "the execute's outcome stayed unknown and the flight reported no progress"
+        back = "preparing" if snapshot.state == "simulating" else "ready"
+        return Decision(
+            True,
+            (why,),
+            (
+                Command("undo", flight.id, {"flight_ids": [str(flight.id)]}),
+                EndFlight(flight.id, "cancelled"),
+                Move(back, f"execute unknown: {why}"),
+            ),
+        )
+    return accepted()
 
 
 def _told(outcome: Outcome, snapshot: Snapshot) -> dict[str, Any]:

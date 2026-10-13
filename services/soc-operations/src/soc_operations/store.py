@@ -25,6 +25,7 @@ import asyncpg
 
 from soc_operations import flight_files
 from soc_operations.lifecycle import (
+    OUTCOME_UNKNOWN,
     Action,
     BuildFile,
     Command,
@@ -269,12 +270,16 @@ async def _flights(connection: asyncpg.Connection, operation_id: uuid.UUID) -> l
         select f.id, f.mode::text as mode, f.file_id, f.config_fingerprint,
                f.executed_at is not null as executed, f.took_off_at is not null as took_off,
                f.landed_at is not null as landed, f.ended_at is not null as ended,
-               s.status::text as status, s.result, s.end_reason::text as end_reason
+               s.status::text as status, s.result, s.end_reason::text as end_reason,
+               (select max(c.replied_at) from soc.command_intents c
+                 where c.flight_id = f.id and c.verb = 'execute' and c.result = $2)
+                 as outcome_unknown_since
           from soc.flights f left join soc.flight_states s on s.flight_id = f.id
          where f.operation_id = $1
          order by f.prepared_at desc
         """,
         operation_id,
+        OUTCOME_UNKNOWN,
     )
     return [
         Flight(
@@ -291,6 +296,7 @@ async def _flights(connection: asyncpg.Connection, operation_id: uuid.UUID) -> l
                 if row["status"] is None
                 else FlightState(row["status"], row["result"], row["end_reason"])
             ),
+            outcome_unknown_since=row["outcome_unknown_since"],
         )
         for row in rows
     ]

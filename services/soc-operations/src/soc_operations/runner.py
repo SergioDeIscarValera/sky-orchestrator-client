@@ -14,7 +14,9 @@ finds what was announced while it was away:
   the operations they concern judged again, which may make a simulated operation ready or
   no longer ready (FR-OPS-04, FR-OPS-07);
 - every second the checks of every operation preparing, simulated or ready are judged
-  again, so a value growing old turns its check to unknown (FR-SAF-02).
+  again, so a value growing old turns its check to unknown (FR-SAF-02); and every
+  operation simulating or launching is looked at again, so an execute whose outcome
+  stayed unknown with no progress since sends it back (DEP-27).
 
 One worker applies one job at a time, so no two decisions race over an operation. Judging
 is coalesced: an operation already waiting to be judged is not queued twice, so five
@@ -44,6 +46,8 @@ log = soc_log.get(__name__)
 #: How often the checks of a preparing, simulated or ready operation are judged again.
 TICK_S = 1.0
 JUDGED = ("preparing", "simulated", "ready")
+#: Waiting on a flight that may not have started (lifecycle.on_tick).
+WAITING = ("simulating", "launching")
 CONCERNS = ("soc_aircraft_samples", "soc_stack_views", "soc_dry_run_results")
 
 type Judge = Callable[[store.Loaded, Tunables, datetime], Sequence[lifecycle.Check]]
@@ -158,7 +162,7 @@ class Runner:
                     rows = await connection.fetch(
                         "select id from soc.operations"
                         " where state = any($1::soc.operation_state[])",
-                        list(JUDGED),
+                        [*JUDGED, *WAITING],
                     )
             except DatabaseUnavailableError:
                 # The connection's own supervisor reports it; the next tick tries again.
@@ -259,7 +263,13 @@ class Runner:
     async def _judge_operation(self, operation: uuid.UUID) -> None:
         async with self.database.transaction() as connection:
             loaded = await store.load(connection, operation)
-            if loaded is None or loaded.snapshot.state not in JUDGED:
+            if loaded is None:
+                return
+            if loaded.snapshot.state in WAITING:
+                decision = lifecycle.on_tick(loaded.snapshot, self._clock())
+                await store.apply(connection, loaded, decision.actions)
+                return
+            if loaded.snapshot.state not in JUDGED:
                 return
             checks = self._judged(connection, loaded)
             await _record(connection, operation, checks)

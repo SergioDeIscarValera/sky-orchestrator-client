@@ -14,7 +14,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -186,7 +186,11 @@ async def answer(
 
 
 def runner_of(
-    migrated: EphemeralPostgres, passwords: dict[str, str], tmp_path: Path, judge: Any
+    migrated: EphemeralPostgres,
+    passwords: dict[str, str],
+    tmp_path: Path,
+    judge: Any,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> Runner:
     path = tmp_path / "soc-operations.json"
     starting = {
@@ -204,7 +208,7 @@ def runner_of(
             "SOC_DB_PASSWORD_SOC_OPERATIONS": passwords["soc_operations"],
         }
     )
-    return Runner(loaded.database, loaded.tunables, judge, tick_s=0.1)
+    return Runner(loaded.database, loaded.tunables, judge, clock=clock, tick_s=0.1)
 
 
 @pytest.fixture
@@ -414,3 +418,54 @@ async def test_the_real_checks_are_written_and_gate_the_simulation(
     assert row["status"] == "refused"
     assert any(reason.startswith("PF-FRESH") for reason in json.loads(row["reasons"]))
     assert await state_of(admin, operation) == "preparing"
+
+
+async def test_an_execute_with_an_unknown_outcome_waits_then_goes_back_undone(
+    admin: asyncpg.Connection,
+    migrated: EphemeralPostgres,
+    passwords: dict[str, str],
+    tmp_path: Path,
+) -> None:
+    """DEP-27: 319999 moves nothing; with no progress 10 s after, the flight never started."""
+    ahead = [timedelta()]
+    runner = runner_of(
+        migrated, passwords, tmp_path, all_pass, clock=lambda: datetime.now(UTC) + ahead[0]
+    )
+    task = asyncio.create_task(runner.run())
+    try:
+        seeded = await seed(admin)
+        operation = seeded.operation_id
+        for transition, wanted in (
+            ("plan", "planned"),
+            ("prepare", "preparing"),
+            ("simulate", "simulating"),
+        ):
+            await ask(admin, seeded, transition)
+            await reached(admin, operation, wanted)
+        flight = await answer(admin, operation, "prepare")
+        await answer(admin, operation, "execute", result=319999)
+        await asyncio.sleep(0.5)
+        assert await state_of(admin, operation) == "simulating"
+        outcome = await admin.fetchval(
+            "select source::text from soc.operation_events where operation_id = $1"
+            " and kind = 'command_outcome' and payload ->> 'result' = '319999'",
+            operation,
+        )
+        assert outcome == "soc-cloud"
+        ahead[0] = timedelta(seconds=11)
+        await reached(admin, operation, "preparing")
+        undo = await admin.fetchval(
+            "select payload from soc.command_intents"
+            " where flight_id = $1 and verb = 'undo' and status = 'pending'",
+            flight,
+        )
+        assert json.loads(undo) == {"flight_ids": [str(flight)]}
+        ended = await admin.fetchrow(
+            "select ended_at, end_reason::text as reason from soc.flights where id = $1", flight
+        )
+        assert ended is not None and ended["ended_at"] is not None
+        assert ended["reason"] == "cancelled"
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
