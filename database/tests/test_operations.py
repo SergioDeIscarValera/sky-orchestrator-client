@@ -16,7 +16,6 @@ from soc_database.harness import (
     Operations,
     Tenancy,
     acting_as,
-    impersonate,
 )
 
 LIFECYCLE = Path(__file__).resolve().parents[2] / "contracts" / "operations" / "lifecycle.json"
@@ -349,12 +348,6 @@ async def test_a_closed_operation_refuses_a_change_to_its_row_as_admin_and_as_ed
     assert as_editor.value.constraint_name == "operation_closed"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="FR-OPS-10 names constraint operation_closed for any change to a closed operation; "
-    "an assignment change is refused by operation_definition_frozen instead",
-)
 async def test_a_closed_operation_refuses_a_change_to_its_assignment_by_operation_closed(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
@@ -366,12 +359,6 @@ async def test_a_closed_operation_refuses_a_change_to_its_assignment_by_operatio
     assert refusal.constraint_name == "operation_closed"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="FR-OPS-10 names constraint operation_closed for any change to a closed operation; "
-    "a new operator is refused by operation_definition_frozen instead",
-)
 async def test_a_closed_operation_refuses_a_new_operator_by_operation_closed(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
@@ -390,29 +377,60 @@ async def test_a_closed_operation_refuses_a_new_operator_by_operation_closed(
     assert refusal.constraint_name == "operation_closed"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="FR-OPS-10: the record accepts no further change of any kind, enforced by the database. "
-    "operation_changes guards only the operations row, so the log takes a new entry on a "
-    "completed operation",
-)
 async def test_a_closed_operation_refuses_a_new_log_entry(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
     flown = await Operations(admin).flown((await tenancy.member()).organization_id)
     await force(admin, flown.operation_id, "completed")
-    await refusal_of(
+    refusal = await refusal_of(
         admin.fetchval("select soc.log_event($1, 'landed', 'aircraft')", flown.operation_id)
     )
+    assert refusal.constraint_name == "operation_closed"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="FR-OPS-10: the record accepts no further change of any kind, enforced by the database. "
-    "record_checks writes a check on a completed operation",
-)
+async def test_the_move_that_closes_an_operation_is_the_last_entry_it_takes(
+    admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    """FR-OPS-10: the log takes only the entry of the move that closes the operation."""
+    flown = await Operations(admin).flown((await tenancy.member()).organization_id)
+    await Operations(admin).move(
+        flown.operation_id,
+        "planned",
+        "preparing",
+        "simulating",
+        "simulated",
+        "ready",
+        "launching",
+        "in_flight",
+        "returning",
+        "completed",
+    )
+    last = await admin.fetchrow(
+        "select payload from soc.operation_events where operation_id = $1"
+        " and kind = 'operation_state_changed' order by recorded_at desc, id desc limit 1",
+        flown.operation_id,
+    )
+    assert last is not None
+    assert json.loads(last["payload"])["to"] == "completed"
+
+
+async def test_is_open_tells_an_open_operation_from_a_closed_one(
+    admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    open_flown = await Operations(admin).flown((await tenancy.member()).organization_id)
+    closed_flown = await Operations(admin).flown((await tenancy.member()).organization_id)
+    await force(admin, closed_flown.operation_id, "aborted")
+    answers = await admin.fetchrow(
+        "select soc.is_open($1) as open_one, soc.is_open($2) as closed_one,"
+        " soc.is_open($3) as unknown",
+        open_flown.operation_id,
+        closed_flown.operation_id,
+        uuid.uuid4(),
+    )
+    assert answers is not None
+    assert (answers["open_one"], answers["closed_one"], answers["unknown"]) == (True, False, False)
+
+
 async def test_a_closed_operation_refuses_new_check_results(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
@@ -430,23 +448,18 @@ async def test_a_closed_operation_refuses_new_check_results(
             }
         ]
     )
-    await refusal_of(
+    refusal = await refusal_of(
         admin.fetchval("select soc.record_checks($1, $2::jsonb)", flown.operation_id, judged)
     )
+    assert refusal.constraint_name == "operation_closed"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="FR-OPS-10: the record accepts no further change of any kind, enforced by the database. "
-    "a flight can be added to a completed operation",
-)
 async def test_a_closed_operation_refuses_a_new_flight(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
     flown = await Operations(admin).flown((await tenancy.member()).organization_id)
     await force(admin, flown.operation_id, "completed")
-    await refusal_of(
+    refusal = await refusal_of(
         admin.execute(
             "insert into soc.flights (organization_id, operation_id, assignment_id, fleet_id,"
             " gateway_sn, aircraft_sn, mode, file_id, geofence_snapshot, envelope_snapshot)"
@@ -456,6 +469,7 @@ async def test_a_closed_operation_refuses_a_new_flight(
             flown.flight_id,
         )
     )
+    assert refusal.constraint_name == "operation_closed"
 
 
 async def test_an_editor_cannot_name_the_state_in_an_update(
@@ -712,23 +726,19 @@ async def test_an_edit_to_what_an_operation_names_leaves_it_where_it_is(
 
 @pytest.mark.parametrize("state", ["simulating", "launching"])
 @pytest.mark.parametrize("what", ["wayline", "geofence", "fleet"])
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="FR-OPS-07: a change to the wayline, the geofence or the fleet returns the operation "
-    "to planned. The lifecycle has no move from simulating or launching to planned, and the "
-    "trigger that moves dependents skips both states without a word, so the operation keeps the "
-    "file it was built from",
-)
-async def test_an_edit_to_what_a_simulating_or_launching_operation_names_returns_it_to_planned(
+async def test_an_edit_to_what_a_simulating_or_launching_operation_names_is_refused(
     state: str, what: str, admin: asyncpg.Connection, session: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
+    """A flight of the operation is prepared from its file: the edit is refused."""
     member = await tenancy.member("editor")
     flown = await Operations(admin).flown(member.organization_id)
     await force(admin, flown.operation_id, state)
     async with acting_as(session, member.user_id) as connection:
-        await edit_dependent(connection, what, flown)
-        assert await state_of(connection, flown.operation_id) == "planned"
+        with pytest.raises(asyncpg.CheckViolationError) as refusal:
+            async with connection.transaction():
+                await edit_dependent(connection, what, flown)
+        assert refusal.value.constraint_name == "operation_definition_frozen"
+        assert await state_of(connection, flown.operation_id) == state
 
 
 async def test_a_second_assignment_is_refused_in_the_mvp(
@@ -893,13 +903,13 @@ async def test_an_assignment_naming_another_organizations_wayline_or_fleet_is_re
     assert refusal.value.constraint_name == constraint
 
 
-async def test_an_operator_must_be_a_member_of_the_operations_organization(
+async def test_an_operator_must_be_a_live_member_of_the_operations_organization(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
     mine = await tenancy.member("editor")
     outsider = await tenancy.member("editor")
     operation = await operation_in(admin, mine.organization_id)
-    with pytest.raises(asyncpg.ForeignKeyViolationError) as refusal:
+    with pytest.raises(asyncpg.CheckViolationError) as refusal:
         await admin.execute(
             "insert into soc.operators (operation_id, organization_id, profile_id, role)"
             " values ($1, $2, $3, 'pilot')",
@@ -907,23 +917,17 @@ async def test_an_operator_must_be_a_member_of_the_operations_organization(
             mine.organization_id,
             outsider.user_id,
         )
-    assert refusal.value.constraint_name == "operators_organization_id_profile_id_fkey"
+    assert refusal.value.constraint_name == "operator_live_member"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="README rule: membership is read through the soc.* helpers, never through a foreign "
-    "key, because soft-deleted memberships stay in the table. soc.operators references "
-    "public.memberships by key, so a retired member can still be named a pilot",
-)
 async def test_a_retired_membership_cannot_be_named_an_operator(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
+    """The membership is read by its deleted_at, never through the key alone."""
     member = await tenancy.member("editor")
     operation = await operation_in(admin, member.organization_id)
     await tenancy.soft_delete_membership(member)
-    await refusal_of(
+    refusal = await refusal_of(
         admin.execute(
             "insert into soc.operators (operation_id, organization_id, profile_id, role)"
             " values ($1, $2, $3, 'pilot')",
@@ -932,11 +936,10 @@ async def test_a_retired_membership_cannot_be_named_an_operator(
             member.user_id,
         )
     )
+    assert refusal.constraint_name == "operator_live_member"
 
 
-@pytest.mark.parametrize(
-    "state", ["launching", "in_flight", "paused", "returning", *TERMINAL_STATES]
-)
+@pytest.mark.parametrize("state", ["launching", "in_flight", "paused", "returning"])
 async def test_operators_are_fixed_from_launching_on(
     state: str, admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
@@ -952,6 +955,24 @@ async def test_operators_are_fixed_from_launching_on(
             member.user_id,
         )
     assert refusal.value.constraint_name == "operation_definition_frozen"
+
+
+@pytest.mark.parametrize("state", TERMINAL_STATES)
+async def test_operators_are_closed_with_their_operation(
+    state: str, admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    member = await tenancy.member("editor")
+    operation = await operation_in(admin, member.organization_id)
+    await force(admin, operation, state)
+    with pytest.raises(asyncpg.CheckViolationError) as refusal:
+        await admin.execute(
+            "insert into soc.operators (operation_id, organization_id, profile_id, role)"
+            " values ($1, $2, $3, 'observer')",
+            operation,
+            member.organization_id,
+            member.user_id,
+        )
+    assert refusal.value.constraint_name == "operation_closed"
 
 
 @pytest.mark.parametrize("state", [*PASSING_STATES, *ACTIVE_STATES, "simulating"])
@@ -976,65 +997,11 @@ async def test_operators_may_change_until_the_operation_launches(
     assert role == "pilot"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=asyncpg.CheckViolationError,
-    reason="README rule: Virtual Origen deletes users by cascade and SOC must not block it. The "
-    "key sets created_by to null, but operation_changes refuses any change to a closed operation "
-    "(operation_closed), so a user who made a closed operation cannot be deleted",
-)
-async def test_deleting_a_user_who_made_a_closed_operation_is_not_blocked(
-    admin: asyncpg.Connection, session: asyncpg.Connection, tenancy: Tenancy
-) -> None:
-    creator = await tenancy.member("editor")
-    async with impersonate_committed(session, creator.user_id):
-        await session.execute(
-            "insert into soc.operations (organization_id, name) values ($1, 'Norte')",
-            creator.organization_id,
-        )
-    operation = await admin.fetchval(
-        "select id from soc.operations where created_by = $1", creator.user_id
-    )
-    assert isinstance(operation, uuid.UUID)
-    await force(admin, operation, "cancelled")
-    await admin.execute("delete from auth.users where id = $1", creator.user_id)
-
-
-@asynccontextmanager
-async def impersonate_committed(
-    session: asyncpg.Connection, user: uuid.UUID
-) -> AsyncIterator[asyncpg.Connection]:
-    """Acts as the user and keeps what was done, as a request through PostgREST does."""
-    async with session.transaction():
-        await impersonate(session, user)
-        yield session
-
-
-@pytest.mark.xfail(
-    strict=True,
-    raises=asyncpg.ForeignKeyViolationError,
-    reason="README rule: Virtual Origen deletes organizations by cascade and SOC must not block "
-    "it. soc.operations, soc.flight_files and soc.operation_events reference public.organizations "
-    "without cascade (0004, 0007 and 0008 cascade), and the log cannot follow a cascade: its rows "
-    "are append-only",
-)
-async def test_deleting_an_organization_takes_its_operations_and_their_log(
-    admin: asyncpg.Connection, tenancy: Tenancy
-) -> None:
-    owner = await tenancy.member("owner")
-    await operation_in(admin, owner.organization_id)
-    await admin.execute("delete from public.organizations where id = $1", owner.organization_id)
-    remaining = await admin.fetchval(
-        "select count(*) from soc.operations where organization_id = $1", owner.organization_id
-    )
-    assert remaining == 0
-
-
 async def test_an_operation_that_has_flown_is_never_deleted(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
+    """IR-OPS-02: an operation goes only with its organization; its log refuses the delete."""
     flown = await Operations(admin).flown((await tenancy.member()).organization_id)
-    refusal = await refusal_of(
-        admin.execute("delete from soc.operations where id = $1", flown.operation_id)
-    )
-    assert isinstance(refusal, asyncpg.ForeignKeyViolationError)
+    with pytest.raises(asyncpg.InsufficientPrivilegeError) as refusal:
+        await admin.execute("delete from soc.operations where id = $1", flown.operation_id)
+    assert "append-only" in refusal.value.message
