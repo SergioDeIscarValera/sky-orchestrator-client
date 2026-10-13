@@ -594,6 +594,20 @@ async def test_a_flight_that_has_ended_takes_no_command(
     assert refusal.value.constraint_name == "command_flight_ended"
 
 
+async def test_an_undo_cancels_only_a_flight_not_executing_yet(
+    session: asyncpg.Connection, admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    member, flown = await pilot_of(admin, tenancy)
+    await admin.execute("update soc.flights set executed_at = now() where id = $1", flown.flight_id)
+    async with acting_as(session, member.user_id) as connection:
+        with pytest.raises(asyncpg.CheckViolationError) as refusal:
+            await command(connection, flown.flight_id, "undo")
+    async with acting_as(session, member.user_id) as connection:
+        paused = await command(connection, flown.flight_id, "pause")
+    assert refusal.value.constraint_name == "command_undo_before_execution"
+    assert paused["status"] == "pending"
+
+
 async def test_a_command_naming_no_operation_is_refused_by_its_key(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
