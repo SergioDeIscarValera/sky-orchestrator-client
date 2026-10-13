@@ -261,6 +261,7 @@ One DJI flight task: one fleet flying one file, simulated or real. Owner:
 | `envelope_snapshot` | jsonb | The stack's envelope at prepare |
 | `prepared_at`, `executed_at`, `ended_at` | timestamptz | |
 | `took_off_at`, `landed_at` | timestamptz, nullable | From the flight mode |
+| `breached_at` | timestamptz, nullable | The sample on which soc-cloud sent its return home for a geofence breach, once per flight (`FR-SAF-01`) |
 | `end_reason` | enum, nullable | As `IR-OPS` |
 
 ## IR-FST — Flight state
