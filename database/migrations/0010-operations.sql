@@ -143,6 +143,12 @@ create table soc.assignments (
   wayline_id      uuid not null,
   fleet_id        uuid not null,
   speed_ms        numeric constraint assignment_speed_positive check (speed_ms is null or speed_ms > 0),
+  -- The wayline as this operation flies it (contracts/geometry/design.schema.json,
+  -- $defs.flight): made by the console, the only generator (ADR-0009), from the
+  -- wayline's bake, the operation's height, this speed and the stack's envelope;
+  -- validated by soc-operations, which builds the flight file from it.
+  flight          jsonb constraint assignment_flight_object
+                    check (flight is null or jsonb_typeof(flight) = 'object'),
   created_at      timestamptz not null default now(),
   unique (id, organization_id),
   foreign key (operation_id, organization_id) references soc.operations (id, organization_id)
@@ -1437,9 +1443,9 @@ create policy editors_change_operations on soc.operations
   using ((select soc.has_live_role(organization_id, 'editor')))
   with check ((select soc.has_live_role(organization_id, 'editor')));
 
-grant insert (operation_id, organization_id, wayline_id, fleet_id, speed_ms) on soc.assignments
-  to authenticated;
-grant update (wayline_id, fleet_id, speed_ms) on soc.assignments to authenticated;
+grant insert (operation_id, organization_id, wayline_id, fleet_id, speed_ms, flight)
+  on soc.assignments to authenticated;
+grant update (wayline_id, fleet_id, speed_ms, flight) on soc.assignments to authenticated;
 grant delete on soc.assignments to authenticated;
 create policy editors_assign on soc.assignments
   for insert to authenticated
