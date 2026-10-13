@@ -3,12 +3,11 @@ import { useEffect } from 'react'
 
 import type { FleetChanges, FleetDraft, StateEvent } from '../backend/backend'
 import { useBackend } from '../backend/context'
+import { placeRow } from '../operations/data'
 import { useOrganization } from '../organizations/context'
 import {
   ASSIGNMENTS,
-  CHECKS,
   COMMAND_INTENTS,
-  EVENTS,
   FLIGHT_STATES,
   FLIGHTS,
   GEOFENCES,
@@ -26,8 +25,11 @@ export const AIRCRAFT_MODELS = ['aircraft-models'] as const
 const DEVICES = 'devices'
 const FLEETS = 'fleets'
 
-/** The organization's queries each change on its state topic makes stale; a join, all of them. */
-const STALE: Readonly<Record<StateEvent['kind'], readonly string[] | 'all'>> = {
+/**
+ * The organization's queries each change on its state topic makes stale; a join, all of them. A
+ * log entry and a check arrive whole, so they are written into their cache instead (placeRow).
+ */
+const STALE: Readonly<Record<StateEvent['kind'], readonly string[] | 'all' | 'written'>> = {
   joined: 'all',
   stack: [DEVICES, STACKS],
   device: [DEVICES],
@@ -38,9 +40,9 @@ const STALE: Readonly<Record<StateEvent['kind'], readonly string[] | 'all'>> = {
   operation: [OPERATIONS, ASSIGNMENTS, OPERATORS],
   flight: [FLIGHTS],
   flight_state: [FLIGHT_STATES],
-  operation_event: [EVENTS],
+  operation_event: 'written',
   transition_request: [REQUESTS],
-  operation_check: [CHECKS],
+  operation_check: 'written',
 }
 
 export async function staleAfter(
@@ -49,6 +51,7 @@ export async function staleAfter(
   event: StateEvent,
 ): Promise<void> {
   const names = STALE[event.kind]
+  if (names === 'written') return placeRow(queryClient, organizationId, event)
   const keys =
     names === 'all'
       ? [organizationKey(organizationId)]
