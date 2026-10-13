@@ -3,7 +3,7 @@
   "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator-client/blob/develop/contracts/config/soc-config.schema.json",
   "title": "SOC configuration",
   "description": "Every tunable, once (FR-DEP-03, IR-CFG). Each consumer's configuration file holds exactly the keys that list it in x-consumers, all of them required, and nothing else; a default is what a new file starts from, never applied at load (ADR-0019). Addresses, ports and secrets come from the environment, declared in x-environment. x-unit, x-consumers, x-safety, x-constraints and x-environment are annotations; a validator ignores them.",
-  "x-version": "2.1.0",
+  "x-version": "2.2.0",
   "x-constraints": [
     "telemetry_stale_after_ms < telemetry_lost_after_ms",
     "stacks[].name are distinct",
@@ -229,6 +229,26 @@
       "x-unit": "Hz",
       "x-consumers": ["soc-cloud"],
       "description": "Most telemetry broadcasts per aircraft per second, latest sample wins (ADR-0007, NFR-RES-07)."
+    },
+    "stack_status_poll_ms": {
+      "type": "integer",
+      "minimum": 200,
+      "maximum": 10000,
+      "default": 1000,
+      "x-unit": "ms",
+      "x-consumers": ["soc-cloud"],
+      "x-safety": true,
+      "description": "How often each stack's status is read from its wayline API. A read with no answer within the interval is recorded as unknown, never as the last value read (FR-LNK-08)."
+    },
+    "stack_envelope_poll_s": {
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 600,
+      "default": 30,
+      "x-unit": "s",
+      "x-consumers": ["soc-cloud"],
+      "x-safety": true,
+      "description": "How often each stack's flight envelope, the limits every flight file is judged against, is read from its wayline API. A read with no answer within the interval is recorded as unknown (FR-LNK-09)."
     }
   },
   "$defs": {

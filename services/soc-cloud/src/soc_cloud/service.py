@@ -8,6 +8,8 @@ import websockets
 
 import soc_log
 from soc_cloud.commands import CHANNEL, Commands, PostgresCommandStore
+from soc_cloud.dry_runs import CHANNEL as DRY_RUNS_CHANNEL
+from soc_cloud.dry_runs import DryRuns, PostgresDryRunStore
 from soc_cloud.fanout import Fanout, telemetry_topic
 from soc_cloud.files import FileServer, FlightFiles
 from soc_cloud.latency import Latencies
@@ -15,6 +17,8 @@ from soc_cloud.link.stack import StackLink
 from soc_cloud.link.telemetry import Sample
 from soc_cloud.presence import PostgresPresenceStore, PresenceRecorder
 from soc_cloud.settings import SERVICE, Settings
+from soc_cloud.so_api import SoApi
+from soc_cloud.stacks import PostgresStackStore, StackSource, StackWatcher
 from soc_cloud.wire import WireContract
 from soc_db import Database
 from soc_realtime import Broadcaster, HttpBroadcast, RealtimeSocket
@@ -22,6 +26,9 @@ from soc_realtime.socket import Connector
 from soc_supervision.endpoint import HealthSource, application, serve
 
 log = soc_log.get(__name__)
+# Bounds one call to a stack's wayline API. A status or envelope read is bounded by its own
+# interval as well; a validation uploads a flight file and waits for Sky Orchestrator's judgement.
+WAYLINE_TIMEOUT_S = 30.0
 
 
 class CloudService:
@@ -35,7 +42,7 @@ class CloudService:
         self.settings = settings
         self.database = Database(
             settings.database,
-            listeners={CHANNEL: self._announced},
+            listeners={CHANNEL: self._announced, DRY_RUNS_CHANNEL: self._dry_run_announced},
             on_connected=self._connected,
         )
         self.realtime = RealtimeSocket(
@@ -81,6 +88,16 @@ class CloudService:
             reply_timeout_s=settings.tunables.command_reply_timeout_s,
             latencies=self.latencies,
         )
+        self.stack_watcher = StackWatcher(
+            [
+                StackSource(link.stack.name, link.stack.flight_files_url, link.topology.gateways)
+                for link in self.links
+            ],
+            PostgresStackStore(self.database),
+            status_poll_ms=settings.tunables.stack_status_poll_ms,
+            envelope_poll_s=settings.tunables.stack_envelope_poll_s,
+        )
+        self.dry_runs = DryRuns(PostgresDryRunStore(self.database))
         self._bind_host = bind_host
 
     async def run(self) -> None:
@@ -102,11 +119,22 @@ class CloudService:
         )
         async with aiohttp.ClientSession() as http, asyncio.TaskGroup() as group:
             broadcaster = Broadcaster(self.realtime, HttpBroadcast(self.settings.realtime, http))
+            apis = {
+                stack.name: SoApi(
+                    http,
+                    stack.api.url,
+                    self.settings.credentials[stack.name].api_token,
+                    timeout_s=WAYLINE_TIMEOUT_S,
+                )
+                for stack in self.settings.tunables.stacks
+            }
             group.create_task(self.database.run())
             group.create_task(self.realtime.run())
             group.create_task(self.presence.run())
             group.create_task(self.fanout.run(broadcaster))
             group.create_task(self.latencies.run())
+            group.create_task(self.stack_watcher.run(apis))
+            group.create_task(self.dry_runs.run(apis))
             for link in self.links:
                 group.create_task(link.run())
             group.create_task(serve(health, self.settings.health_port, self._bind_host))
@@ -125,9 +153,13 @@ class CloudService:
     async def _announced(self, payload: str) -> None:
         await self.commands.announced(payload)
 
+    async def _dry_run_announced(self, payload: str) -> None:
+        await self.dry_runs.announced(payload)
+
     async def _connected(self) -> None:
         self.presence.rewrite_all()
         await self.commands.sweep()
+        await self.dry_runs.sweep()
 
     def _replied(self, tid: str, result: int) -> None:
         self.commands.replied(tid, result)

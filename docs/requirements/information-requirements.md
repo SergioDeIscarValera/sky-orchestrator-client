@@ -505,6 +505,8 @@ starts from, never applied at load.
 | `max_arc_spacing_m` | 10 | `FR-WAY-04` |
 | `flight_file_grace_s` | 600 | `NFR-SEC-06` |
 | `broadcast_max_rate_hz` | 25 | `NFR-RES-07` |
+| `stack_status_poll_ms` | 1000 | `FR-LNK-08`; a read with no answer within the interval is unknown |
+| `stack_envelope_poll_s` | 30 | `FR-LNK-09`; the same for the envelope |
 
 **IR-CFG-01**: the safety-relevant keys have no permissive fallback; a missing
 one stops the service (`FR-SAF-05`).
@@ -546,3 +548,4 @@ this document updated first.
 | 2026-10-10 | IR-CMD-01 covers what was asked; IR-CMD-02, `soc-cloud`'s four verbs (migration 0004). |
 | 2026-10-10 | IR-TRQ opened: the operation transition request ADR-0006 names had no entity. |
 | 2026-10-13 | M4's data model (migration 0010): IR-TRQ specified; IR-CHK, IR-SMP and IR-DRY added (ADR-0025); IR-ASG's `flight`, IR-FIL's `operation_id`, IR-FLT's `config_fingerprint` and IR-STK's read times. |
+| 2026-10-13 | IR-CFG: `stack_status_poll_ms` and `stack_envelope_poll_s`, the stacks' poll intervals (contract 2.2.0, `FR-LNK-08`, `FR-LNK-09`). |

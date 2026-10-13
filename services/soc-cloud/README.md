@@ -14,7 +14,9 @@ The skeleton every later part plugs into:
 | --- | --- |
 | Settings: the contract's keys for `soc-cloud` as typed views, the environment, each stack's secrets; fail closed | `settings.py` |
 | The wire contract: Sky Orchestrator's vendored DJI schemas, every outgoing message checked first (`FR-LNK-10`) | `wire.py` |
-| The typed client for Sky Orchestrator's wayline API: stack status, the envelope and a dry run of a flight file, a nullable field None when absent or null (`FR-LNK-08`, `FR-LNK-09`); not wired into the service yet | `so_api.py` |
+| The typed client for Sky Orchestrator's wayline API: stack status, the envelope and a dry run of a flight file, a nullable field None when absent or null (`FR-LNK-08`, `FR-LNK-09`) | `so_api.py` |
+| Each stack's status and envelope read from its wayline API, every `stack_status_poll_ms` and `stack_envelope_poll_s`, each read recorded as SO returned it or null when it could not be read: an unknown stays unknown, never the last value read. Written for each gateway the stack's link has heard, with when it was read; the latest of each kept while the database is away. Each stack's flight-file address recorded once per gateway and read back (`FR-LNK-08`, `FR-LNK-09`, ADR-0025) | `stacks.py`, through `soc.record_stack_status`, `soc.record_stack_envelope` and `soc.record_stack_files_url` |
+| Dry runs of flight files (`FR-LNK-09`, IR-DRY): each pending run judged by the stack its gateway belongs to, the file's bytes and its wayline's takeoff sent to `POST /v1/validations`, the verdict recorded valid or rejected with every problem SO named, or failed with what went wrong; a run for a stack this service does not serve is failed with that reason; swept on every connection | `dry_runs.py`, through `soc.record_dry_run`, listening on `soc_dry_runs` |
 | The database link, supervised, as `soc_cloud` | `service.py`, through `soc-db` |
 | The Realtime socket, joined to every served organization's telemetry topic | `service.py`, through `soc-realtime` |
 | One MQTT v5 link per stack as `cloud-client`, persistent session, supervised (`FR-LNK-01`) | `link/stack.py` |
@@ -73,6 +75,26 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
   refused with the reason; the envelope is enforced through its reference.
 - A refused configuration stops the process with exit status 2 and one
   `configuration_refused` line naming every problem.
+- The stacks, against fakes of the wayline API and the database: each status and
+  envelope recorded as the stack returned it; a field the stack does not know
+  null; an unreachable stack recorded null, and its value again once it answers;
+  a stack that hangs delays no other; the flight-file address recorded once per
+  gateway, read back, and written again while the stack's row is not there; the
+  latest reading kept while the database is away, and a refused one dropped;
+  each change of reachability logged once, not every read.
+- The dry runs, against fakes of the validation API and `soc.dry_runs`: valid,
+  rejected with every problem, failed with the error; a run for a stack this
+  service does not serve failed with the reason; the file and its takeoff sent
+  as SO takes them (latitude first); the sweep finds what is pending; a run
+  announced twice judged once; a database away at the sweep or at the verdict.
+- On the container lane, against Postgres with SOC's migrations: a status
+  written to its stack and announced on `soc_stack_views`; an envelope written;
+  the files address read back; a status read over HTTP from a loopback wayline
+  API reaching the row, and null once that API stops answering; a dry run
+  inserted by `soc_operations` judged end to end through the whole service on
+  the wayline API, with the file and takeoff received, latitude first; a dry run
+  waiting while the service was away judged by its first sweep; a run for an
+  unserved stack failed; a judgement the API refuses failed with its words.
 - The link, driven with Sky Orchestrator's own example messages: the
   acknowledgement, presence both ways, samples, the file request answered or
   refused, a reply its schema refuses never sent, unreadable messages dropped,
@@ -126,6 +148,15 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
 | A command for a dock no connected stack has announced | It waits; it runs when a stack announces the dock, or expires once `command_intent_ttl_s` has passed |
 | A command claimed but not published (the broker dropped) | It stays `sent` and times out after `command_reply_timeout_s`: nothing claims it twice |
 | A command its schema refuses | `failed` before anything is sent, with every problem logged |
+| A stack's wayline API unreachable, refused, or with no answer within the interval | That read is recorded null (unknown) at once, never the last value; `stack_api_unreachable` is logged when it starts and `stack_api_reachable` when it answers again; the other stacks are unaffected |
+| A status or envelope read with a body its schema refuses | Recorded null, as an unreachable read is; the error is logged with the change of reachability |
+| The database away while a stack reads | The latest reading of each is kept and written when the database is back, the older ones never written after it |
+| A stack's row not there yet when a reading or its flight-file address is written | The database does nothing for that write. The address is read back and written again with the next reading until the row shows it; a status or envelope is written by the next reading, within a second for the status and within its interval for the envelope |
+| A dry run for a stack this service does not serve | Failed at once with `stack <name> is not served by this soc-cloud`; nothing is sent to any stack |
+| A dry run the stack cannot judge (unreachable, refused, a body it cannot read) | Failed, its verdict `{"error": ...}` with what the stack said; recorded once |
+| The database away while a dry run is judged | The verdict is kept and recorded when the database is back, and the stack is not asked again. A run the process stopped before judging stays pending until the sweep on the next connection |
+| A dry run announced while the service is away | Found by the sweep on the next connection and judged then |
+| A dry run the database refuses to record | `dry_run_refused` is logged; the run stays pending until the next sweep |
 | `soc-cloud` restarts with commands in flight | The sweep runs what is pending, times out what was sent too long ago, and waits for the replies of the rest |
 | A bug in a supervised part | The process ends with status 1 and a `service_failed` line, and the container restarts |
 | SIGTERM | Every link closes and the process exits with status 0 |
