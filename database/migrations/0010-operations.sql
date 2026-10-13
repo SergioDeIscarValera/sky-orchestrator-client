@@ -1170,6 +1170,11 @@ begin
     raise exception 'flight %: it has ended', flight
       using errcode = 'check_violation', constraint = 'command_flight_ended';
   end if;
+  -- FR-CMD-05: an undo cancels a flight prepared and not executing yet.
+  if wanted = 'undo' and target.executed_at is not null then
+    raise exception 'flight %: it executes, so it is no longer undone', flight
+      using errcode = 'check_violation', constraint = 'command_undo_before_execution';
+  end if;
   select * into asked from soc.command_intents
    where organization_id = target.organization_id and client_request_id = client_request;
   if found then
