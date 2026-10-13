@@ -97,6 +97,14 @@ const REFUSALS = {
     field: null,
     message: 'This flight has ended: its aircraft takes no more commands.',
   },
+  command_undo_before_execution: {
+    field: null,
+    message: 'This flight already executes: an undo cancels only one not started yet.',
+  },
+  operator_live_member: {
+    field: 'profileId',
+    message: 'Only a live member of a live organization is named an operator.',
+  },
   operations_geofence_id_organization_id_fkey: {
     field: 'geofenceId',
     message: "This geofence is not one of the organization's.",
@@ -125,11 +133,13 @@ export type OperationConstraint = keyof typeof REFUSALS
  * The refusals a trigger or a function raises with USING CONSTRAINT: PostgREST sends their
  * message and no constraint name, so the message names the constraint instead.
  */
-const RAISED: ReadonlyArray<readonly [RegExp, OperationConstraint]> = [
+export const RAISED: ReadonlyArray<readonly [RegExp, OperationConstraint]> = [
   [/one assignment in the MVP/, 'assignment_one_in_mvp'],
   [/its (?:definition|operators) (?:is|are) fixed once it is/, 'operation_definition_frozen'],
   [/closed when it became/, 'operation_closed'],
   [/it has ended/, 'command_flight_ended'],
+  [/it executes, so it is no longer undone/, 'command_undo_before_execution'],
+  [/an operator is a live member of its organization/, 'operator_live_member'],
 ]
 
 /** The words for the role a request needs: soc.request_transition and request_command raise these. */
@@ -139,7 +149,7 @@ export const ROLE_MESSAGES = {
   command: 'Only a pilot of the operation commands its aircraft.',
 } as const
 
-const ROLE_SAID: ReadonlyArray<readonly [RegExp, string]> = [
+export const ROLE_SAID: ReadonlyArray<readonly [RegExp, string]> = [
   [/an editor of its organization asks it to move/, ROLE_MESSAGES.editor],
   [/only its pilots/, ROLE_MESSAGES.pilot],
   [/only a pilot of its operation commands it/, ROLE_MESSAGES.command],

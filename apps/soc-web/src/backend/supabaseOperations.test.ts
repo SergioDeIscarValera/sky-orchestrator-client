@@ -708,6 +708,22 @@ describe('the refusals the database makes of an operation (migration 0010)', () 
       null,
       'This flight has ended: its aircraft takes no more commands.',
     ],
+    [
+      'POST /rest/v1/rpc/request_command',
+      400,
+      '23514',
+      `flight ${FLIGHT_ID}: it executes, so it is no longer undone`,
+      null,
+      'This flight already executes: an undo cancels only one not started yet.',
+    ],
+    [
+      'POST /rest/v1/operators',
+      400,
+      '23514',
+      `operation ${OPERATION_ID}: an operator is a live member of its organization`,
+      'profileId',
+      'Only a live member of a live organization is named an operator.',
+    ],
   ])(
     'names what the database refused (%s, %s, %s)',
     async (route, status, code, message, field, text) => {
