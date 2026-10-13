@@ -939,6 +939,25 @@ async def test_a_retired_membership_cannot_be_named_an_operator(
     assert refusal.constraint_name == "operator_live_member"
 
 
+async def test_a_member_of_a_retired_organization_cannot_be_named_an_operator(
+    admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    """A live membership of an organization Virtual Origen retired names no operator."""
+    member = await tenancy.member("editor")
+    operation = await operation_in(admin, member.organization_id)
+    await tenancy.soft_delete_organization(member.organization_id)
+    refusal = await refusal_of(
+        admin.execute(
+            "insert into soc.operators (operation_id, organization_id, profile_id, role)"
+            " values ($1, $2, $3, 'pilot')",
+            operation,
+            member.organization_id,
+            member.user_id,
+        )
+    )
+    assert refusal.constraint_name == "operator_live_member"
+
+
 @pytest.mark.parametrize("state", ["launching", "in_flight", "paused", "returning"])
 async def test_operators_are_fixed_from_launching_on(
     state: str, admin: asyncpg.Connection, tenancy: Tenancy

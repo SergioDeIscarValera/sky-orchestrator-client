@@ -147,14 +147,6 @@ async def test_deleting_an_organization_takes_an_operation_and_its_log(
         assert count == 0, table
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=asyncpg.ForeignKeyViolationError,
-    reason="Decision B says deleting an organization takes a whole operation with its log. A "
-    "flown operation still refuses it with assignments_wayline_id_organization_id_fkey: its "
-    "assignment names a wayline the cascade removes, and 0010 leaves the wayline, fleet and "
-    "assignment keys without a cascade",
-)
 async def test_deleting_an_organization_takes_a_flown_operation_its_flights_and_its_log(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:

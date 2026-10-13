@@ -116,12 +116,30 @@ async def test_the_return_home_is_sent_then_settled_by_its_reply_like_any_other(
         "info",
         {"verb": "return_home", "status": "accepted", "result": 0},
     )
-    requested = await admin.fetchval(
-        "select count(*) from soc.operation_events where command_id = $1"
-        " and kind = 'command_requested'",
+    requested = await admin.fetch(
+        "select source::text as source, actor_id from soc.operation_events"
+        " where command_id = $1 and kind = 'command_requested'",
         intent,
     )
-    assert requested == 1
+    # soc-cloud sent it on its own: neither a member nor soc-operations asked for it.
+    assert [(row["source"], row["actor_id"]) for row in requested] == [("soc-cloud", None)]
+
+
+async def test_a_flight_that_ended_records_no_breach(
+    soc_cloud: asyncpg.Connection, admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    flown = await Operations(admin).flown((await tenancy.member("owner")).organization_id)
+    await admin.execute(
+        "update soc.flights set ended_at = now(), end_reason = 'completed' where id = $1",
+        flown.flight_id,
+    )
+    before = await intents_of(admin, flown.flight_id)
+    assert await breach(soc_cloud, flown.flight_id, uuid.uuid4()) is False
+    assert await intents_of(admin, flown.flight_id) == before
+    breached = await admin.fetchval(
+        "select breached_at from soc.flights where id = $1", flown.flight_id
+    )
+    assert breached is None
 
 
 async def test_the_breach_entry_carries_the_keys_the_contract_lists(

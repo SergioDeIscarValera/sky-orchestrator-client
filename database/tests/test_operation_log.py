@@ -269,7 +269,7 @@ async def test_log_event_refuses_a_kind_outside_the_contract(
 async def test_log_event_refuses_an_operation_that_does_not_exist(
     admin: asyncpg.Connection,
 ) -> None:
-    with pytest.raises(asyncpg.PostgresError):
+    with pytest.raises(asyncpg.NoDataFoundError, match="does not exist"):
         await admin.fetchval("select soc.log_event($1, 'landed', 'aircraft')", uuid.uuid4())
 
 
