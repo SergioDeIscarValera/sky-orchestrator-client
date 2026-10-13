@@ -97,9 +97,11 @@ function Moves({ operation }: { readonly operation: Operation }) {
           >
             {CONFIRMATION[confirming.move].confirm}
           </button>
+          {/* The safe answer takes the focus: the move buttons it replaces would otherwise lose it. */}
           <button
             type="button"
             className={QUIET_BUTTON}
+            autoFocus
             onClick={() => {
               setAsking(null)
             }}

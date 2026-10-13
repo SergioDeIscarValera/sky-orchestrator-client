@@ -186,6 +186,7 @@ describe('the moves a member may ask an operation (FR-OPS-02, FR-OPS-09)', () =>
     await user.click(move('Simulate'))
     const asking = screen.getByRole('group', { name: 'Fly in the simulator' })
     expect(asks).not.toHaveBeenCalled()
+    expect(within(asking).getByRole('button', { name: 'Cancel' })).toHaveFocus()
     await user.click(within(asking).getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('group')).toBeNull()
     expect(asks).not.toHaveBeenCalled()
