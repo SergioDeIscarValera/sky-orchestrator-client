@@ -213,8 +213,12 @@ the state. Retention: permanent.
 (`IR-EVT`) with its cause and author; the current state never disagrees with the
 log, because both are written in one transaction.
 
-**IR-OPS-02**: an operation that has flown is never deleted; its definition is
-frozen once it leaves `ready`.
+**IR-OPS-02**: an operation that has flown is never deleted, except with its
+organization once Virtual Origen erases it; its log goes with it then, and only
+then. Its definition, and what it names (its wayline, geofence and fleet), stays
+as it is while a flight of it is prepared or flown, from `simulating` on, and
+once it is closed; an edit while it is preparing, simulated or ready puts it back
+to `planned` (`FR-OPS-07`).
 
 ## IR-ASG — Assignment
 
