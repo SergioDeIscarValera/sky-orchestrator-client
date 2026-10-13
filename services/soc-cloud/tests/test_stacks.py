@@ -214,9 +214,10 @@ async def test_an_envelope_read_is_recorded_as_the_stack_returned_it() -> None:
 async def test_an_unreachable_stack_records_null_and_a_reachable_one_its_value() -> None:
     store, api = FakeStore(), FakeWayline()
     store.rows.add(DOCK)
-    api.status_failures = [SoApiError("GET /v1/status answered 503", status=503)] * 3
     async with watching(store, [stack("lab", [DOCK])], {"lab": api}):
-        await until(lambda: None in [text for _, text in store.statuses])
+        await until(lambda: store.last_status() is not None)
+        api.status_failures = [SoApiError("GET /v1/status answered 503", status=503)] * 3
+        await until(lambda: store.last_status() is None)
         await until(lambda: store.last_status() is not None)
     assert json.loads(store.last_status() or "{}") == STATUS_WIRE
 
