@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 import shutil
@@ -212,3 +213,109 @@ async def acting_as(
         yield connection
     finally:
         await transaction.rollback()
+
+
+FARM = (-4.7245, 41.6523)
+SQUARE = [[-4.7255, 41.6515], [-4.7235, 41.6515], [-4.7235, 41.6531], [-4.7255, 41.6531]]
+
+
+@dataclass(frozen=True)
+class Flown:
+    """An operation with one assignment and one flight, and what they name."""
+
+    organization_id: uuid.UUID
+    gateway_sn: str
+    aircraft_sn: str
+    fleet_id: uuid.UUID
+    geofence_id: uuid.UUID
+    wayline_id: uuid.UUID
+    operation_id: uuid.UUID
+    assignment_id: uuid.UUID
+    file_id: uuid.UUID
+    flight_id: uuid.UUID
+
+
+class Operations:
+    """Operations, as the database's administrator makes them for a test: a stack with one
+    aircraft, its fleet, a geofence, a wayline, an operation assigning them, a flight file
+    and a flight, each through the constraints a real one passes."""
+
+    def __init__(self, admin: asyncpg.Connection) -> None:
+        self._admin = admin
+
+    async def flown(
+        self, organization_id: uuid.UUID, *, mode: str = "simulated", file: bytes = b"PK\x03\x04kmz"
+    ) -> Flown:
+        admin = self._admin
+        gateway = f"SOTEST{secrets.token_hex(4).upper()}"
+        aircraft = f"SOUAV{secrets.token_hex(4).upper()}"
+        await admin.execute(
+            "select soc.record_stack($1, 'lab', $2, 'connected')", gateway, organization_id
+        )
+        await admin.execute(
+            "select soc.record_topology($1, $2::jsonb)",
+            gateway,
+            json.dumps(
+                [{"aircraft_sn": aircraft, "domain": 0, "type": 67, "sub_type": 0, "online": True}]
+            ),
+        )
+        model = await admin.fetchval("select model from soc.aircraft_models order by model limit 1")
+        fleet_id = await admin.fetchval(
+            "insert into soc.fleets"
+            " (organization_id, name, model, airframe_serial, gateway_sn, aircraft_sn)"
+            " values ($1, 'Norte 1', $2, '1WNBH9', $3, $4) returning id",
+            organization_id, model, gateway, aircraft,
+        )  # fmt: skip
+        geofence_id = await admin.fetchval(
+            "insert into soc.geofences (organization_id, name, polygon, max_height_m, origin)"
+            " values ($1, 'Norte', $2::jsonb, 120, 'drawn') returning id",
+            organization_id, json.dumps(SQUARE),
+        )  # fmt: skip
+        waypoints = [{"index": 0, "position": list(FARM), "height_m": 30, "actions": []}]
+        wayline_id = await admin.fetchval(
+            "insert into soc.waylines (organization_id, name, takeoff, default_height_m, design,"
+            " waypoints, metrics, bake_version)"
+            " values ($1, 'Pasillo', $2::jsonb, 30, '{}'::jsonb, $3::jsonb, $4::jsonb, '2.2.0')"
+            " returning id",
+            organization_id, json.dumps(list(FARM)), json.dumps(waypoints),
+            json.dumps({"waypoint_count": 1, "distance_m": 0}),
+        )  # fmt: skip
+        operation_id = await admin.fetchval(
+            "insert into soc.operations"
+            " (organization_id, name, geofence_id, takeoff_security_height_m)"
+            " values ($1, 'Norte', $2, 20) returning id",
+            organization_id, geofence_id,
+        )  # fmt: skip
+        assignment_id = await admin.fetchval(
+            "insert into soc.assignments"
+            " (operation_id, organization_id, wayline_id, fleet_id, speed_ms)"
+            " values ($1, $2, $3, $4, 5) returning id",
+            operation_id, organization_id, wayline_id, fleet_id,
+        )  # fmt: skip
+        file_id = await admin.fetchval(
+            "insert into soc.flight_files (organization_id, operation_id, wayline_id, bytes, md5,"
+            " size_bytes, profile_version, token)"
+            " values ($1, $2, $3, $4, $5, $6, '1.0.0', $7) returning id",
+            organization_id, operation_id, wayline_id, file, hashlib.md5(file).hexdigest(),  # noqa: S324 - DJI's fingerprint
+            len(file), secrets.token_urlsafe(16),
+        )  # fmt: skip
+        flight_id = await admin.fetchval(
+            "insert into soc.flights (organization_id, operation_id, assignment_id, fleet_id,"
+            " gateway_sn, aircraft_sn, mode, file_id, geofence_snapshot, envelope_snapshot)"
+            " values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, '{}'::jsonb) returning id",
+            organization_id, operation_id, assignment_id, fleet_id, gateway, aircraft, mode,
+            file_id,
+            json.dumps({"polygon": SQUARE, "max_height_m": 120}),
+        )  # fmt: skip
+        return Flown(
+            organization_id, gateway, aircraft, fleet_id, geofence_id, wayline_id, operation_id,
+            assignment_id, file_id, flight_id,
+        )  # fmt: skip
+
+    async def move(self, operation_id: uuid.UUID, *states: str) -> None:
+        """Walk the operation through each state in turn, by the lifecycle's own moves."""
+        for state in states:
+            await self._admin.execute(
+                "select soc.move_operation($1, $2::soc.operation_state, 'test', 'soc-operations')",
+                operation_id, state,
+            )  # fmt: skip
