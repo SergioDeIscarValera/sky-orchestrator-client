@@ -271,6 +271,7 @@ The latest progress of a flight, from `flighttask_progress`. Owner: `soc-cloud`.
 | `percent` | integer | 0 to 100 |
 | `current_waypoint_index` | integer | |
 | `break_point` | jsonb, nullable | DJI's, with its reason once Sky Orchestrator sends one (SO's FR-FLT-12) |
+| `end_reason` | enum, nullable | How the task ended, once it has: from DJI's result and break reason, and from the returns `soc-cloud` sent itself (`FR-SAF-01`) |
 | `updated_at` | timestamptz | |
 
 ## IR-FIL — Flight file

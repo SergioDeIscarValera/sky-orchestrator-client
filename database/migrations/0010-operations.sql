@@ -239,6 +239,9 @@ create table soc.flight_states (
   percent                integer check (percent is null or percent between 0 and 100),
   current_waypoint_index integer check (current_waypoint_index is null or current_waypoint_index >= 0),
   break_point            jsonb check (break_point is null or jsonb_typeof(break_point) = 'object'),
+  -- How the task ended, once it has, as soc-cloud reads it: from DJI's result and break
+  -- reason, and from the returns it sent itself (a geofence breach, FR-SAF-01).
+  end_reason             soc.end_reason,
   updated_at             timestamptz not null default now()
 );
 
@@ -897,6 +900,27 @@ begin
 end;
 $$;
 
+-- --- The organization's members, to name operators (FR-OPS-01, IR-OPR) --------------
+
+-- Who an operation can name as its pilots and observers: the organization's live
+-- members, with their role, to a member of that organization only.
+create function soc.organization_members(organization uuid)
+returns table (profile_id uuid, display_name text, email text, role public.role)
+language sql
+stable
+security definer
+set search_path = soc, public, pg_temp
+as $$
+  select m.profile_id, p.display_name, p.email::text, m.role
+    from public.memberships m
+    join public.profiles p on p.id = m.profile_id
+   where m.organization_id = organization
+     and m.deleted_at is null
+     and p.deleted_at is null
+     and soc.is_live_member(organization)
+   order by coalesce(p.display_name, p.email::text);
+$$;
+
 -- --- Pilots' commands (FR-CMD-01 to FR-CMD-05) ---------------------------------------
 
 -- A pilot of the operation who is an editor or above commands its aircraft in flight.
@@ -949,10 +973,55 @@ begin
     me, coalesce(meta, '{}')
   )
   returning * into asked;
-  perform soc.log_event(target.operation_id, 'command_requested', 'operator',
-                        jsonb_build_object('verb', wanted), me, target.id, target.fleet_id, asked.id);
   return asked;
 end;
+$$;
+
+-- FR-CMD-06, FR-LOG-02: every command is logged when asked, by a pilot or by
+-- soc-operations, and again when it settles; soc-operations hears each settling and
+-- moves its flights and operations on it.
+create function soc.command_intent_is_logged()
+returns trigger
+language plpgsql
+security definer
+set search_path = soc, pg_temp
+as $$
+declare
+  fleet uuid;
+begin
+  select fleet_id into fleet from soc.flights where id = new.flight_id;
+  if tg_op = 'INSERT' then
+    perform soc.log_event(new.operation_id, 'command_requested',
+                          case when new.requested_by is null then 'soc-operations' else 'operator' end::soc.event_source,
+                          jsonb_build_object('verb', new.verb), new.requested_by, new.flight_id, fleet, new.id);
+  elsif new.status is distinct from old.status and new.status <> 'sent' then
+    perform soc.log_event(new.operation_id, 'command_outcome', 'soc-cloud',
+                          jsonb_build_object('verb', new.verb, 'status', new.status, 'result', new.result),
+                          null, new.flight_id, fleet, new.id, null,
+                          case when new.status = 'accepted' then 'info' else 'warning' end::soc.event_severity);
+    perform pg_notify('soc_command_outcomes', new.id::text);
+  end if;
+  return null;
+end;
+$$;
+
+create trigger command_intent_is_logged
+  after insert or update on soc.command_intents
+  for each row execute function soc.command_intent_is_logged();
+
+-- ADR-0008: where each stack's dock downloads flight files, from soc-cloud's
+-- configuration, so the prepare soc-operations asks for carries the file's whole URL.
+alter table soc.stacks add column flight_files_url text
+  constraint stack_flight_files_url check (flight_files_url is null or flight_files_url ~ '^http://');
+
+create function soc.record_stack_files_url(gateway text, url text)
+returns void
+language sql
+security definer
+set search_path = soc, pg_temp
+as $$
+  update soc.stacks set flight_files_url = url
+   where gateway_sn = gateway and flight_files_url is distinct from url;
 $$;
 
 -- --- soc-cloud's record (ADR-0025) ---------------------------------------------------
@@ -1062,7 +1131,8 @@ create function soc.record_flight_progress(
   dji_result integer,
   done_percent integer,
   waypoint integer,
-  breakpoint jsonb
+  breakpoint jsonb,
+  ended soc.end_reason default null
 )
 returns void
 language plpgsql
@@ -1079,17 +1149,19 @@ begin
   end if;
   select status into before from soc.flight_states where flight_id = flight;
   insert into soc.flight_states (flight_id, organization_id, status, result, percent,
-                                 current_waypoint_index, break_point, updated_at)
-  values (flight, target.organization_id, reported, dji_result, done_percent, waypoint, breakpoint, now())
+                                 current_waypoint_index, break_point, end_reason, updated_at)
+  values (flight, target.organization_id, reported, dji_result, done_percent, waypoint, breakpoint,
+          ended, now())
   on conflict (flight_id) do update set
     status = excluded.status, result = excluded.result, percent = excluded.percent,
     current_waypoint_index = excluded.current_waypoint_index, break_point = excluded.break_point,
-    updated_at = excluded.updated_at;
+    end_reason = excluded.end_reason, updated_at = excluded.updated_at;
   if before is distinct from reported then
     perform soc.log_event(target.operation_id, 'flight_status_changed', 'soc-cloud',
                           jsonb_build_object('status', reported, 'percent', done_percent,
                                              'result', dji_result,
-                                             'break_point', breakpoint),
+                                             'break_point', breakpoint,
+                                             'end_reason', ended),
                           null, flight, target.fleet_id);
     perform pg_notify('soc_flight_progress', flight::text);
   end if;
@@ -1293,6 +1365,7 @@ begin
       'percent', new.percent,
       'current_waypoint_index', new.current_waypoint_index,
       'break_point', new.break_point,
+      'end_reason', new.end_reason,
       'updated_at', new.updated_at
     ),
     'flight_state',
@@ -1540,15 +1613,18 @@ revoke execute on function soc.record_aircraft_sample(text, text, jsonb, timesta
 revoke execute on function soc.record_stack_status(text, jsonb) from public;
 revoke execute on function soc.record_stack_envelope(text, jsonb) from public;
 revoke execute on function soc.record_flight_progress(uuid, soc.flight_status, integer, integer,
-  integer, jsonb) from public;
+  integer, jsonb, soc.end_reason) from public;
 revoke execute on function soc.record_flight_moment(uuid, text, timestamptz, integer) from public;
 revoke execute on function soc.record_dry_run(uuid, soc.dry_run_status, jsonb) from public;
 revoke execute on function soc.record_checks(uuid, jsonb) from public;
+revoke execute on function soc.organization_members(uuid) from public;
+revoke execute on function soc.record_stack_files_url(text, text) from public;
 
 grant execute on function soc.is_terminal(soc.operation_state) to authenticated, soc_cloud, soc_operations;
 grant execute on function soc.is_frozen(soc.operation_state) to authenticated, soc_cloud, soc_operations;
 grant execute on function soc.request_transition(uuid, soc.transition, uuid, jsonb) to authenticated;
 grant execute on function soc.request_command(uuid, soc.command_verb, uuid, jsonb) to authenticated;
+grant execute on function soc.organization_members(uuid) to authenticated;
 grant execute on function soc.log_event(uuid, text, soc.event_source, jsonb, uuid, uuid, uuid, uuid,
   timestamptz, soc.event_severity) to soc_operations, soc_cloud;
 grant execute on function soc.move_operation(uuid, soc.operation_state, text, soc.event_source, uuid,
@@ -1561,6 +1637,7 @@ grant execute on function soc.record_aircraft_sample(text, text, jsonb, timestam
 grant execute on function soc.record_stack_status(text, jsonb) to soc_cloud;
 grant execute on function soc.record_stack_envelope(text, jsonb) to soc_cloud;
 grant execute on function soc.record_flight_progress(uuid, soc.flight_status, integer, integer,
-  integer, jsonb) to soc_cloud;
+  integer, jsonb, soc.end_reason) to soc_cloud;
 grant execute on function soc.record_flight_moment(uuid, text, timestamptz, integer) to soc_cloud;
 grant execute on function soc.record_dry_run(uuid, soc.dry_run_status, jsonb) to soc_cloud;
+grant execute on function soc.record_stack_files_url(text, text) to soc_cloud;
