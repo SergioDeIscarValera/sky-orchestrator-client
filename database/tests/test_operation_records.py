@@ -40,6 +40,17 @@ RECORD_CHECKS = "select soc.record_checks($1, $2::jsonb)"
 RECORD_FILES_URL = "select soc.record_stack_files_url($1, $2)"
 CHECK_JUDGED_AT = "2026-10-13T10:00:00+00:00"
 NOW = datetime(2026, 10, 13, 10, 0, 0, tzinfo=UTC)
+TO_COMPLETED = [
+    "planned",
+    "preparing",
+    "simulating",
+    "simulated",
+    "ready",
+    "launching",
+    "in_flight",
+    "returning",
+    "completed",
+]
 
 
 @pytest.fixture
@@ -418,3 +429,122 @@ async def test_a_stacks_flight_files_url_is_http_or_null(
     with pytest.raises(asyncpg.CheckViolationError) as refusal:
         await soc_cloud.execute(RECORD_FILES_URL, gateway, "https://files.example.test/")
     assert refusal.value.constraint_name == "stack_flight_files_url"
+
+
+@pytest.mark.parametrize("status", ["sent", "in_progress", "paused"])
+async def test_a_flight_state_ends_only_once_its_status_is_a_finished_one(
+    status: str, soc_cloud: asyncpg.Connection, admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    flown = await Operations(admin).flown((await tenancy.member("owner")).organization_id)
+    with pytest.raises(asyncpg.CheckViolationError) as refusal:
+        await soc_cloud.execute(
+            RECORD_PROGRESS_ENDED, flown.flight_id, status, 0, 40, 2, None, "geofence_breach"
+        )
+    assert refusal.value.constraint_name == "flight_state_ends_when_finished"
+
+
+async def test_a_progress_on_an_ended_flight_is_kept_but_neither_logged_nor_announced(
+    soc_cloud: asyncpg.Connection,
+    admin: asyncpg.Connection,
+    tenancy: Tenancy,
+    migrated: EphemeralPostgres,
+) -> None:
+    member = await tenancy.member("owner")
+    ended = await Operations(admin).flown(member.organization_id)
+    still_flying = await Operations(admin).flown(member.organization_id)
+    await admin.execute(
+        "update soc.flights set ended_at = now(), end_reason = 'operator_return' where id = $1",
+        ended.flight_id,
+    )
+    async with listening(migrated, "soc_flight_progress") as heard:
+        await soc_cloud.execute(RECORD_PROGRESS, ended.flight_id, "paused", 0, 40, 2, None)
+        await soc_cloud.execute(
+            RECORD_PROGRESS, still_flying.flight_id, "in_progress", 0, 10, 1, None
+        )
+        assert await heard_in_order(heard, 1) == [str(still_flying.flight_id)]
+        assert heard.empty()
+    kept = await admin.fetchval(
+        "select status::text from soc.flight_states where flight_id = $1", ended.flight_id
+    )
+    assert kept == "paused"
+    logged = await admin.fetchval(
+        "select count(*) from soc.operation_events where flight_id = $1"
+        " and kind = 'flight_status_changed'",
+        ended.flight_id,
+    )
+    assert logged == 0
+
+
+async def test_a_progress_on_a_closed_operation_is_kept_but_neither_logged_nor_announced(
+    soc_cloud: asyncpg.Connection,
+    admin: asyncpg.Connection,
+    tenancy: Tenancy,
+    migrated: EphemeralPostgres,
+) -> None:
+    member = await tenancy.member("owner")
+    closed = await Operations(admin).flown(member.organization_id)
+    still_flying = await Operations(admin).flown(member.organization_id)
+    await Operations(admin).move(closed.operation_id, *TO_COMPLETED)
+    async with listening(migrated, "soc_flight_progress") as heard:
+        await soc_cloud.execute(RECORD_PROGRESS, closed.flight_id, "paused", 0, 40, 2, None)
+        await soc_cloud.execute(
+            RECORD_PROGRESS, still_flying.flight_id, "in_progress", 0, 10, 1, None
+        )
+        assert await heard_in_order(heard, 1) == [str(still_flying.flight_id)]
+        assert heard.empty()
+    assert (
+        await admin.fetchval(
+            "select status::text from soc.flight_states where flight_id = $1", closed.flight_id
+        )
+        == "paused"
+    )
+    assert (
+        await admin.fetchval(
+            "select count(*) from soc.operation_events where flight_id = $1", closed.flight_id
+        )
+        == 0
+    )
+
+
+async def test_a_moment_on_a_closed_operation_is_kept_on_the_flight_but_not_logged(
+    soc_cloud: asyncpg.Connection,
+    admin: asyncpg.Connection,
+    tenancy: Tenancy,
+    migrated: EphemeralPostgres,
+) -> None:
+    member = await tenancy.member("owner")
+    closed = await Operations(admin).flown(member.organization_id)
+    still_flying = await Operations(admin).flown(member.organization_id)
+    await Operations(admin).move(closed.operation_id, *TO_COMPLETED)
+    async with listening(migrated, "soc_flight_progress") as heard:
+        await soc_cloud.execute(
+            "select soc.record_flight_moment($1, 'took_off', $2, 1)", closed.flight_id, NOW
+        )
+        await soc_cloud.execute(
+            RECORD_PROGRESS, still_flying.flight_id, "in_progress", 0, 10, 1, None
+        )
+        assert await heard_in_order(heard, 1) == [str(still_flying.flight_id)]
+        assert heard.empty()
+    assert (
+        await admin.fetchval("select took_off_at from soc.flights where id = $1", closed.flight_id)
+        == NOW
+    )
+    assert (
+        await admin.fetchval(
+            "select count(*) from soc.operation_events where flight_id = $1 and kind = 'took_off'",
+            closed.flight_id,
+        )
+        == 0
+    )
+
+
+async def test_record_checks_refuses_a_write_on_a_closed_operation(
+    soc_operations: asyncpg.Connection, admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    flown = await Operations(admin).flown((await tenancy.member("owner")).organization_id)
+    await Operations(admin).move(flown.operation_id, *TO_COMPLETED)
+    with pytest.raises(asyncpg.CheckViolationError) as refusal:
+        await soc_operations.fetchval(
+            RECORD_CHECKS, flown.operation_id, json.dumps([judgement("PF-LINK", "pass")])
+        )
+    assert refusal.value.constraint_name == "operation_closed"
