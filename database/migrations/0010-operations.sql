@@ -224,6 +224,8 @@ create table soc.flights (
   executed_at        timestamptz,
   took_off_at        timestamptz,
   landed_at          timestamptz,
+  -- When soc-cloud sent its return home on a geofence breach, once per flight (FR-SAF-01).
+  breached_at        timestamptz,
   ended_at           timestamptz,
   end_reason         soc.end_reason,
   unique (id, organization_id),
@@ -1385,7 +1387,8 @@ $$;
 -- FR-SAF-01, ADR-0010: soc-cloud's own return home, sent the moment a sample of an
 -- executing flight is outside its geofence, recorded as the command it sent (already
 -- sent, its reply settled by soc.record_command_reply) with the breach in the log, in one
--- transaction. Once per flight: a second breach of the same flight records nothing.
+-- transaction. Once per flight: a second breach of the same flight records nothing, and
+-- the flight keeps when it was breached, so a restarted soc-cloud never sends it twice.
 create function soc.record_geofence_breach(
   flight uuid, intent uuid, outside jsonb, sampled timestamptz
 )
@@ -1397,11 +1400,10 @@ as $$
 declare
   target soc.flights;
 begin
-  select * into target from soc.flights where id = flight;
-  if not found or exists (
-    select 1 from soc.operation_events
-     where flight_id = flight and kind = 'geofence_breach'
-  ) then
+  update soc.flights set breached_at = sampled
+   where id = flight and breached_at is null
+  returning * into target;
+  if not found then
     return false;
   end if;
   insert into soc.command_intents (
@@ -1556,6 +1558,7 @@ begin
       'executed_at', new.executed_at,
       'took_off_at', new.took_off_at,
       'landed_at', new.landed_at,
+      'breached_at', new.breached_at,
       'ended_at', new.ended_at,
       'end_reason', new.end_reason
     ),
