@@ -96,6 +96,25 @@ describe('the view in the URL (NFR-UX-03)', () => {
     expect(selectionOf(select({}, selection))).toEqual(selection)
   })
 
+  it('reads an operation, after a wayline and before an aircraft', () => {
+    const wayline = '33333333-3333-4333-8333-333333333333'
+    const operation = '66666666-6666-4666-8666-666666666666'
+    const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
+    expect(readView({ panel: 'operations', operation })).toEqual({
+      panel: 'operations',
+      operation,
+    })
+    expect(readView({ operation, wayline })).toEqual({ wayline })
+    expect(readView({ ...aircraft, operation })).toEqual({ operation })
+    expect(readView({ operation: 'North corridor' })).toEqual({})
+    const selection = { kind: 'operation', operationId: operation } as const
+    expect(select({ panel: 'operations', wayline }, selection)).toEqual({
+      panel: 'operations',
+      operation,
+    })
+    expect(selectionOf(select({}, selection))).toEqual(selection)
+  })
+
   it("reads a selection's open form, and no form without a selection", () => {
     const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
     expect(readView({ ...aircraft, form: 'register' })).toEqual({ ...aircraft, form: 'register' })

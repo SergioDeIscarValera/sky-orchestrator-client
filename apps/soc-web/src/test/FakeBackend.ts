@@ -373,6 +373,14 @@ export class FakeBackend implements Backend {
     [PILOT.userId, [NORTH, ORCHARD]],
     [NEIGHBOUR.userId, [NORTH]],
   ])
+  /** The name and address each member is listed by, by profile: the two accounts, and any a test adds. */
+  readonly profiles = new Map<
+    string,
+    { readonly displayName: string | null; readonly email: string | null }
+  >([
+    [PILOT.userId, { displayName: null, email: PILOT.email }],
+    [NEIGHBOUR.userId, { displayName: null, email: NEIGHBOUR.email }],
+  ])
   signInFailure: SignInFailure | null = null
   organizationsFailure: BackendError | null = null
   organizationReads = 0
@@ -773,10 +781,11 @@ export class FakeBackend implements Backend {
     for (const [profileId, organizations] of this.memberships) {
       const organization = organizations.find(({ id }) => id === organizationId)
       if (organization !== undefined) {
+        const profile = this.profiles.get(profileId)
         members.push({
           profileId,
-          displayName: null,
-          email: [PILOT, NEIGHBOUR].find((account) => account.userId === profileId)?.email ?? null,
+          displayName: profile?.displayName ?? null,
+          email: profile?.email ?? null,
           role: organization.role,
         })
       }

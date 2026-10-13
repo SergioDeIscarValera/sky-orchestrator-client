@@ -14,6 +14,12 @@ const GeofenceDetail = lazy(() =>
 const WaylineDetail = lazy(() =>
   import('../plans/WaylineDetail').then(({ WaylineDetail: detail }) => ({ default: detail })),
 )
+// An operation's detail loads with the operations' queries and the flight planner (NFR-PERF-05).
+const OperationDetail = lazy(() =>
+  import('../operations/OperationDetail').then(({ OperationDetail: detail }) => ({
+    default: detail,
+  })),
+)
 
 /**
  * Whatever is selected, faded in afresh when the selection changes; nothing at all
@@ -30,7 +36,9 @@ export function Inspector() {
         ? selection.geofenceId
         : selection.kind === 'wayline'
           ? selection.waylineId
-          : `${selection.gatewaySn}/${selection.aircraftSn}`
+          : selection.kind === 'operation'
+            ? selection.operationId
+            : `${selection.gatewaySn}/${selection.aircraftSn}`
   return (
     <aside
       aria-label="Inspector"
@@ -58,6 +66,10 @@ export function Inspector() {
         ) : selection.kind === 'wayline' ? (
           <Suspense fallback={<Waiting>Loading the wayline…</Waiting>}>
             <WaylineDetail waylineId={selection.waylineId} />
+          </Suspense>
+        ) : selection.kind === 'operation' ? (
+          <Suspense fallback={<Waiting>Loading the operation…</Waiting>}>
+            <OperationDetail operationId={selection.operationId} />
           </Suspense>
         ) : (
           <DeviceDetail gatewaySn={selection.gatewaySn} aircraftSn={selection.aircraftSn} />
