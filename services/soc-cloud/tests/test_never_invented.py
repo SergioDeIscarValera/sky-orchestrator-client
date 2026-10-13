@@ -16,7 +16,7 @@ import msgspec
 import pytest
 
 from soc_cloud import fanout
-from soc_cloud.link import messages, telemetry
+from soc_cloud.link import messages, progress, telemetry
 from soc_cloud.link.messages import AircraftOsd, Battery, PositionState
 
 #: The code a measurement passes through, from the wire to the broadcast: each module
@@ -24,6 +24,7 @@ from soc_cloud.link.messages import AircraftOsd, Battery, PositionState
 MAPPING = [
     (Path(messages.__file__), None),
     (Path(telemetry.__file__), None),
+    (Path(progress.__file__), None),
     (Path(fanout.__file__), "payload"),
 ]
 #: Every measurement the broadcast carries; the rest identify and time the sample.
