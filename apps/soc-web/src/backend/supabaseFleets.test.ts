@@ -241,6 +241,28 @@ describe('the catalogue, the devices and the fleets through PostgREST', () => {
     )
   })
 
+  it('says an aircraft that flies keeps its wire identity, which the trigger refuses to move (FR-FLE-05)', async () => {
+    const { backend, supabase } = await signedIn()
+    supabase.answers.set('PATCH /rest/v1/fleets', {
+      status: 400,
+      body: {
+        code: '23514',
+        message: `fleet ${FLEET_ID}: its aircraft is flying`,
+        details: null,
+        hint: null,
+      },
+    })
+    const refused = await backend
+      .changeFleet(FLEET_ID, { aircraftSn: 'SOTESTUAV002' })
+      .catch((error: unknown) => error)
+    expect(refused).toBeInstanceOf(FieldRefusedError)
+    expect(refused).toMatchObject({
+      field: null,
+      code: '23514',
+      message: 'This aircraft is flying: its wire identity stays until its flight ends.',
+    })
+  })
+
   it.each([
     [
       400,

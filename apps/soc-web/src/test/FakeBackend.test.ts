@@ -726,3 +726,23 @@ describe('the operations held in memory (IR-OPS, IR-ASG, IR-OPR, IR-TRQ, IR-CMD)
     )
   })
 })
+
+describe("a fleet's wire identity while its aircraft flies (migration 0010, FR-FLE-05)", () => {
+  it('refuses the gateway or the aircraft serial to move while a flight is unended, and names no field', async () => {
+    const { backend, operation, fleet } = await prepared()
+    backend.addFlight(flightOf(operation.id, fleet.id))
+    expect(
+      await backend
+        .changeFleet(fleet.id, { aircraftSn: 'SOTESTUAV002' })
+        .catch((error: unknown) => error),
+    ).toMatchObject({
+      field: null,
+      code: '23514',
+      message: 'This aircraft is flying: its wire identity stays until its flight ends.',
+    })
+    expect(await backend.changeFleet(fleet.id, { name: 'Norte alta' })).toMatchObject({
+      name: 'Norte alta',
+      aircraftSn: 'SOTESTUAV001',
+    })
+  })
+})

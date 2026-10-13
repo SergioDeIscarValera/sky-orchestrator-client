@@ -42,7 +42,7 @@ import {
   type WaylineDraft,
 } from '../backend/backend'
 import type { Link } from '../backend/link'
-import { untouched } from '../backend/supabaseFleets'
+import { flyingRefusal, untouched } from '../backend/supabaseFleets'
 import * as operationRefusals from '../backend/supabaseOperations'
 import type { Geodetic } from '../geometry/projection'
 import {
@@ -477,6 +477,13 @@ export class FakeBackend implements Backend {
     const [organizationId, fleet] = this.locate(fleetId)
     if (!this.writes(organizationId)) return Promise.reject(untouched())
     const changed = { ...fleet, ...changes }
+    // The trigger refuses a wire identity that moves while the fleet has an unended flight, first.
+    const identityMoves =
+      changed.gatewaySn !== fleet.gatewaySn || changed.aircraftSn !== fleet.aircraftSn
+    const flying = [...this.flightRows.values()]
+      .flat()
+      .some((flight) => flight.fleetId === fleetId && flight.endedAt === null)
+    if (identityMoves && flying) return Promise.reject(flyingRefusal())
     const refused = this.refusal(organizationId, changed, fleetId)
     if (refused !== null) return Promise.reject(refused)
     this.replace(organizationId, fleetId, changed)
