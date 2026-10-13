@@ -3,25 +3,46 @@ import { useEffect } from 'react'
 
 import type { FleetChanges, FleetDraft, StateEvent } from '../backend/backend'
 import { useBackend } from '../backend/context'
+import { placeRow } from '../operations/data'
 import { useOrganization } from '../organizations/context'
-import { GEOFENCES, WAYLINES, organizationKey } from '../organizations/scope'
+import {
+  ASSIGNMENTS,
+  COMMAND_INTENTS,
+  FLIGHT_STATES,
+  FLIGHTS,
+  GEOFENCES,
+  OPERATIONS,
+  OPERATORS,
+  REQUESTS,
+  STACKS,
+  WAYLINES,
+  organizationKey,
+} from '../organizations/scope'
 
 /** The catalogue changes only with a migration, so one read lasts the session (IR-MOD). */
 export const AIRCRAFT_MODELS = ['aircraft-models'] as const
 
 const DEVICES = 'devices'
 const FLEETS = 'fleets'
-const COMMAND_INTENTS = 'command-intents'
 
-/** The organization's queries each change on its state topic makes stale; a join, all of them. */
-const STALE: Readonly<Record<StateEvent['kind'], readonly string[] | 'all'>> = {
+/**
+ * The organization's queries each change on its state topic makes stale; a join, all of them. A
+ * log entry and a check arrive whole, so they are written into their cache instead (placeRow).
+ */
+const STALE: Readonly<Record<StateEvent['kind'], readonly string[] | 'all' | 'written'>> = {
   joined: 'all',
-  stack: [DEVICES],
+  stack: [DEVICES, STACKS],
   device: [DEVICES],
   fleet: [FLEETS],
   command_intent: [COMMAND_INTENTS],
   geofence: [GEOFENCES],
   wayline: [WAYLINES],
+  operation: [OPERATIONS, ASSIGNMENTS, OPERATORS],
+  flight: [FLIGHTS],
+  flight_state: [FLIGHT_STATES],
+  operation_event: 'written',
+  transition_request: [REQUESTS],
+  operation_check: 'written',
 }
 
 export async function staleAfter(
@@ -30,6 +51,7 @@ export async function staleAfter(
   event: StateEvent,
 ): Promise<void> {
   const names = STALE[event.kind]
+  if (names === 'written') return placeRow(queryClient, organizationId, event)
   const keys =
     names === 'all'
       ? [organizationKey(organizationId)]

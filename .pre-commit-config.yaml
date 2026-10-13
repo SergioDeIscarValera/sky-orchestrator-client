@@ -177,8 +177,8 @@ repos:
         entry: bash -c 'cd apps/soc-web && pnpm typecheck && pnpm lint && pnpm format:check && pnpm test'
         language: system
         pass_filenames: false
-        # The web's tests read these contracts and hold its mirrors equal to them.
-        files: ^(apps/soc-web/|contracts/(config|broadcast|flight-files|geometry|recordings|site|sky-orchestrator)/)
+        # The web's tests read these contracts and 0010's raised words, and hold its mirrors equal to them.
+        files: ^(apps/soc-web/|contracts/(config|broadcast|events|flight-files|geometry|operations|recordings|site|sky-orchestrator)/|database/migrations/)
 
       - id: soc-geo-gate
         name: soc-geo gate

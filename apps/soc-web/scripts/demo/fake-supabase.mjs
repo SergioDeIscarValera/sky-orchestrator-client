@@ -26,8 +26,27 @@ const ANSWERED_EVENTS = new Set(['phx_join', 'phx_leave', 'access_token'])
 const NORTH = '11111111-1111-4111-8111-111111111111'
 const ALMENDRAL = '22222222-2222-4222-8222-222222222222'
 const NORTE_1 = '33333333-3333-4333-8333-333333333333'
+const NORTH_CORRIDOR = '55555555-5555-4555-8555-555555555555'
 const USER_ID = '6f1c2a52-34c5-4d7b-9a43-0b0f9e1d2c11'
 const GATEWAY = 'SOTESTDOCK01'
+const OPERATION = '66666666-6666-4666-8666-666666666666'
+const ASSIGNMENT = '77777777-7777-4777-8777-777777777777'
+/** The address the demo answers for its one member: the demo signs in with any address. */
+const DEMO_EMAIL = 'pilot@farm.test'
+/** The one device envelope the demo's stack reports: contracts/geometry/bake.json's `envelope`. */
+const ENVELOPE = {
+  geofence_center: { latitude_deg: 41.6523, longitude_deg: -4.7245 },
+  geofence_radius_m: 1000,
+  max_height_m: 120,
+  max_home_distance_m: 1000,
+  max_leg_m: 300,
+  max_transit_m: 300,
+  max_total_distance_m: 5000,
+  max_waypoints: 200,
+  max_horizontal_speed_ms: 15,
+}
+const PILOT_ONLY = new Set(['simulate', 'launch', 'stop'])
+const PILOT_VERBS = new Set(['pause', 'recovery', 'return_home', 'undo'])
 
 const ORGANIZATIONS = [
   {
@@ -236,6 +255,70 @@ function seedWaylines() {
   ]
 }
 
+/**
+ * Finca Norte's one operation, as the database holds a new one (migration 0010): a draft named for
+ * its wayline, flown by its one fleet, with its one pilot and an empty log.
+ */
+function seedOperations() {
+  return [
+    {
+      id: OPERATION,
+      organization_id: NORTH,
+      name: 'North corridor',
+      geofence_id: null,
+      takeoff_security_height_m: null,
+      state: 'draft',
+      end_reason: null,
+      created_by: USER_ID,
+      created_at: '2026-10-11T08:20:00+00:00',
+      updated_at: '2026-10-11T08:20:00+00:00',
+      started_at: null,
+      ended_at: null,
+    },
+  ]
+}
+
+function seedAssignments() {
+  return [
+    {
+      id: ASSIGNMENT,
+      operation_id: OPERATION,
+      organization_id: NORTH,
+      wayline_id: NORTH_CORRIDOR,
+      fleet_id: NORTE_1,
+      speed_ms: null,
+      flight: null,
+      created_at: '2026-10-11T08:20:00+00:00',
+    },
+  ]
+}
+
+function seedOperators() {
+  return [{ operation_id: OPERATION, organization_id: NORTH, profile_id: USER_ID, role: 'pilot' }]
+}
+
+/** Each stack of Finca Norte, as soc-cloud records it: the lab's reports an envelope, the replay's none. */
+function seedStacks() {
+  return [
+    {
+      gateway_sn: GATEWAY,
+      name: 'lab',
+      organization_id: NORTH,
+      link_state: 'connected',
+      envelope: ENVELOPE,
+      envelope_read_at: '2026-10-11T12:40:00+00:00',
+    },
+    ...['REPLAYDOCK', 'REPLAYDOCK2'].map((gatewaySn) => ({
+      gateway_sn: gatewaySn,
+      name: 'replay',
+      organization_id: NORTH,
+      link_state: 'connected',
+      envelope: null,
+      envelope_read_at: null,
+    })),
+  ]
+}
+
 /** A JWT-shaped string with a placeholder signature: the console reads only its payload. */
 export function unsignedJwt(payload) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -252,6 +335,19 @@ export function startFakeSupabase({ port = 0 } = {}) {
     geofences: [],
     waylines: seedWaylines(),
     refreshTokens: new Map(),
+    /** The operations' tables, by name: what the console reads and writes through PostgREST. */
+    tables: {
+      operations: seedOperations(),
+      assignments: seedAssignments(),
+      operators: seedOperators(),
+      operation_checks: [],
+      operation_events: [],
+      transition_requests: [],
+      flights: [],
+      flight_states: [],
+      command_intents: [],
+      stacks: seedStacks(),
+    },
   }
   const server = createServer((request, response) => {
     void answer(state, request, response)
@@ -344,7 +440,7 @@ async function answer(state, request, response) {
 function corsHeaders(request) {
   return {
     'access-control-allow-origin': '*',
-    'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
+    'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
     // A wildcard does not cover Authorization, so the requested headers are echoed back.
     'access-control-allow-headers':
       request.headers['access-control-request-headers'] ?? DEFAULT_ALLOWED_HEADERS,
@@ -400,6 +496,21 @@ function route(state, method, url, body) {
     if (pathname === `/rest/v1/${table}` && ['GET', 'POST', 'PATCH'].includes(method)) {
       return plans(state[table], method, searchParams, body)
     }
+  }
+  if (pathname === '/rest/v1/rpc/organization_members' && (method === 'GET' || method === 'POST')) {
+    const organization =
+      typeof body.organization === 'string' ? body.organization : searchParams.get('organization')
+    return { status: 200, payload: membersOf(organization) }
+  }
+  if (pathname === '/rest/v1/rpc/request_transition' && method === 'POST') {
+    return requestTransition(state, body)
+  }
+  if (pathname === '/rest/v1/rpc/request_command' && method === 'POST') {
+    return requestCommand(state, body)
+  }
+  const name = pathname.slice('/rest/v1/'.length)
+  if (pathname.startsWith('/rest/v1/') && Object.hasOwn(state.tables, name)) {
+    return operationTable(state, name, method, searchParams, body)
   }
   return { status: 404, payload: { message: `the demo has no ${method} ${pathname}` } }
 }
@@ -537,6 +648,198 @@ function plans(rows, method, searchParams, body) {
   if (row === undefined) return { status: 200, payload: [] }
   Object.assign(row, body, { updated_at: now })
   return { status: 200, payload: [row] }
+}
+
+/** The organization's members (soc.organization_members): the demo's one user, in its role there. */
+function membersOf(organization) {
+  const role = ORGANIZATIONS.find(({ id }) => id === organization)?.role
+  return role === undefined
+    ? []
+    : [{ profile_id: USER_ID, display_name: null, email: DEMO_EMAIL, role }]
+}
+
+/** Whether the demo's user may write in an organization: an owner or an editor (IR-OPS). */
+function canEdit(organization) {
+  const role = ORGANIZATIONS.find(({ id }) => id === organization)?.role
+  return role === 'owner' || role === 'editor'
+}
+
+function isPilot(state, operation) {
+  return state.tables.operators.some(
+    (row) => row.operation_id === operation && row.profile_id === USER_ID && row.role === 'pilot',
+  )
+}
+
+/** A refusal the database raises as insufficient_privilege (42501): a role the write needs. */
+function forbidden(message) {
+  return { status: 403, payload: { code: '42501', message, details: null, hint: null } }
+}
+
+/**
+ * soc.request_transition: an editor asks an operation to move, and a pilot of it asks to simulate,
+ * launch or stop. The client request id is the key: the same id answers the request it made first.
+ */
+function requestTransition(state, body) {
+  const operation = state.tables.operations.find(({ id }) => id === body.operation)
+  if (operation === undefined || !canEdit(operation.organization_id)) {
+    return forbidden(
+      `operation ${String(body.operation)}: an editor of its organization asks it to move`,
+    )
+  }
+  if (PILOT_ONLY.has(body.wanted) && !isPilot(state, operation.id)) {
+    return forbidden(`operation ${operation.id}: only its pilots ${String(body.wanted)}`)
+  }
+  const asked = state.tables.transition_requests.find(
+    (row) =>
+      row.organization_id === operation.organization_id &&
+      row.client_request_id === body.client_request,
+  )
+  if (asked !== undefined) return { status: 200, payload: asked }
+  const request = {
+    id: randomUUID(),
+    client_request_id: body.client_request,
+    organization_id: operation.organization_id,
+    operation_id: operation.id,
+    transition: body.wanted,
+    requested_by: USER_ID,
+    requested_at: new Date().toISOString(),
+    status: 'pending',
+    reasons: null,
+    decided_at: null,
+  }
+  state.tables.transition_requests.push(request)
+  return { status: 200, payload: request }
+}
+
+/**
+ * soc.request_command: a pilot of a flight's operation asks its aircraft a pilot's verb. A flight
+ * that has ended refuses; the client request id answers the intent it made first. The demo flies
+ * nothing, so no flight is found and every request is refused, as the database refuses a stranger.
+ */
+function requestCommand(state, body) {
+  if (!PILOT_VERBS.has(body.wanted)) {
+    return {
+      status: 400,
+      payload: {
+        code: '22023',
+        message: `a pilot asks pause, recovery, return_home or undo, not ${String(body.wanted)}`,
+        details: null,
+        hint: null,
+      },
+    }
+  }
+  const flight = state.tables.flights.find(({ id }) => id === body.flight)
+  if (flight === undefined || !isPilot(state, flight.operation_id)) {
+    return forbidden(`flight ${String(body.flight)}: only a pilot of its operation commands it`)
+  }
+  if (flight.ended_at) {
+    return {
+      status: 400,
+      payload: {
+        code: '23514',
+        message: `flight ${flight.id}: it has ended`,
+        details: null,
+        hint: null,
+      },
+    }
+  }
+  const asked = state.tables.command_intents.find(
+    (row) =>
+      row.organization_id === flight.organization_id &&
+      row.client_request_id === body.client_request,
+  )
+  if (asked !== undefined) return { status: 200, payload: asked }
+  const intent = {
+    id: randomUUID(),
+    client_request_id: body.client_request,
+    organization_id: flight.organization_id,
+    operation_id: flight.operation_id,
+    flight_id: flight.id,
+    verb: body.wanted,
+    status: 'pending',
+    result: null,
+    requested_by: USER_ID,
+    requested_at: new Date().toISOString(),
+    sent_at: null,
+    replied_at: null,
+  }
+  state.tables.command_intents.push(intent)
+  return { status: 200, payload: intent }
+}
+
+/** The operations' tables the console writes through PostgREST (migration 0010's grants). */
+const WRITABLE = new Set(['operations', 'assignments', 'operators'])
+
+/**
+ * One of the operations' tables: GET the rows its filters keep; for the writable ones, POST one
+ * (201 with the row), PATCH or DELETE the rows its filters keep (the list of those, empty when none).
+ * The demo stores what it is given: the database's own checks are not repeated here.
+ */
+function operationTable(state, name, method, searchParams, body) {
+  if (method === 'GET') return { status: 200, payload: filtered(state, name, searchParams) }
+  if (!WRITABLE.has(name)) {
+    return { status: 405, payload: { message: `the demo does not write ${name}` } }
+  }
+  const rows = state.tables[name]
+  const now = new Date().toISOString()
+  if (method === 'POST') {
+    const row = { ...defaultsOf(name, now), ...body }
+    rows.push(row)
+    return { status: 201, payload: row }
+  }
+  if (method !== 'PATCH' && method !== 'DELETE') {
+    return { status: 405, payload: { message: `the demo does not ${method} ${name}` } }
+  }
+  const matched = filtered(state, name, searchParams)
+  if (method === 'DELETE') {
+    state.tables[name] = rows.filter((row) => !matched.includes(row))
+    return { status: 200, payload: matched }
+  }
+  for (const row of matched) {
+    Object.assign(row, body)
+    if (Object.hasOwn(row, 'updated_at')) row.updated_at = now
+  }
+  return { status: 200, payload: matched }
+}
+
+/** The columns a row gets from the database when it is inserted: its id, its state and its stamps. */
+function defaultsOf(name, now) {
+  if (name === 'operations') {
+    return {
+      id: randomUUID(),
+      state: 'draft',
+      end_reason: null,
+      created_by: USER_ID,
+      created_at: now,
+      updated_at: now,
+      started_at: null,
+      ended_at: null,
+    }
+  }
+  if (name === 'assignments')
+    return { id: randomUUID(), speed_ms: null, flight: null, created_at: now }
+  return {}
+}
+
+/** The rows a PostgREST query keeps: each `column=eq.value` filter must hold; select and order filter nothing. */
+function filtered(state, name, searchParams) {
+  const filters = [...searchParams].filter(
+    ([column]) => !['select', 'order', 'limit', 'offset'].includes(column),
+  )
+  return state.tables[name].filter((row) =>
+    filters.every(([column, filter]) => {
+      const value = equals(filter)
+      return value === null || String(columnOf(state, name, row, column)) === value
+    }),
+  )
+}
+
+/** A column of a row, or through its flight for `flights.operation_id`, the embedded filter of the console. */
+function columnOf(state, name, row, column) {
+  if (name === 'flight_states' && column === 'flights.operation_id') {
+    return state.tables.flights.find(({ id }) => id === row.flight_id)?.operation_id
+  }
+  return row[column]
 }
 
 function taken(state, gatewaySn, aircraftSn, except) {
