@@ -141,8 +141,17 @@ describe("an operation's words (FR-OPS-02, FR-OPS-05, FR-LOG-02)", () => {
       timed_out: 'Timed out',
       expired: 'Expired',
     })
-    expect(Object.keys(FLIGHT_STATUS_WORDS)).toHaveLength(9)
-    expect(FLIGHT_STATUS_WORDS.in_progress).toBe('In progress')
+    expect(FLIGHT_STATUS_WORDS).toEqual({
+      sent: 'Sent',
+      in_progress: 'In progress',
+      paused: 'Paused',
+      ok: 'Completed',
+      failed: 'Failed',
+      canceled: 'Cancelled',
+      rejected: 'Rejected',
+      timeout: 'Timed out',
+      partially_done: 'Partly done',
+    })
   })
 })
 
