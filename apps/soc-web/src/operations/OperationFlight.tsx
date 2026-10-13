@@ -4,6 +4,7 @@ import { formatDuration } from '../fleets/format'
 import type { Flight } from '../geometry/flight'
 import type { Violation } from '../geometry/limits'
 import { formatLength } from '../plans/format'
+import { OperationPill } from './OperationPill'
 
 /**
  * The flight the assignment stores (FR-OPS-01, FR-WAY-11): its figures, and every problem it
@@ -13,12 +14,15 @@ export function OperationFlight({
   flight,
   problems,
   error,
+  outdated,
 }: {
   /** The stored flight, or null while none is planned. */
   readonly flight: Flight | null
   readonly problems: readonly Violation[]
   /** Why the stored flight cannot be read, if it cannot. */
   readonly error: string | null
+  /** The definition now makes another flight: the next Save writes it. */
+  readonly outdated: boolean
 }) {
   const figures: (readonly [string, string])[] =
     flight === null
@@ -30,6 +34,11 @@ export function OperationFlight({
         ]
   return (
     <Details title="Flight" rows={figures}>
+      {outdated && (
+        <p className="mt-2">
+          <OperationPill tone="caution">Out of date</OperationPill>
+        </p>
+      )}
       {flight === null && error === null && <p className="text-muted mt-2 text-sm">Not planned</p>}
       {error !== null && (
         <p role="alert" className={`${ALERT} mt-3`}>

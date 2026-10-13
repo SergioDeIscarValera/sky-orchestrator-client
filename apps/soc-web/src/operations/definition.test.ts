@@ -9,6 +9,10 @@ import { draftOf } from '../plans/waylines'
 import {
   bakedOf,
   definitionFieldOf,
+  draftFlight,
+  flightOutdated,
+  sameJson,
+  type Choices,
   definitionOpen,
   envelopeOf,
   fenceProblems,
@@ -399,6 +403,20 @@ describe('the envelope and the stored flight (FR-LNK-09, FR-WAY-11)', () => {
   })
 })
 
+/** A JSON value with every object's keys in reverse order, as a jsonb column may give it back. */
+function reordered(value: unknown): Record<string, unknown> {
+  const turn = (item: unknown): unknown => {
+    if (Array.isArray(item)) return item.map(turn)
+    if (typeof item !== 'object' || item === null) return item
+    return Object.fromEntries(
+      Object.entries(item)
+        .reverse()
+        .map(([key, inner]) => [key, turn(inner)]),
+    )
+  }
+  return turn(value) as Record<string, unknown>
+}
+
 describe('what a save writes (FR-OPS-01, FR-OPS-07)', () => {
   const stackedFlight = (height: number, speed: number, envelope: Envelope | null = null) =>
     flightFor({
@@ -410,10 +428,10 @@ describe('what a save writes (FR-OPS-01, FR-OPS-07)', () => {
       envelope,
     })
 
-  it('writes nothing when nothing changed', () => {
+  it('writes nothing when nothing changed, its stored flight read back with its keys reordered', () => {
     const stored = {
       operation: operationOf({ takeoffSecurityHeightM: 30 }),
-      assignment: assignmentOf({ speedMs: 10 }),
+      assignment: assignmentOf({ speedMs: 10, flight: reordered(stackedFlight(30, 10)) }),
     }
     expect(planSave(stored, draftOver(), stackedFlight(30, 10))).toEqual({
       operation: null,
@@ -500,5 +518,77 @@ describe('what a save writes (FR-OPS-01, FR-OPS-07)', () => {
     expect(
       planSave(stored, draftOver({ fleetId: null, speedMs: null }), null).assignment,
     ).toBeNull()
+  })
+})
+
+describe('a stored flight its definition no longer makes (FR-OPS-07)', () => {
+  const choices: Choices = {
+    waylines: [CORRIDOR],
+    fleets: [FLEET_RECORD],
+    geofences: [],
+    stacks: [{ ...STACK, envelope: null }],
+    models: [],
+    origin: FARM,
+  }
+  const operation = operationOf({ takeoffSecurityHeightM: 30 })
+  const made = flightFor({
+    wayline: CORRIDOR,
+    fleet: FLEET_RECORD,
+    heightM: 30,
+    speedMs: 10,
+    origin: FARM,
+    envelope: null,
+  })
+
+  it('reads two JSON values as the same whatever the order of their keys, never of their items', () => {
+    expect(sameJson({ a: 1, b: [1, { c: 2, d: null }] }, { b: [1, { d: null, c: 2 }], a: 1 })).toBe(
+      true,
+    )
+    expect(sameJson([1, 2], [2, 1])).toBe(false)
+    expect(sameJson({ a: 1 }, { a: 1, b: undefined })).toBe(false)
+    expect(sameJson({ a: 1 }, null)).toBe(false)
+    expect(sameJson(null, null)).toBe(true)
+  })
+
+  it('is not outdated while it is the flight the definition makes', () => {
+    const assignment = assignmentOf({ speedMs: 10, flight: reordered(made) })
+    expect(flightOutdated(operation, assignment, choices)).toBe(false)
+  })
+
+  it('is outdated once its wayline was edited elsewhere, and the next save writes the new flight', () => {
+    const edited: Wayline = {
+      ...CORRIDOR,
+      waypoints: CORRIDOR.waypoints.map((waypoint) => ({
+        ...waypoint,
+        heightM: waypoint.heightM + 5,
+      })),
+    }
+    const assignment = assignmentOf({ speedMs: 10, flight: made })
+    const now = { ...choices, waylines: [edited] }
+    expect(flightOutdated(operation, assignment, now)).toBe(true)
+    const fresh = draftFlight(readOk(storedText(operation, assignment)), now)
+    expect(
+      planSave({ operation, assignment }, readOk(storedText(operation, assignment)), fresh),
+    ).toEqual({
+      operation: null,
+      assignment: { kind: 'change', id: ASSIGNMENT, changes: { flight: fresh } },
+    })
+  })
+
+  it('is outdated once the stack has read an envelope the stored flight was not judged by', () => {
+    const assignment = assignmentOf({ speedMs: 10, flight: made })
+    const judged = {
+      ...choices,
+      stacks: [{ ...STACK, envelope: { ...ENVELOPE_JSON, max_height_m: 20 } }],
+    }
+    expect(flightOutdated(operation, assignment, judged)).toBe(true)
+  })
+
+  it('is never outdated with nothing to compare: no assignment, no flight, or a flight it cannot make', () => {
+    expect(flightOutdated(operation, null, choices)).toBe(false)
+    expect(flightOutdated(operation, assignmentOf({ speedMs: 10 }), choices)).toBe(false)
+    const unreadable = { ...choices, stacks: [{ ...STACK, envelope: { nonsense: true } }] }
+    const assignment = assignmentOf({ speedMs: 10, flight: made })
+    expect(flightOutdated(operation, assignment, unreadable)).toBe(false)
   })
 })

@@ -1,4 +1,5 @@
 import type {
+  AircraftModel,
   Assignment,
   AssignmentChanges,
   AssignmentDraft,
@@ -301,7 +302,12 @@ function assignmentWriteOf(
   if (waylineId !== assignment.waylineId) changes.waylineId = waylineId
   if (fleetId !== assignment.fleetId) changes.fleetId = fleetId
   if (speedMs !== assignment.speedMs) changes.speedMs = speedMs
-  const flies = Object.keys(changes).length > 0 || next.heightM !== operation.takeoffSecurityHeightM
+  // The flight is written again when what it is made of changed here, or anywhere else: the
+  // wayline edited, the stack's envelope read anew (FR-OPS-07).
+  const flies =
+    Object.keys(changes).length > 0 ||
+    next.heightM !== operation.takeoffSecurityHeightM ||
+    !sameJson(flight, assignment.flight)
   if (!flies) return null
   return { kind: 'change', id: assignment.id, changes: { ...changes, flight } }
 }
@@ -319,5 +325,71 @@ export function definitionFieldOf(field: RefusedField | null): DefinitionField |
       return 'heightM'
     default:
       return null
+  }
+}
+
+/** The organization's lists the definition takes its choices from, read before it is shown. */
+export interface Choices {
+  readonly waylines: readonly Wayline[]
+  readonly fleets: readonly Fleet[]
+  readonly geofences: readonly Geofence[]
+  readonly stacks: readonly StackView[]
+  readonly models: readonly AircraftModel[]
+  /** The site frame's origin, which the flight is measured from (ADR-0014). */
+  readonly origin: Geodetic | null
+}
+
+/** The flight the draft's assignment would store, from the lists it names; null while incomplete. */
+export function draftFlight(
+  draft: DefinitionDraft,
+  choices: Choices,
+): Record<string, unknown> | null {
+  const fleet = choices.fleets.find(({ id }) => id === draft.fleetId)
+  const stack = choices.stacks.find(({ gatewaySn }) => gatewaySn === fleet?.gatewaySn)
+  return flightFor({
+    wayline: choices.waylines.find(({ id }) => id === draft.waylineId),
+    fleet,
+    heightM: draft.heightM,
+    speedMs: draft.speedMs,
+    origin: choices.origin,
+    envelope: envelopeOf(stack),
+  })
+}
+
+/** Two JSON values are the same, whatever the order of their keys (a jsonb column reorders them). */
+export function sameJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((item, index) => sameJson(item, b[index]))
+  }
+  const left = a as Record<string, unknown>
+  const right = b as Record<string, unknown>
+  const keys = Object.keys(left)
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every((key) => Object.hasOwn(right, key) && sameJson(left[key], right[key]))
+  )
+}
+
+/**
+ * Whether the stored flight is no longer the one its operation's stored definition makes: its
+ * wayline was edited, or the stack's envelope changed, since it was saved. False while either
+ * cannot be made: nothing to compare.
+ */
+export function flightOutdated(
+  operation: Operation,
+  assignment: Assignment | null,
+  choices: Choices,
+): boolean {
+  if (assignment === null || assignment.flight === null) return false
+  const read = readDefinition(storedText(operation, assignment), { maxSpeedMs: null })
+  if (!read.ok) return false
+  try {
+    const current = draftFlight(read.draft, choices)
+    return current !== null && !sameJson(current, assignment.flight)
+  } catch {
+    return false
   }
 }

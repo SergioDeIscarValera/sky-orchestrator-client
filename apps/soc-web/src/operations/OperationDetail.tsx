@@ -8,10 +8,16 @@ import { useOrganization } from '../organizations/context'
 import { useGeofences, useWaylines } from '../plans/data'
 import { useSiteFrame } from '../scene/siteFrame'
 import { useAssignments, useOperation, useStacks } from './data'
-import { definitionOpen, fenceProblems, storedFlight } from './definition'
+import {
+  definitionOpen,
+  fenceProblems,
+  flightOutdated,
+  storedFlight,
+  type Choices,
+} from './definition'
 import { OperationActions } from './OperationActions'
 import { OperationChecks } from './OperationChecks'
-import { OperationDefinition, type Choices } from './OperationDefinition'
+import { OperationDefinition } from './OperationDefinition'
 import { OperationFlight } from './OperationFlight'
 import { OperationLog } from './OperationLog'
 import { OperationOperators } from './OperationOperators'
@@ -93,6 +99,7 @@ export function OperationDetail({ operationId }: { readonly operationId: string 
         flight={flight}
         problems={problems}
         error={stored.ok ? null : stored.message}
+        outdated={flightOutdated(current, assignment, choices)}
       />
       <OperationOperators operationId={operationId} state={current.state} />
       <OperationChecks operationId={operationId} />

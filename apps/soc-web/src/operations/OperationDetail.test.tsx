@@ -141,6 +141,29 @@ describe('an operation in the inspector (FR-OPS-01, FR-OPS-07)', () => {
     )
   })
 
+  it('marks a stored flight its definition no longer makes, and writes the new one on Save', async () => {
+    const { backend, fleet, wayline, operation } = await farm()
+    await backend.changeOperation(operation.id, { takeoffSecurityHeightM: 30 })
+    // Stored as another console saved it, at 8 m/s, while the assignment now says 10.
+    await backend.assign(operation.id, NORTH.id, {
+      waylineId: wayline.id,
+      fleetId: fleet.id,
+      speedMs: 10,
+      flight: flightToJson(flightFor(30, 8)),
+    })
+    const { user } = await openAt(backend, operation.id)
+    expect(await within(inspector()).findByText('Out of date')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(async () => {
+      const [assignment] = await backend.assignments(operation.id)
+      expect(assignment?.flight).toEqual(flightToJson(flightFor(30, 10)))
+    })
+    await waitFor(() => {
+      expect(within(inspector()).queryByText('Out of date')).toBeNull()
+    })
+  })
+
   it('stores no flight while the height or the speed is not yet set', async () => {
     const { backend, fleet, wayline, operation } = await farm()
     const { user } = await openAt(backend, operation.id)

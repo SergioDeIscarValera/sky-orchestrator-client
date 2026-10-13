@@ -1,42 +1,22 @@
 import { useId, useState, type ReactNode } from 'react'
 
-import {
-  FieldRefusedError,
-  type AircraftModel,
-  type Assignment,
-  type Fleet,
-  type Geofence,
-  type Operation,
-  type StackView,
-  type Wayline,
-} from '../backend/backend'
+import { FieldRefusedError, type Assignment, type Operation } from '../backend/backend'
 import { ALERT, FIELD, PRIMARY_BUTTON } from '../app/styles'
 import { Details } from '../fleets/Details'
-import type { Geodetic } from '../geometry/projection'
 import { useAssign, useChangeAssignment, useChangeOperation } from './data'
 import {
   definitionFieldOf,
-  envelopeOf,
-  flightFor,
+  draftFlight,
   MAX_HEIGHT_M,
   planSave,
   readDefinition,
   storedText,
-  type DefinitionDraft,
+  type Choices,
   type DefinitionErrors,
   type DefinitionText,
 } from './definition'
 
-/** The organization's lists the definition takes its choices from, read before it is shown. */
-export interface Choices {
-  readonly waylines: readonly Wayline[]
-  readonly fleets: readonly Fleet[]
-  readonly geofences: readonly Geofence[]
-  readonly stacks: readonly StackView[]
-  readonly models: readonly AircraftModel[]
-  /** The site frame's origin, which the flight is measured from (ADR-0014). */
-  readonly origin: Geodetic | null
-}
+export type { Choices } from './definition'
 
 interface Props {
   readonly operation: Operation
@@ -85,7 +65,7 @@ export function OperationDefinition({ operation, assignment, choices, editable }
     setErrors({})
     setSaving(true)
     try {
-      const plan = planSave({ operation, assignment }, read.draft, flightOf(read.draft, choices))
+      const plan = planSave({ operation, assignment }, read.draft, draftFlight(read.draft, choices))
       if (plan.operation !== null) {
         await changeOperation.mutateAsync({ id: operation.id, changes: plan.operation })
       }
@@ -258,20 +238,6 @@ export function OperationDefinition({ operation, assignment, choices, editable }
       </div>
     </form>
   )
-}
-
-/** The flight the draft's assignment would store, from the lists it names; null while incomplete. */
-function flightOf(draft: DefinitionDraft, choices: Choices): Record<string, unknown> | null {
-  const fleet = choices.fleets.find(({ id }) => id === draft.fleetId)
-  const stack = choices.stacks.find(({ gatewaySn }) => gatewaySn === fleet?.gatewaySn)
-  return flightFor({
-    wayline: choices.waylines.find(({ id }) => id === draft.waylineId),
-    fleet,
-    heightM: draft.heightM,
-    speedMs: draft.speedMs,
-    origin: choices.origin,
-    envelope: envelopeOf(stack),
-  })
 }
 
 /** A choice the operation holds that the organization's live list does not: it was retired. */
