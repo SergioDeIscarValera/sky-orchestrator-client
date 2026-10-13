@@ -4,24 +4,43 @@ import { useEffect } from 'react'
 import type { FleetChanges, FleetDraft, StateEvent } from '../backend/backend'
 import { useBackend } from '../backend/context'
 import { useOrganization } from '../organizations/context'
-import { GEOFENCES, WAYLINES, organizationKey } from '../organizations/scope'
+import {
+  ASSIGNMENTS,
+  CHECKS,
+  COMMAND_INTENTS,
+  EVENTS,
+  FLIGHT_STATES,
+  FLIGHTS,
+  GEOFENCES,
+  OPERATIONS,
+  OPERATORS,
+  REQUESTS,
+  STACKS,
+  WAYLINES,
+  organizationKey,
+} from '../organizations/scope'
 
 /** The catalogue changes only with a migration, so one read lasts the session (IR-MOD). */
 export const AIRCRAFT_MODELS = ['aircraft-models'] as const
 
 const DEVICES = 'devices'
 const FLEETS = 'fleets'
-const COMMAND_INTENTS = 'command-intents'
 
 /** The organization's queries each change on its state topic makes stale; a join, all of them. */
 const STALE: Readonly<Record<StateEvent['kind'], readonly string[] | 'all'>> = {
   joined: 'all',
-  stack: [DEVICES],
+  stack: [DEVICES, STACKS],
   device: [DEVICES],
   fleet: [FLEETS],
   command_intent: [COMMAND_INTENTS],
   geofence: [GEOFENCES],
   wayline: [WAYLINES],
+  operation: [OPERATIONS, ASSIGNMENTS, OPERATORS],
+  flight: [FLIGHTS],
+  flight_state: [FLIGHT_STATES],
+  operation_event: [EVENTS],
+  transition_request: [REQUESTS],
+  operation_check: [CHECKS],
 }
 
 export async function staleAfter(

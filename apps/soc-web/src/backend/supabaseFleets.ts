@@ -14,7 +14,21 @@ import {
 } from './backend'
 import { rows } from './rows'
 
-const STATE_EVENTS = ['stack', 'device', 'fleet', 'command_intent', 'geofence', 'wayline'] as const
+/** Every broadcast on the organization's state topic (ADR-0007), each passed on as it was sent. */
+const STATE_EVENTS = [
+  'stack',
+  'device',
+  'fleet',
+  'command_intent',
+  'geofence',
+  'wayline',
+  'operation',
+  'flight',
+  'flight_state',
+  'operation_event',
+  'transition_request',
+  'operation_check',
+] as const
 
 /** The part of a Realtime channel the console uses, so it can be faked in tests. */
 export interface StateChannel {

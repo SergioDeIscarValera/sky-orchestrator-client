@@ -8,6 +8,19 @@ export const MEMBER_ORGANIZATIONS = 'member-organizations'
 export const GEOFENCES = 'geofences'
 export const WAYLINES = 'waylines'
 
+/** The query names of an organization's stacks, operations and their parts (IR-STK, IR-OPS). */
+export const STACKS = 'stacks'
+export const OPERATIONS = 'operations'
+export const ASSIGNMENTS = 'assignments'
+export const OPERATORS = 'operators'
+export const MEMBERS = 'members'
+export const CHECKS = 'checks'
+export const EVENTS = 'events'
+export const REQUESTS = 'requests'
+export const FLIGHTS = 'flights'
+export const FLIGHT_STATES = 'flight-states'
+export const COMMAND_INTENTS = 'command-intents'
+
 /** Every query about one organization's data starts with this key. */
 export function organizationKey(organizationId: string, ...rest: readonly unknown[]): QueryKey {
   return [SCOPE, organizationId, ...rest]

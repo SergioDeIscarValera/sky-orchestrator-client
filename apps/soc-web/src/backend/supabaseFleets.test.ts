@@ -307,6 +307,12 @@ describe("the organization's state topic", () => {
       'command_intent',
       'geofence',
       'wayline',
+      'operation',
+      'flight',
+      'flight_state',
+      'operation_event',
+      'transition_request',
+      'operation_check',
     ])
     channel?.handlers.get('device')?.({ event: 'device', payload: { online: false } })
     expect(seen).toEqual([{ kind: 'device', payload: { online: false } }])
