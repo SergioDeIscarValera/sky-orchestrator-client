@@ -1381,6 +1381,44 @@ begin
 end;
 $$;
 
+-- FR-SAF-01, ADR-0010: soc-cloud's own return home, sent the moment a sample of an
+-- executing flight is outside its geofence, recorded as the command it sent (already
+-- sent, its reply settled by soc.record_command_reply) with the breach in the log, in one
+-- transaction. Once per flight: a second breach of the same flight records nothing.
+create function soc.record_geofence_breach(
+  flight uuid, intent uuid, outside jsonb, sampled timestamptz
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = soc, pg_temp
+as $$
+declare
+  target soc.flights;
+begin
+  select * into target from soc.flights where id = flight;
+  if not found or exists (
+    select 1 from soc.operation_events
+     where flight_id = flight and kind = 'geofence_breach'
+  ) then
+    return false;
+  end if;
+  insert into soc.command_intents (
+    id, client_request_id, organization_id, operation_id, flight_id, gateway_sn, verb,
+    payload, status, sent_at
+  ) values (
+    intent, intent, target.organization_id, target.operation_id, flight, target.gateway_sn,
+    'return_home', '{}', 'sent', now()
+  );
+  if soc.is_open(target.operation_id) then
+    perform soc.log_event(target.operation_id, 'geofence_breach', 'soc-cloud',
+                          outside || jsonb_build_object('sampled_at', sampled),
+                          null, flight, target.fleet_id, intent, sampled);
+  end if;
+  return true;
+end;
+$$;
+
 -- FR-LNK-09: soc-cloud's verdict on a dry run, from pending only.
 create function soc.record_dry_run(run uuid, outcome soc.dry_run_status, said jsonb)
 returns setof soc.dry_runs
@@ -1799,6 +1837,7 @@ revoke execute on function soc.record_flight_progress(uuid, soc.flight_status, i
   integer, jsonb, soc.end_reason) from public;
 revoke execute on function soc.record_flight_moment(uuid, text, timestamptz, integer) from public;
 revoke execute on function soc.record_dry_run(uuid, soc.dry_run_status, jsonb) from public;
+revoke execute on function soc.record_geofence_breach(uuid, uuid, jsonb, timestamptz) from public;
 revoke execute on function soc.record_checks(uuid, jsonb) from public;
 revoke execute on function soc.commanding_pilots(uuid) from public;
 revoke execute on function soc.organization_members(uuid) from public;
@@ -1826,4 +1865,5 @@ grant execute on function soc.record_flight_progress(uuid, soc.flight_status, in
   integer, jsonb, soc.end_reason) to soc_cloud;
 grant execute on function soc.record_flight_moment(uuid, text, timestamptz, integer) to soc_cloud;
 grant execute on function soc.record_dry_run(uuid, soc.dry_run_status, jsonb) to soc_cloud;
+grant execute on function soc.record_geofence_breach(uuid, uuid, jsonb, timestamptz) to soc_cloud;
 grant execute on function soc.record_stack_files_url(text, text) to soc_cloud;
