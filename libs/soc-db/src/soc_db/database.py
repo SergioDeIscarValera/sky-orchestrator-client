@@ -20,7 +20,6 @@ KEEPALIVES = {
     "tcp_keepalives_interval": "5",
     "tcp_keepalives_count": "3",
 }
-CONNECTION_ERRORS = (OSError, TimeoutError, asyncpg.PostgresError, asyncpg.InterfaceError)
 
 NotificationHandler = Callable[[str], Awaitable[None]]
 Connector = Callable[..., Awaitable[asyncpg.Connection]]
@@ -30,6 +29,17 @@ log = soc_log.get(__name__)
 
 class DatabaseUnavailableError(Exception):
     pass
+
+
+# A sweep that loses its connection midway raises DatabaseUnavailableError from its session:
+# the connection is replaced and the sweep runs again, as for any other lost connection.
+CONNECTION_ERRORS = (
+    OSError,
+    TimeoutError,
+    asyncpg.PostgresError,
+    asyncpg.InterfaceError,
+    DatabaseUnavailableError,
+)
 
 
 @dataclass(frozen=True)
