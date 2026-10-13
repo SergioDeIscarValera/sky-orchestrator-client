@@ -213,8 +213,12 @@ the state. Retention: permanent.
 (`IR-EVT`) with its cause and author; the current state never disagrees with the
 log, because both are written in one transaction.
 
-**IR-OPS-02**: an operation that has flown is never deleted; its definition is
-frozen once it leaves `ready`.
+**IR-OPS-02**: an operation that has flown is never deleted, except with its
+organization once Virtual Origen erases it; its log goes with it then, and only
+then. Its definition, and what it names (its wayline, geofence and fleet), stays
+as it is while a flight of it is prepared or flown, from `simulating` on, and
+once it is closed; an edit while it is preparing, simulated or ready puts it back
+to `planned` (`FR-OPS-07`).
 
 ## IR-ASG — Assignment
 
@@ -257,6 +261,7 @@ One DJI flight task: one fleet flying one file, simulated or real. Owner:
 | `envelope_snapshot` | jsonb | The stack's envelope at prepare |
 | `prepared_at`, `executed_at`, `ended_at` | timestamptz | |
 | `took_off_at`, `landed_at` | timestamptz, nullable | From the flight mode |
+| `breached_at` | timestamptz, nullable | The sample on which soc-cloud sent its return home for a geofence breach, once per flight (`FR-SAF-01`) |
 | `end_reason` | enum, nullable | As `IR-OPS` |
 
 ## IR-FST — Flight state
@@ -286,7 +291,7 @@ Owner: `soc-operations`. Retention: as long as any flight that used it.
 | `md5` | text | Of `bytes` |
 | `size_bytes` | integer | |
 | `profile_version` | text | Version of the WPML profile written |
-| `token` | text | The unguessable serving path, 128 random bits or more |
+| `token` | text | The unguessable serving path: 128 random bits, 32 lower-case hexadecimal characters, as soc-cloud serves it |
 | `created_at` | timestamptz | |
 
 **IR-FIL-01**: the bytes are never rebuilt for an existing flight. What flew is
