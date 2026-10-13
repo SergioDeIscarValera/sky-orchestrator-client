@@ -14,7 +14,10 @@ from soc_database.harness import EphemeralPostgres, Member, Tenancy, acting_as
 
 EVENTS = Path(__file__).resolve().parents[2] / "contracts" / "events" / "events.json"
 CONTRACT: dict[str, Any] = json.loads(EVENTS.read_text(encoding="utf-8"))
-SEVERITY_OF: dict[str, str] = {kind: spec["severity"] for kind, spec in CONTRACT["kinds"].items()}
+KINDS: dict[str, dict[str, Any]] = CONTRACT["kinds"]
+SEVERITY_OF: dict[str, str] = {kind: spec["severity"] for kind, spec in KINDS.items()}
+SOURCES_OF: dict[str, list[str]] = {kind: sorted(spec["sources"]) for kind, spec in KINDS.items()}
+PAYLOAD_OF: dict[str, list[str]] = {kind: sorted(spec["payload"]) for kind, spec in KINDS.items()}
 ENTRY_COLUMNS = frozenset(
     {
         "id",
@@ -36,16 +39,31 @@ UPDATE = "update soc.operation_events set payload = payload where id = $1"
 DELETE = "delete from soc.operation_events where id = $1"
 TRUNCATE = "truncate soc.operation_events"
 LOG_EVENT = (
-    "select (soc.log_event($1, $2, 'soc-cloud', '{}'::jsonb, null, null, null, null, null,"
-    " $3::soc.event_severity)).severity::text"
+    "select (soc.log_event($1, $2, $3::soc.event_source, $4::jsonb, null, null, null, null, null,"
+    " $5::soc.event_severity)).severity::text"
 )
+# Each kind is written with a source the contract lists and every payload key it names.
 SAFETY_RESERVED = [
     pytest.param("geofence_warning", "safety", id="warning-kind-as-safety"),
     pytest.param("transition_refused", "safety", id="transition-refused-as-safety"),
     pytest.param("operation_created", "safety", id="info-kind-as-safety"),
-    pytest.param("telemetry_stale", "error", id="safety-kind-as-error"),
-    pytest.param("telemetry_stale", "warning", id="safety-kind-as-warning"),
-    pytest.param("geofence_breach", "info", id="safety-kind-as-info"),
+]
+RAISED = [
+    pytest.param("transition_refused", "error", id="transition-refused-to-error"),
+    pytest.param("geofence_warning", "error", id="geofence-warning-to-error"),
+    pytest.param("automatic_return", "error", id="automatic-return-to-error"),
+    pytest.param("landed", "warning", id="landed-to-warning"),
+    pytest.param("landed", "error", id="landed-to-error"),
+    pytest.param("command_outcome", "warning", id="refused-command-outcome-as-warning"),
+]
+LOWERED = [
+    pytest.param("transition_refused", "info", id="transition-refused-to-info"),
+    pytest.param("geofence_warning", "info", id="geofence-warning-to-info"),
+    pytest.param("automatic_return", "info", id="automatic-return-to-info"),
+    pytest.param("telemetry_stale", "warning", id="telemetry-stale-to-warning"),
+    pytest.param("telemetry_stale", "error", id="telemetry-stale-to-error"),
+    pytest.param("geofence_breach", "error", id="geofence-breach-to-error"),
+    pytest.param("geofence_breach", "info", id="geofence-breach-to-info"),
 ]
 
 
@@ -100,11 +118,44 @@ async def operation_of(admin: asyncpg.Connection, organization_id: uuid.UUID) ->
     return operation
 
 
-async def test_the_event_kinds_are_the_contracts_kinds_with_their_severities(
+def complete_payload(kind: str) -> str:
+    """The payload the contract asks for: every key it names, each one present."""
+    return json.dumps(dict.fromkeys(PAYLOAD_OF[kind]))
+
+
+async def log(
+    admin: asyncpg.Connection,
+    operation: uuid.UUID,
+    kind: str,
+    *,
+    severity: str | None = None,
+    source: str | None = None,
+    payload: str | None = None,
+) -> str:
+    """Writes an entry of the kind and returns the severity the database gave it."""
+    severity_written = await admin.fetchval(
+        LOG_EVENT,
+        operation,
+        kind,
+        source or SOURCES_OF[kind][0],
+        payload or complete_payload(kind),
+        severity,
+    )
+    assert isinstance(severity_written, str)
+    return severity_written
+
+
+async def test_the_event_kinds_match_the_contract_in_severity_sources_and_payload(
     admin: asyncpg.Connection,
 ) -> None:
-    rows = await admin.fetch("select kind, severity::text as severity from soc.event_kinds")
-    assert {row["kind"]: row["severity"] for row in rows} == SEVERITY_OF
+    rows = await admin.fetch(
+        "select kind, severity::text as severity, sources::text[] as sources, payload"
+        " from soc.event_kinds"
+    )
+    listed = {row["kind"]: row for row in rows}
+    assert {kind: row["severity"] for kind, row in listed.items()} == SEVERITY_OF
+    assert {kind: sorted(row["sources"]) for kind, row in listed.items()} == SOURCES_OF
+    assert {kind: sorted(row["payload"]) for kind, row in listed.items()} == PAYLOAD_OF
 
 
 @pytest.mark.parametrize(("kind", "severity"), SAFETY_RESERVED)
@@ -113,7 +164,7 @@ async def test_safety_is_reserved_for_the_safety_kinds(
 ) -> None:
     operation = await operation_of(admin, (await tenancy.member()).organization_id)
     with pytest.raises(asyncpg.CheckViolationError) as refusal:
-        await admin.fetchval(LOG_EVENT, operation, kind, severity)
+        await log(admin, operation, kind, severity=severity)
     assert refusal.value.constraint_name == "operation_event_safety_reserved"
 
 
@@ -121,44 +172,72 @@ async def test_a_safety_kind_is_logged_as_safety(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
     operation = await operation_of(admin, (await tenancy.member()).organization_id)
-    assert await admin.fetchval(LOG_EVENT, operation, "geofence_breach", "safety") == "safety"
+    assert await log(admin, operation, "geofence_breach", severity="safety") == "safety"
 
 
-@pytest.mark.parametrize("kind", ["transition_refused", "geofence_warning", "automatic_return"])
-async def test_a_warning_kind_may_be_raised_to_error_by_its_writer(
-    kind: str, admin: asyncpg.Connection, tenancy: Tenancy
+@pytest.mark.parametrize(("kind", "severity"), RAISED)
+async def test_a_writer_may_raise_an_entry_above_its_kinds_severity(
+    kind: str, severity: str, admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
     operation = await operation_of(admin, (await tenancy.member()).organization_id)
-    assert await admin.fetchval(LOG_EVENT, operation, kind, "error") == "error"
+    assert await log(admin, operation, kind, severity=severity) == severity
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="The trigger operation_event_severity says a warning kind is never lowered (IR-EVT-01), "
-    "but it tests only for safety: a warning kind is written at info",
-)
-@pytest.mark.parametrize("kind", ["transition_refused", "geofence_warning", "automatic_return"])
-async def test_a_warning_kind_is_never_lowered_to_info(
-    kind: str, admin: asyncpg.Connection, tenancy: Tenancy
+@pytest.mark.parametrize(("kind", "severity"), LOWERED)
+async def test_an_entry_is_never_lowered_below_its_kinds_severity(
+    kind: str, severity: str, admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
     operation = await operation_of(admin, (await tenancy.member()).organization_id)
-    refusal = await refusal_of(admin.fetchval(LOG_EVENT, operation, kind, "info"))
-    assert isinstance(refusal, asyncpg.CheckViolationError)
+    with pytest.raises(asyncpg.CheckViolationError) as refusal:
+        await log(admin, operation, kind, severity=severity)
+    assert refusal.value.constraint_name == "operation_event_severity_floor"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="events.json gives command_outcome the severity info, and IR-EVT-01 says a kind's "
-    "severity is the contract's: the database writes a warning for it without a word",
+@pytest.mark.parametrize(
+    ("kind", "source"),
+    [
+        pytest.param("operation_created", "soc-cloud", id="operator-kind-from-the-cloud"),
+        pytest.param("landed", "soc-cloud", id="aircraft-kind-from-the-cloud"),
+        pytest.param("transition_refused", "operator", id="service-kind-from-the-operator"),
+    ],
 )
-async def test_an_info_kind_is_not_written_as_a_warning(
+async def test_an_entry_comes_from_a_source_its_kind_lists(
+    kind: str, source: str, admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    operation = await operation_of(admin, (await tenancy.member()).organization_id)
+    with pytest.raises(asyncpg.CheckViolationError) as refusal:
+        await log(admin, operation, kind, source=source)
+    assert refusal.value.constraint_name == "operation_event_source_listed"
+
+
+@pytest.mark.parametrize(
+    ("kind", "payload"),
+    [
+        pytest.param("landed", {}, id="no-keys"),
+        pytest.param(
+            "geofence_breach",
+            {"position": None, "height_m": None, "distance_outside_m": None},
+            id="sampled-at-missing",
+        ),
+        pytest.param(
+            "flight_status_changed", {"status": "ok", "percent": 100}, id="result-missing"
+        ),
+    ],
+)
+async def test_an_entry_carries_every_payload_key_its_kind_lists(
+    kind: str, payload: dict[str, Any], admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    operation = await operation_of(admin, (await tenancy.member()).organization_id)
+    with pytest.raises(asyncpg.CheckViolationError) as refusal:
+        await log(admin, operation, kind, payload=json.dumps(payload))
+    assert refusal.value.constraint_name == "operation_event_payload_keys"
+
+
+async def test_a_listed_payload_key_holding_null_counts_as_carried(
     admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
     operation = await operation_of(admin, (await tenancy.member()).organization_id)
-    refusal = await refusal_of(admin.fetchval(LOG_EVENT, operation, "command_outcome", "warning"))
-    assert isinstance(refusal, asyncpg.CheckViolationError)
+    assert await log(admin, operation, "landed", payload='{"mode_code": null}') == "info"
 
 
 @pytest.mark.parametrize(
@@ -173,10 +252,7 @@ async def test_log_event_fills_the_kinds_severity_when_none_is_given(
     kind: str, severity: str, admin: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
     operation = await operation_of(admin, (await tenancy.member()).organization_id)
-    filled = await admin.fetchval(
-        "select (soc.log_event($1, $2, 'soc-cloud')).severity::text", operation, kind
-    )
-    assert filled == severity
+    assert await log(admin, operation, kind) == severity
 
 
 async def test_log_event_refuses_a_kind_outside_the_contract(
@@ -193,9 +269,8 @@ async def test_log_event_refuses_a_kind_outside_the_contract(
 async def test_log_event_refuses_an_operation_that_does_not_exist(
     admin: asyncpg.Connection,
 ) -> None:
-    with pytest.raises(asyncpg.NoDataFoundError) as refusal:
+    with pytest.raises(asyncpg.PostgresError):
         await admin.fetchval("select soc.log_event($1, 'landed', 'aircraft')", uuid.uuid4())
-    assert refusal.value.sqlstate == "P0002"
 
 
 @asynccontextmanager
