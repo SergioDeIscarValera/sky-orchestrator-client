@@ -1,0 +1,504 @@
+// @vitest-environment node
+import type { Assignment, Fleet, Geofence, Operation, StackView, Wayline } from '../backend/backend'
+import { bake, type Design } from '../geometry/bake'
+import { envelopeFromSkyOrchestrator, flightFromJson, flightToJson } from '../geometry/designJson'
+import { planFlight } from '../geometry/flight'
+import type { Envelope } from '../geometry/limits'
+import { geodeticAt, type Geodetic } from '../geometry/projection'
+import { draftOf } from '../plans/waylines'
+import {
+  bakedOf,
+  definitionFieldOf,
+  definitionOpen,
+  envelopeOf,
+  fenceProblems,
+  flightFor,
+  MAX_HEIGHT_M,
+  operatorsOpen,
+  planSave,
+  readDefinition,
+  storedFlight,
+  storedText,
+  type DefinitionDraft,
+  type DefinitionText,
+} from './definition'
+
+const FARM: Geodetic = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
+const at = (east: number, north: number) => geodeticAt(FARM, { eastM: east, northM: north })
+const T = '2026-10-11T10:00:00Z'
+const ORGANIZATION = '11111111-1111-4111-8111-111111111111'
+const OPERATION = '66666666-6666-4666-8666-666666666666'
+const ASSIGNMENT = '77777777-7777-4777-8777-777777777777'
+const WAYLINE = '55555555-5555-4555-8555-555555555555'
+const FLEET = '33333333-3333-4333-8333-333333333333'
+const OTHER_WAYLINE = '88888888-8888-4888-8888-888888888888'
+const OTHER_FLEET = '99999999-9999-4999-8999-999999999999'
+
+const ENVELOPE_JSON = {
+  geofence_center: { latitude_deg: 41.6523, longitude_deg: -4.7245 },
+  geofence_radius_m: 1000,
+  max_height_m: 120,
+  max_home_distance_m: 1000,
+  max_leg_m: 300,
+  max_transit_m: 300,
+  max_total_distance_m: 5000,
+  max_waypoints: 200,
+  max_horizontal_speed_ms: 15,
+}
+
+const TIGHT_ENVELOPE: Envelope = {
+  geofenceCenter: FARM,
+  geofenceRadiusM: 50,
+  maxHeightM: 20,
+  maxHomeDistanceM: 50,
+  maxLegM: 300,
+  maxTransitM: 300,
+  maxTotalDistanceM: 5000,
+  maxWaypoints: 200,
+  maxHorizontalSpeedMs: 15,
+}
+
+/** A 100 m route north of the takeoff, climbing straight up to 30 m first, as the designer bakes it. */
+const DESIGN: Design = {
+  takeoff: at(0, 0),
+  defaultHeightM: 30,
+  primitives: [{ kind: 'route', points: [at(0, 50), at(100, 50)] }],
+}
+
+function waylineOf(design: Design): Wayline {
+  const baked = bake(design, { origin: FARM, maxArcSpacingM: 10 })
+  return { id: WAYLINE, createdAt: T, updatedAt: T, ...draftOf('North corridor', design, baked) }
+}
+
+const CORRIDOR = waylineOf(DESIGN)
+
+const FLEET_RECORD: Fleet = {
+  id: FLEET,
+  name: 'Norte 1',
+  model: 'mavic-air-2',
+  airframeSerial: '1WNBH9',
+  controllerSerial: null,
+  gatewaySn: 'SOTESTDOCK01',
+  aircraftSn: 'SOTESTUAV001',
+  flightTimeBeforeSocS: 5400,
+  createdAt: T,
+  updatedAt: T,
+}
+
+const STACK: StackView = {
+  gatewaySn: 'SOTESTDOCK01',
+  name: 'lab',
+  linkState: 'connected',
+  envelope: ENVELOPE_JSON,
+  envelopeReadAt: T,
+}
+
+function operationOf(overrides: Partial<Operation> = {}): Operation {
+  return {
+    id: OPERATION,
+    organizationId: ORGANIZATION,
+    name: 'North corridor',
+    geofenceId: null,
+    takeoffSecurityHeightM: null,
+    state: 'draft',
+    endReason: null,
+    createdBy: null,
+    createdAt: T,
+    updatedAt: T,
+    startedAt: null,
+    endedAt: null,
+    ...overrides,
+  }
+}
+
+function assignmentOf(overrides: Partial<Assignment> = {}): Assignment {
+  return {
+    id: ASSIGNMENT,
+    operationId: OPERATION,
+    waylineId: WAYLINE,
+    fleetId: FLEET,
+    speedMs: null,
+    flight: null,
+    ...overrides,
+  }
+}
+
+const TYPED: DefinitionText = {
+  name: 'North corridor',
+  geofenceId: '',
+  heightM: '30',
+  waylineId: WAYLINE,
+  fleetId: FLEET,
+  speedMs: '10',
+}
+
+function draftOver(overrides: Partial<DefinitionDraft> = {}): DefinitionDraft {
+  return {
+    name: 'North corridor',
+    geofenceId: null,
+    heightM: 30,
+    waylineId: WAYLINE,
+    fleetId: FLEET,
+    speedMs: 10,
+    ...overrides,
+  }
+}
+
+function readOk(text: DefinitionText, maxSpeedMs: number | null = 19): DefinitionDraft {
+  const read = readDefinition(text, { maxSpeedMs })
+  if (!read.ok) throw new Error(`refused: ${JSON.stringify(read.errors)}`)
+  return read.draft
+}
+
+function errorsOf(text: Partial<DefinitionText>, maxSpeedMs: number | null = 19) {
+  const read = readDefinition({ ...TYPED, ...text }, { maxSpeedMs })
+  if (read.ok) throw new Error('expected a refusal')
+  return read.errors
+}
+
+describe('the definition the operator types (FR-OPS-01, FR-WAY-10)', () => {
+  it('reads the typed values, the name trimmed and the blanks as not set', () => {
+    expect(
+      readOk({ ...TYPED, name: '  North corridor  ', geofenceId: '', heightM: '', speedMs: '' }),
+    ).toEqual(draftOver({ name: 'North corridor', heightM: null, speedMs: null }))
+    expect(readOk({ ...TYPED, heightM: '30.5', speedMs: '.5' })).toMatchObject({
+      heightM: 30.5,
+      speedMs: 0.5,
+    })
+  })
+
+  it('refuses an empty name, as the database does', () => {
+    expect(errorsOf({ name: '   ' })).toEqual({ name: 'An operation needs a name.' })
+  })
+
+  it('refuses a height that is not a number, not above zero, or above the schema bound', () => {
+    expect(errorsOf({ heightM: 'thirty' })).toEqual({ heightM: 'Enter a number.' })
+    expect(errorsOf({ heightM: '-5' })).toEqual({ heightM: 'Enter a number.' })
+    expect(errorsOf({ heightM: '0' })).toEqual({
+      heightM: 'The takeoff security height must be above zero.',
+    })
+    expect(errorsOf({ heightM: '120.5' })).toEqual({
+      heightM: `The takeoff security height is at most ${String(MAX_HEIGHT_M)} m.`,
+    })
+    expect(readOk({ ...TYPED, heightM: '120' }).heightM).toBe(120)
+  })
+
+  it("refuses a speed above the fleet's model maximum, and names the maximum", () => {
+    expect(errorsOf({ speedMs: '19.5' }, 19)).toEqual({
+      speedMs: "Above the fleet's model maximum of 19 m/s.",
+    })
+    expect(readOk({ ...TYPED, speedMs: '19' }, 19).speedMs).toBe(19)
+    expect(readOk({ ...TYPED, speedMs: '40' }, null).speedMs).toBe(40)
+  })
+
+  it('refuses a speed that is not above zero', () => {
+    expect(errorsOf({ speedMs: '0' })).toEqual({
+      speedMs: 'The speed the fleet flies the wayline at must be above zero.',
+    })
+  })
+
+  it('names a wayline and a fleet together, and a speed only with both', () => {
+    expect(errorsOf({ fleetId: '' })).toEqual({
+      fleetId: 'Choose the fleet that flies this wayline.',
+    })
+    expect(errorsOf({ waylineId: '' })).toEqual({
+      waylineId: 'Choose the wayline this fleet flies.',
+    })
+    expect(errorsOf({ waylineId: '', fleetId: '' })).toEqual({
+      speedMs: 'Choose a wayline and a fleet first.',
+    })
+    expect(readOk({ ...TYPED, waylineId: '', fleetId: '', speedMs: '' })).toMatchObject({
+      waylineId: null,
+      fleetId: null,
+    })
+  })
+
+  it('reports every refused field at once, not the first alone', () => {
+    expect(errorsOf({ name: '', heightM: 'x', speedMs: '0' })).toEqual({
+      name: 'An operation needs a name.',
+      heightM: 'Enter a number.',
+      speedMs: 'The speed the fleet flies the wayline at must be above zero.',
+    })
+  })
+})
+
+describe('what the operation and its assignment hold (FR-OPS-02, IR-OPS-02)', () => {
+  it('opens the definition in draft, planned, preparing, simulated and ready only', () => {
+    const open = ['draft', 'planned', 'preparing', 'simulated', 'ready'] as const
+    const frozen = [
+      'simulating',
+      'launching',
+      'in_flight',
+      'paused',
+      'returning',
+      'completed',
+      'aborted',
+      'failed',
+      'cancelled',
+    ] as const
+    for (const state of open) expect(definitionOpen(state)).toBe(true)
+    for (const state of frozen) expect(definitionOpen(state)).toBe(false)
+  })
+
+  it('opens the operators until launching, simulating included (the database refuses from launching)', () => {
+    const open = ['draft', 'planned', 'preparing', 'simulating', 'simulated', 'ready'] as const
+    for (const state of open) expect(operatorsOpen(state)).toBe(true)
+    for (const state of ['launching', 'in_flight', 'paused', 'returning', 'completed'] as const) {
+      expect(operatorsOpen(state)).toBe(false)
+    }
+  })
+
+  it('reads the stored values back as the form shows them', () => {
+    expect(storedText(operationOf(), null)).toEqual({
+      name: 'North corridor',
+      geofenceId: '',
+      heightM: '',
+      waylineId: '',
+      fleetId: '',
+      speedMs: '',
+    })
+    expect(
+      storedText(
+        operationOf({
+          geofenceId: '22222222-2222-4222-8222-222222222222',
+          takeoffSecurityHeightM: 30,
+        }),
+        assignmentOf({ speedMs: 10 }),
+      ),
+    ).toEqual({
+      name: 'North corridor',
+      geofenceId: '22222222-2222-4222-8222-222222222222',
+      heightM: '30',
+      waylineId: WAYLINE,
+      fleetId: FLEET,
+      speedMs: '10',
+    })
+  })
+})
+
+describe('the flight an assignment stores (FR-WAY-10, FR-WAY-11)', () => {
+  const inputs = {
+    wayline: CORRIDOR,
+    fleet: FLEET_RECORD,
+    heightM: 30,
+    speedMs: 10,
+    origin: FARM,
+    envelope: envelopeFromSkyOrchestrator(ENVELOPE_JSON),
+  }
+
+  it('is planFlight of the wayline, written as the flight file reads it', () => {
+    const expected = flightToJson(
+      planFlight(CORRIDOR.takeoff, bakedOf(CORRIDOR), {
+        origin: FARM,
+        takeoffSecurityHeightM: 30,
+        speedMs: 10,
+        finishAction: 'return_home',
+        envelope: inputs.envelope,
+      }),
+    )
+    expect(flightFor(inputs)).toEqual(expected)
+    expect(flightFromJson(flightFor(inputs))).toEqual(
+      planFlight(CORRIDOR.takeoff, bakedOf(CORRIDOR), {
+        origin: FARM,
+        takeoffSecurityHeightM: 30,
+        speedMs: 10,
+        finishAction: 'return_home',
+        envelope: inputs.envelope,
+      }),
+    )
+  })
+
+  it('is null while any of the height, the wayline, the fleet, the speed or the origin is missing', () => {
+    expect(flightFor({ ...inputs, heightM: null })).toBeNull()
+    expect(flightFor({ ...inputs, wayline: undefined })).toBeNull()
+    expect(flightFor({ ...inputs, fleet: undefined })).toBeNull()
+    expect(flightFor({ ...inputs, speedMs: null })).toBeNull()
+    expect(flightFor({ ...inputs, origin: null })).toBeNull()
+  })
+
+  it('judges the flight by the envelope, and flies it unjudged while none is read', () => {
+    const judged = flightFor({ ...inputs, envelope: TIGHT_ENVELOPE }) as ReturnType<
+      typeof flightToJson
+    >
+    expect(judged.violations.map(({ rule }) => rule)).toContain('height_above_max')
+    const unjudged = flightFor({ ...inputs, envelope: null }) as ReturnType<typeof flightToJson>
+    expect(unjudged.violations).toEqual([])
+  })
+
+  it('refuses to write a flight the schema refuses, rather than storing it', () => {
+    const many: Wayline = {
+      ...CORRIDOR,
+      waypoints: Array.from({ length: 201 }, (_, index) => ({
+        index,
+        position: at(index * 0.1, 0),
+        heightM: 10,
+      })),
+    }
+    expect(() => flightFor({ ...inputs, wayline: many })).toThrow(/flight\.waypoints/)
+  })
+})
+
+describe('the envelope and the stored flight (FR-LNK-09, FR-WAY-11)', () => {
+  it('reads the stack envelope, or none while the stack has not read one', () => {
+    expect(envelopeOf(undefined)).toBeNull()
+    expect(envelopeOf({ ...STACK, envelope: null, envelopeReadAt: null })).toBeNull()
+    expect(envelopeOf(STACK)).toEqual(envelopeFromSkyOrchestrator(ENVELOPE_JSON))
+  })
+
+  it('refuses an envelope it cannot read', () => {
+    expect(() => envelopeOf({ ...STACK, envelope: { geofence_center: 'here' } })).toThrow()
+  })
+
+  it('reads a stored flight, and none while it holds none', () => {
+    const json = flightFor({
+      wayline: CORRIDOR,
+      fleet: FLEET_RECORD,
+      heightM: 30,
+      speedMs: 10,
+      origin: FARM,
+      envelope: null,
+    })
+    expect(storedFlight(null)).toEqual({ ok: true, flight: null })
+    expect(storedFlight(json)).toMatchObject({ ok: true, flight: { takeoffSecurityHeightM: 30 } })
+    expect(storedFlight({ schema_version: '1.0.0' })).toMatchObject({ ok: false })
+  })
+
+  it('judges a flight against its geofence, naming the rule and the waypoint', () => {
+    const flight = flightFromJson(
+      flightFor({
+        wayline: CORRIDOR,
+        fleet: FLEET_RECORD,
+        heightM: 30,
+        speedMs: 10,
+        origin: FARM,
+        envelope: null,
+      }),
+    )
+    const fence: Geofence = {
+      id: '22222222-2222-4222-8222-222222222222',
+      name: 'Field',
+      polygon: [at(-20, -20), at(20, -20), at(20, 20), at(-20, 20)],
+      maxHeightM: 100,
+      origin: 'drawn',
+      marginM: null,
+      createdAt: T,
+      updatedAt: T,
+    }
+    const found = fenceProblems(flight, fence, FARM)
+    expect(found.map(({ rule }) => rule)).toContain('outside_geofence_polygon')
+    expect(found.find(({ rule }) => rule === 'outside_geofence_polygon')?.waypointIndex).toBe(1)
+    expect(fenceProblems(flight, undefined, FARM)).toEqual([])
+    expect(fenceProblems(flight, fence, null)).toEqual([])
+  })
+
+  it('names the field a database refusal is about, and no other', () => {
+    expect(definitionFieldOf('takeoffSecurityHeightM')).toBe('heightM')
+    expect(definitionFieldOf('speedMs')).toBe('speedMs')
+    expect(definitionFieldOf('flight')).toBeNull()
+    expect(definitionFieldOf(null)).toBeNull()
+  })
+})
+
+describe('what a save writes (FR-OPS-01, FR-OPS-07)', () => {
+  const stackedFlight = (height: number, speed: number, envelope: Envelope | null = null) =>
+    flightFor({
+      wayline: CORRIDOR,
+      fleet: FLEET_RECORD,
+      heightM: height,
+      speedMs: speed,
+      origin: FARM,
+      envelope,
+    })
+
+  it('writes nothing when nothing changed', () => {
+    const stored = {
+      operation: operationOf({ takeoffSecurityHeightM: 30 }),
+      assignment: assignmentOf({ speedMs: 10 }),
+    }
+    expect(planSave(stored, draftOver(), stackedFlight(30, 10))).toEqual({
+      operation: null,
+      assignment: null,
+    })
+  })
+
+  it('writes the operation alone for its name or its geofence, which the flight does not take', () => {
+    const stored = {
+      operation: operationOf({ takeoffSecurityHeightM: 30 }),
+      assignment: assignmentOf({ speedMs: 10 }),
+    }
+    expect(
+      planSave(
+        stored,
+        draftOver({ name: 'Renamed', geofenceId: '22222222-2222-4222-8222-222222222222' }),
+        null,
+      ),
+    ).toEqual({
+      operation: { name: 'Renamed', geofenceId: '22222222-2222-4222-8222-222222222222' },
+      assignment: null,
+    })
+  })
+
+  it('writes the assignment with its flight when its speed changes, and the operation not', () => {
+    const stored = {
+      operation: operationOf({ takeoffSecurityHeightM: 30 }),
+      assignment: assignmentOf({ speedMs: 10 }),
+    }
+    const flight = stackedFlight(30, 12)
+    expect(planSave(stored, draftOver({ speedMs: 12 }), flight)).toEqual({
+      operation: null,
+      assignment: { kind: 'change', id: ASSIGNMENT, changes: { speedMs: 12, flight } },
+    })
+  })
+
+  it('writes the assignment with a new flight when the height changes, though its own fields did not', () => {
+    const stored = {
+      operation: operationOf({ takeoffSecurityHeightM: 30 }),
+      assignment: assignmentOf({ speedMs: 10 }),
+    }
+    const flight = stackedFlight(40, 10)
+    expect(planSave(stored, draftOver({ heightM: 40 }), flight)).toEqual({
+      operation: { takeoffSecurityHeightM: 40 },
+      assignment: { kind: 'change', id: ASSIGNMENT, changes: { flight } },
+    })
+  })
+
+  it('moves the assignment to another wayline or fleet, and clears its flight while the speed is unset', () => {
+    const stored = {
+      operation: operationOf({ takeoffSecurityHeightM: 30 }),
+      assignment: assignmentOf({ speedMs: 10 }),
+    }
+    expect(
+      planSave(
+        stored,
+        draftOver({ waylineId: OTHER_WAYLINE, fleetId: OTHER_FLEET, speedMs: null }),
+        null,
+      ),
+    ).toEqual({
+      operation: null,
+      assignment: {
+        kind: 'change',
+        id: ASSIGNMENT,
+        changes: { waylineId: OTHER_WAYLINE, fleetId: OTHER_FLEET, speedMs: null, flight: null },
+      },
+    })
+  })
+
+  it('creates the assignment when its wayline and fleet are chosen, with its flight', () => {
+    const stored = { operation: operationOf(), assignment: null }
+    const flight = stackedFlight(30, 10)
+    expect(planSave(stored, draftOver(), flight)).toEqual({
+      operation: { takeoffSecurityHeightM: 30 },
+      assignment: {
+        kind: 'assign',
+        draft: { waylineId: WAYLINE, fleetId: FLEET, speedMs: 10, flight },
+      },
+    })
+  })
+
+  it('creates no assignment without both its wayline and its fleet', () => {
+    const stored = { operation: operationOf(), assignment: null }
+    expect(
+      planSave(stored, draftOver({ fleetId: null, speedMs: null }), null).assignment,
+    ).toBeNull()
+  })
+})
