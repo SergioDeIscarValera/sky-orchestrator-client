@@ -181,7 +181,8 @@ create table soc.operators (
 -- --- Flight files, flights and their progress (IR-FIL, IR-FLT, IR-FST) ---------------
 
 -- IR-FIL-01: the bytes are kept as built and never rebuilt; md5 and size are the
--- bytes' own, checked here. The token is the serving path's secret (ADR-0008, NFR-SEC-06).
+-- bytes' own, checked here. The token is the serving path's secret (ADR-0008, NFR-SEC-06):
+-- 128 random bits as soc-cloud serves them, 32 lower-case hexadecimal characters.
 create table soc.flight_files (
   id              uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations (id) on delete cascade,
@@ -193,7 +194,7 @@ create table soc.flight_files (
                     constraint flight_file_size_of_bytes check (size_bytes = octet_length(bytes)),
   profile_version text not null constraint flight_file_profile_given check (btrim(profile_version) <> ''),
   token           text not null unique
-                    constraint flight_file_token_unguessable check (token ~ '^[A-Za-z0-9_-]{22,}$'),
+                    constraint flight_file_token_unguessable check (token ~ '^[0-9a-f]{32}$'),
   created_at      timestamptz not null default now(),
   unique (id, organization_id),
   foreign key (operation_id, organization_id) references soc.operations (id, organization_id)
