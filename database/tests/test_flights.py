@@ -74,7 +74,7 @@ async def test_a_flight_file_of_its_own_bytes_is_accepted(
         md5_of(FILE),
         len(FILE),
         "1.0.0",
-        secrets.token_urlsafe(16),
+        secrets.token_hex(16),
     )
     assert file_id is not None
 
@@ -89,7 +89,7 @@ async def test_a_flight_file_of_its_own_bytes_is_accepted(
         pytest.param(
             md5_of(FILE),
             len(FILE),
-            "abc",
+            "abc123",
             "1.0.0",
             "flight_file_token_unguessable",
             id="short-token",
@@ -97,10 +97,10 @@ async def test_a_flight_file_of_its_own_bytes_is_accepted(
         pytest.param(
             md5_of(FILE),
             len(FILE),
-            "a" * 21 + "+",
+            "A" * 32,
             "1.0.0",
             "flight_file_token_unguessable",
-            id="token-not-url-safe",
+            id="32-characters-not-lower-hex",
         ),
         pytest.param(
             md5_of(FILE), len(FILE), None, " ", "flight_file_profile_given", id="blank-profile"
@@ -129,7 +129,7 @@ async def test_a_flight_file_names_its_own_bytes_and_an_unguessable_token(
             md5,
             size,
             profile,
-            token or secrets.token_urlsafe(16),
+            token or secrets.token_hex(16),
         )
     assert refusal.value.constraint_name == constraint
 
@@ -288,3 +288,84 @@ async def test_a_fleets_wire_identity_moves_once_its_flight_has_ended(
             spare,
         )
     assert moved == spare
+
+
+async def test_a_closed_operation_takes_no_new_flight_file_or_dry_run(
+    soc_operations: asyncpg.Connection, admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    flown = await Operations(admin).flown((await tenancy.member("owner")).organization_id)
+    await Operations(admin).move(
+        flown.operation_id,
+        "planned",
+        "preparing",
+        "simulating",
+        "simulated",
+        "ready",
+        "launching",
+        "in_flight",
+        "returning",
+        "completed",
+    )
+    with pytest.raises(asyncpg.CheckViolationError) as file_refusal:
+        await soc_operations.fetchval(
+            INSERT_FILE,
+            flown.organization_id,
+            flown.operation_id,
+            flown.wayline_id,
+            FILE,
+            md5_of(FILE),
+            len(FILE),
+            "1.0.0",
+            secrets.token_hex(16),
+        )
+    assert file_refusal.value.constraint_name == "operation_closed"
+    with pytest.raises(asyncpg.CheckViolationError) as run_refusal:
+        await soc_operations.execute(
+            "insert into soc.dry_runs (organization_id, file_id, gateway_sn) values ($1, $2, $3)",
+            flown.organization_id,
+            flown.file_id,
+            flown.gateway_sn,
+        )
+    assert run_refusal.value.constraint_name == "operation_closed"
+
+
+FLIGHT_BROADCAST_KEYS = {
+    "id",
+    "operation_id",
+    "mode",
+    "executed_at",
+    "took_off_at",
+    "landed_at",
+    "breached_at",
+    "ended_at",
+    "end_reason",
+}
+
+
+async def test_the_flight_broadcast_keeps_the_keys_the_console_reads(
+    todays_partition: None, admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    member = await tenancy.member("editor")
+    flown = await Operations(admin).flown(member.organization_id)
+    await admin.execute(
+        "update soc.flights set ended_at = now(), end_reason = 'operator_return' where id = $1",
+        flown.flight_id,
+    )
+    rows = await admin.fetch(
+        "select payload from realtime.messages where topic = $1 and event = 'flight'"
+        " order by inserted_at, id",
+        f"org:{member.organization_id}:soc:state",
+    )
+    payloads = [json.loads(row["payload"]) for row in rows]
+    assert [set(payload) for payload in payloads][-1] == FLIGHT_BROADCAST_KEYS
+
+
+async def test_a_flight_keeps_when_it_was_breached_as_a_nullable_timestamp(
+    admin: asyncpg.Connection,
+) -> None:
+    column = await admin.fetchrow(
+        "select data_type, is_nullable from information_schema.columns"
+        " where table_schema = 'soc' and table_name = 'flights' and column_name = 'breached_at'"
+    )
+    assert column is not None
+    assert (column["data_type"], column["is_nullable"]) == ("timestamp with time zone", "YES")
