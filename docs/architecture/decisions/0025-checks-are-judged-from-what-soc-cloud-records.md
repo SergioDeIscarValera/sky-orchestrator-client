@@ -62,9 +62,11 @@ then fails.
 - Each aircraft costs one upsert and one notification per sample, five a second.
   That is small beside the telemetry Realtime already carries; only the latest
   row is kept.
-- A check is as fresh as its input's record. The checks' own thresholds
-  (`telemetry_stale_after_ms`) apply to the sample's time, never to when the row
-  was written.
+- A check is as fresh as its input. A sample's age counts from when `soc-cloud`
+  received it, not from the aircraft's own timestamp. The phone's clock runs about
+  half a second off the server's, so that timestamp is not a time the server can
+  measure against. The checks' threshold (`telemetry_stale_after_ms`) applies to
+  that age, and to the age of the stack's status and envelope reads.
 - `soc.aircraft_samples` keeps the sample as broadcast
   (`contracts/broadcast/telemetry.schema.json`), so console and checks read one
   shape.

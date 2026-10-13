@@ -921,6 +921,25 @@ as $$
    order by coalesce(p.display_name, p.email::text);
 $$;
 
+-- FR-OPS-03, FR-CMD-01: how many of an operation's pilots can command, live members
+-- with editor or above; for soc-operations, which reads no Virtual Origen table itself.
+create function soc.commanding_pilots(operation uuid)
+returns integer
+language sql
+stable
+security definer
+set search_path = soc, public, pg_temp
+as $$
+  select count(*)::integer
+    from soc.operators p
+    join public.memberships m
+      on m.organization_id = p.organization_id and m.profile_id = p.profile_id
+    join public.organizations o on o.id = p.organization_id
+   where p.operation_id = operation and p.role = 'pilot'
+     and m.deleted_at is null and o.deleted_at is null
+     and m.role in ('owner', 'editor');
+$$;
+
 -- --- Pilots' commands (FR-CMD-01 to FR-CMD-05) ---------------------------------------
 
 -- A pilot of the operation who is an editor or above commands its aircraft in flight.
@@ -1617,6 +1636,7 @@ revoke execute on function soc.record_flight_progress(uuid, soc.flight_status, i
 revoke execute on function soc.record_flight_moment(uuid, text, timestamptz, integer) from public;
 revoke execute on function soc.record_dry_run(uuid, soc.dry_run_status, jsonb) from public;
 revoke execute on function soc.record_checks(uuid, jsonb) from public;
+revoke execute on function soc.commanding_pilots(uuid) from public;
 revoke execute on function soc.organization_members(uuid) from public;
 revoke execute on function soc.record_stack_files_url(text, text) from public;
 
@@ -1633,6 +1653,7 @@ grant execute on function soc.definition_changed(uuid, text, uuid) to soc_operat
 grant execute on function soc.claim_transition_request(uuid, integer) to soc_operations;
 grant execute on function soc.decide_transition_request(uuid, soc.request_status, jsonb) to soc_operations;
 grant execute on function soc.record_checks(uuid, jsonb) to soc_operations;
+grant execute on function soc.commanding_pilots(uuid) to soc_operations;
 grant execute on function soc.record_aircraft_sample(text, text, jsonb, timestamptz) to soc_cloud;
 grant execute on function soc.record_stack_status(text, jsonb) to soc_cloud;
 grant execute on function soc.record_stack_envelope(text, jsonb) to soc_cloud;
