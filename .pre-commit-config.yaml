@@ -155,8 +155,8 @@ repos:
         language: system
         pass_filenames: false
         # The flight file tests read Sky Orchestrator's WPML subset page, the golden texts and
-        # the route example's bake, and the bake's schema.
-        files: ^(services/soc-operations/|libs/|contracts/(config|flight-files|geometry|sky-orchestrator)/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
+        # the route example's bake, and the bake's schema; the refusals read the results.
+        files: ^(services/soc-operations/|libs/|contracts/(config|flight-files|geometry|results|sky-orchestrator)/|database/|infra/migrate/|pyproject\.toml$|uv\.lock$)
 
       - id: soc-check-gate
         name: soc-check gate
