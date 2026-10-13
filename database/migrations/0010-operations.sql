@@ -65,7 +65,9 @@ as $$
   select state in ('completed', 'aborted', 'failed', 'cancelled');
 $$;
 
--- IR-OPS-02: from launching on, what the operation flies is fixed.
+-- IR-OPS-02: while a flight of it is prepared or flown, and once it is closed, what the
+-- operation flies is fixed; an edit while preparing, simulated or ready puts it back to
+-- planned instead (FR-OPS-07).
 create function soc.is_frozen(state soc.operation_state)
 returns boolean
 language sql
@@ -79,31 +81,33 @@ $$;
 
 create table soc.event_kinds (
   kind     text primary key,
-  severity soc.event_severity not null
+  severity soc.event_severity not null,
+  sources  soc.event_source[] not null,
+  payload  text[] not null
 );
 
-insert into soc.event_kinds (kind, severity) values
-  ('operation_created', 'info'),
-  ('operation_state_changed', 'info'),
-  ('operation_definition_changed', 'info'),
-  ('transition_requested', 'info'),
-  ('transition_refused', 'warning'),
-  ('checks_at_simulation', 'info'),
-  ('checks_at_launch', 'info'),
-  ('flight_prepared', 'info'),
-  ('flight_status_changed', 'info'),
-  ('flight_ended', 'info'),
-  ('took_off', 'info'),
-  ('automatic_return', 'warning'),
-  ('landed', 'info'),
-  ('command_requested', 'info'),
-  ('command_outcome', 'info'),
-  ('geofence_warning', 'warning'),
-  ('geofence_breach', 'safety'),
-  ('telemetry_stale', 'safety'),
-  ('telemetry_fresh', 'info'),
-  ('fleet_offline', 'warning'),
-  ('fleet_online', 'info');
+insert into soc.event_kinds (kind, severity, sources, payload) values
+  ('operation_created', 'info', array['operator']::soc.event_source[], array['name']::text[]),
+  ('operation_state_changed', 'info', array['operator', 'soc-operations', 'soc-cloud']::soc.event_source[], array['from', 'to', 'cause']::text[]),
+  ('operation_definition_changed', 'info', array['operator', 'soc-operations']::soc.event_source[], array['what']::text[]),
+  ('transition_requested', 'info', array['operator']::soc.event_source[], array['transition']::text[]),
+  ('transition_refused', 'warning', array['soc-operations']::soc.event_source[], array['transition', 'reasons']::text[]),
+  ('checks_at_simulation', 'info', array['soc-operations']::soc.event_source[], array['checks']::text[]),
+  ('checks_at_launch', 'info', array['soc-operations']::soc.event_source[], array['checks']::text[]),
+  ('flight_prepared', 'info', array['soc-operations']::soc.event_source[], array['mode', 'md5']::text[]),
+  ('flight_status_changed', 'info', array['soc-cloud']::soc.event_source[], array['status', 'percent', 'result']::text[]),
+  ('flight_ended', 'info', array['soc-operations']::soc.event_source[], array['status', 'result', 'end_reason']::text[]),
+  ('took_off', 'info', array['aircraft']::soc.event_source[], array['mode_code']::text[]),
+  ('automatic_return', 'warning', array['aircraft']::soc.event_source[], array['mode_code']::text[]),
+  ('landed', 'info', array['aircraft']::soc.event_source[], array['mode_code']::text[]),
+  ('command_requested', 'info', array['operator', 'soc-operations']::soc.event_source[], array['verb']::text[]),
+  ('command_outcome', 'info', array['soc-cloud']::soc.event_source[], array['verb', 'status', 'result']::text[]),
+  ('geofence_warning', 'warning', array['soc-cloud']::soc.event_source[], array['position', 'height_m', 'distance_to_boundary_m']::text[]),
+  ('geofence_breach', 'safety', array['soc-cloud']::soc.event_source[], array['position', 'height_m', 'distance_outside_m', 'sampled_at']::text[]),
+  ('telemetry_stale', 'safety', array['soc-cloud']::soc.event_source[], array['last_sampled_at']::text[]),
+  ('telemetry_fresh', 'info', array['soc-cloud']::soc.event_source[], array['sampled_at']::text[]),
+  ('fleet_offline', 'warning', array['soc-cloud']::soc.event_source[], array['aircraft_sn']::text[]),
+  ('fleet_online', 'info', array['soc-cloud']::soc.event_source[], array['aircraft_sn']::text[]);
 
 -- --- Same-organization keys on what an operation names -------------------------------
 
@@ -115,7 +119,7 @@ alter table soc.fleets add constraint fleets_id_organization unique (id, organiz
 
 create table soc.operations (
   id                        uuid primary key default gen_random_uuid(),
-  organization_id           uuid not null references public.organizations (id),
+  organization_id           uuid not null references public.organizations (id) on delete cascade,
   name                      text not null constraint operation_name_given check (btrim(name) <> ''),
   geofence_id               uuid,
   takeoff_security_height_m numeric constraint operation_height_positive
@@ -180,7 +184,7 @@ create table soc.operators (
 -- bytes' own, checked here. The token is the serving path's secret (ADR-0008, NFR-SEC-06).
 create table soc.flight_files (
   id              uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations (id),
+  organization_id uuid not null references public.organizations (id) on delete cascade,
   operation_id    uuid not null,
   wayline_id      uuid not null,
   bytes           bytea not null,
@@ -192,7 +196,8 @@ create table soc.flight_files (
                     constraint flight_file_token_unguessable check (token ~ '^[A-Za-z0-9_-]{22,}$'),
   created_at      timestamptz not null default now(),
   unique (id, organization_id),
-  foreign key (operation_id, organization_id) references soc.operations (id, organization_id),
+  foreign key (operation_id, organization_id) references soc.operations (id, organization_id)
+    on delete cascade,
   foreign key (wayline_id, organization_id) references soc.waylines (id, organization_id)
 );
 
@@ -221,10 +226,12 @@ create table soc.flights (
   ended_at           timestamptz,
   end_reason         soc.end_reason,
   unique (id, organization_id),
-  foreign key (operation_id, organization_id) references soc.operations (id, organization_id),
+  foreign key (operation_id, organization_id) references soc.operations (id, organization_id)
+    on delete cascade,
   foreign key (assignment_id, organization_id) references soc.assignments (id, organization_id),
   foreign key (fleet_id, organization_id) references soc.fleets (id, organization_id),
-  foreign key (file_id, organization_id) references soc.flight_files (id, organization_id),
+  foreign key (file_id, organization_id) references soc.flight_files (id, organization_id)
+    on delete cascade,
   constraint flight_ends_with_a_reason check ((ended_at is null) = (end_reason is null))
 );
 
@@ -232,7 +239,7 @@ create index flights_by_operation on soc.flights (operation_id, prepared_at desc
 create index flights_unended_by_aircraft on soc.flights (aircraft_sn) where ended_at is null;
 
 create table soc.flight_states (
-  flight_id              uuid primary key references soc.flights (id),
+  flight_id              uuid primary key references soc.flights (id) on delete cascade,
   organization_id        uuid not null,
   status                 soc.flight_status not null,
   result                 integer,
@@ -242,24 +249,30 @@ create table soc.flight_states (
   -- How the task ended, once it has, as soc-cloud reads it: from DJI's result and break
   -- reason, and from the returns it sent itself (a geofence breach, FR-SAF-01).
   end_reason             soc.end_reason,
-  updated_at             timestamptz not null default now()
+  updated_at             timestamptz not null default now(),
+  constraint flight_state_ends_when_finished check (
+    end_reason is null
+    or status in ('ok', 'failed', 'canceled', 'rejected', 'timeout', 'partially_done')
+  )
 );
 
 -- The command intents of 0004 name operations and flights that exist from here on.
 alter table soc.command_intents
-  add constraint command_intent_operation foreign key (operation_id) references soc.operations (id),
-  add constraint command_intent_flight foreign key (flight_id) references soc.flights (id);
+  add constraint command_intent_operation foreign key (operation_id) references soc.operations (id)
+    on delete cascade,
+  add constraint command_intent_flight foreign key (flight_id) references soc.flights (id)
+    on delete cascade;
 
 -- --- The log (IR-EVT, FR-LOG-01) -----------------------------------------------------
 
 -- No key to profiles: the log is never changed, not even to forget who acted.
 create table soc.operation_events (
   id              uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations (id),
-  operation_id    uuid not null references soc.operations (id),
-  flight_id       uuid references soc.flights (id),
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  operation_id    uuid not null references soc.operations (id) on delete cascade,
+  flight_id       uuid references soc.flights (id) on delete cascade,
   fleet_id        uuid,
-  command_id      uuid references soc.command_intents (id),
+  command_id      uuid references soc.command_intents (id) on delete cascade,
   occurred_at     timestamptz not null,
   recorded_at     timestamptz not null default clock_timestamp(),
   kind            text not null references soc.event_kinds (kind),
@@ -274,13 +287,20 @@ create index operation_events_by_operation on soc.operation_events (operation_id
 create index operation_events_safety on soc.operation_events (organization_id, recorded_at)
   where severity = 'safety';
 
--- FR-LOG-01: appended, never changed nor removed, by any role.
+-- FR-LOG-01: appended, never changed nor removed, by any role. The one way a log goes
+-- is with its organization, once Virtual Origen has erased it: its cascade reaches here
+-- with the organization already gone, and SOC never blocks it.
 create function soc.operation_event_is_kept()
 returns trigger
 language plpgsql
 set search_path = soc, pg_temp
 as $$
 begin
+  if tg_op = 'DELETE' and not exists (
+    select 1 from public.organizations where id = old.organization_id
+  ) then
+    return old;
+  end if;
   raise exception 'the operation log is append-only: % refused', tg_op
     using errcode = 'insufficient_privilege';
 end;
@@ -293,8 +313,10 @@ create trigger operation_events_are_kept
   before truncate on soc.operation_events
   for each statement execute function soc.operation_event_is_kept();
 
--- IR-EVT-01: a kind's severity is the contract's; a warning-or-safety kind may be
--- raised to error by its writer, never lowered.
+-- IR-EVT-01, IR-EVT-02: an entry is what the contract lists for its kind: a source it
+-- names, every payload key it names, and its severity, which a writer may raise (a
+-- refused command is logged as a warning) but never lower; safety is only a safety
+-- kind's, and a safety kind's only.
 create function soc.operation_event_severity()
 returns trigger
 language plpgsql
@@ -302,8 +324,27 @@ set search_path = soc, pg_temp
 as $$
 declare
   listed soc.event_severity;
+  allowed soc.event_source[];
+  keys text[];
 begin
-  select severity into listed from soc.event_kinds where kind = new.kind;
+  select severity, sources, payload into listed, allowed, keys
+    from soc.event_kinds where kind = new.kind;
+  if not found then
+    return new;
+  end if;
+  if not new.source = any (allowed) then
+    raise exception 'event %: % is not one of its sources', new.kind, new.source
+      using errcode = 'check_violation', constraint = 'operation_event_source_listed';
+  end if;
+  if not new.payload ?& keys then
+    raise exception 'event %: its payload lacks one of %', new.kind, keys
+      using errcode = 'check_violation', constraint = 'operation_event_payload_keys';
+  end if;
+  if array_position(enum_range(null::soc.event_severity), new.severity)
+     < array_position(enum_range(null::soc.event_severity), listed) then
+    raise exception 'event %: % is below its severity, %', new.kind, new.severity, listed
+      using errcode = 'check_violation', constraint = 'operation_event_severity_floor';
+  end if;
   if new.severity = 'safety' and listed <> 'safety' then
     raise exception 'event %: safety is reserved for safety events', new.kind
       using errcode = 'check_violation', constraint = 'operation_event_safety_reserved';
@@ -322,6 +363,23 @@ create trigger operation_event_severity
 
 -- The one way to append, for the definer functions below and both services. A kind
 -- outside the list fails on its key; an operation that does not exist fails here.
+-- FR-OPS-10: a closed operation's record takes nothing more. Its log takes only the
+-- entry of the move that closed it, written while that move is under way.
+create function soc.is_open(operation uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = soc, pg_temp
+as $$
+  select exists (
+    select 1 from soc.operations o
+     where o.id = operation
+       and (not soc.is_terminal(o.state)
+            or current_setting('soc.moving_operation', true) = operation::text)
+  );
+$$;
+
 create function soc.log_event(
   operation uuid,
   event_kind text,
@@ -342,6 +400,10 @@ as $$
 declare
   logged soc.operation_events;
 begin
+  if not soc.is_open(operation) then
+    raise exception 'operation %: closed, its log takes nothing more', operation
+      using errcode = 'check_violation', constraint = 'operation_closed';
+  end if;
   insert into soc.operation_events (
     organization_id, operation_id, flight_id, fleet_id, command_id, occurred_at, kind,
     severity, source, actor_id, payload
@@ -364,7 +426,7 @@ $$;
 -- --- Telemetry history and the latest sample (IR-TEL, ADR-0025) ----------------------
 
 create table soc.telemetry_samples (
-  flight_id           uuid not null references soc.flights (id),
+  flight_id           uuid not null references soc.flights (id) on delete cascade,
   sampled_at          timestamptz not null,
   organization_id     uuid not null,
   fleet_id            uuid not null,
@@ -416,12 +478,13 @@ create table soc.dry_runs (
   id              uuid primary key default gen_random_uuid(),
   organization_id uuid not null,
   file_id         uuid not null,
-  gateway_sn      text not null references soc.stacks (gateway_sn),
+  gateway_sn      text not null references soc.stacks (gateway_sn) on delete cascade,
   status          soc.dry_run_status not null default 'pending',
   verdict         jsonb check (verdict is null or jsonb_typeof(verdict) = 'object'),
   requested_at    timestamptz not null default now(),
   judged_at       timestamptz,
-  foreign key (file_id, organization_id) references soc.flight_files (id, organization_id),
+  foreign key (file_id, organization_id) references soc.flight_files (id, organization_id)
+    on delete cascade,
   check ((status = 'pending') = (judged_at is null))
 );
 
@@ -440,7 +503,8 @@ create table soc.transition_requests (
   reasons           jsonb check (reasons is null or jsonb_typeof(reasons) = 'array'),
   decided_at        timestamptz,
   unique (organization_id, client_request_id),
-  foreign key (operation_id, organization_id) references soc.operations (id, organization_id),
+  foreign key (operation_id, organization_id) references soc.operations (id, organization_id)
+    on delete cascade,
   check ((decided_at is not null) = (status in ('accepted', 'refused', 'failed', 'expired'))),
   check ((reasons is not null) = (status in ('refused', 'failed')))
 );
@@ -494,7 +558,6 @@ begin
          updated_at = now()
    where id = operation
   returning * into moved;
-  perform set_config('soc.moving_operation', '', true);
   perform soc.log_event(
     operation, 'operation_state_changed', event_source,
     jsonb_build_object('from', current.state, 'to', to_state, 'cause', cause)
@@ -502,6 +565,7 @@ begin
               else jsonb_build_object('end_reason', moved.end_reason) end,
     actor
   );
+  perform set_config('soc.moving_operation', '', true);
   return moved;
 end;
 $$;
@@ -521,6 +585,10 @@ begin
   select state into current from soc.operations where id = operation for update;
   if not found then
     return;
+  end if;
+  if soc.is_terminal(current) then
+    raise exception 'operation %: closed when it became %', operation, current
+      using errcode = 'check_violation', constraint = 'operation_closed';
   end if;
   if soc.is_frozen(current) then
     raise exception 'operation %: its definition is fixed once it is %', operation, current
@@ -554,6 +622,14 @@ begin
      and current_setting('soc.moving_operation', true) is distinct from old.id::text then
     raise exception 'operation %: its state moves only by soc.move_operation', old.id
       using errcode = 'insufficient_privilege';
+  end if;
+  -- Virtual Origen deleting a profile forgets who made the operation, closed or not.
+  if (new.*) is not distinct from (old.*) or (
+       new.created_by is null and old.created_by is not null
+       and (new.name, new.geofence_id, new.takeoff_security_height_m, new.state)
+           is not distinct from (old.name, old.geofence_id, old.takeoff_security_height_m, old.state)
+     ) then
+    return new;
   end if;
   if soc.is_terminal(old.state) then
     raise exception 'operation %: closed when it became %', old.id, old.state
@@ -672,18 +748,39 @@ create trigger assignment_changes
 create function soc.operator_changes()
 returns trigger
 language plpgsql
-set search_path = soc, pg_temp
+security definer
+set search_path = soc, public, pg_temp
 as $$
 declare
   current soc.operation_state;
+  operation uuid := coalesce(new.operation_id, old.operation_id);
 begin
-  select state into current from soc.operations
-   where id = coalesce(new.operation_id, old.operation_id);
-  if current in ('launching', 'in_flight', 'paused', 'returning')
-     or soc.is_terminal(current) then
-    raise exception 'operation %: its operators are fixed once it is %',
-      coalesce(new.operation_id, old.operation_id), current
+  -- A membership Virtual Origen removed takes its operators with it, whatever the state.
+  if tg_op = 'DELETE' and not exists (
+    select 1 from public.memberships
+     where organization_id = old.organization_id and profile_id = old.profile_id
+  ) then
+    return old;
+  end if;
+  select state into current from soc.operations where id = operation;
+  if not found then
+    return coalesce(new, old);
+  end if;
+  if soc.is_terminal(current) then
+    raise exception 'operation %: closed when it became %', operation, current
+      using errcode = 'check_violation', constraint = 'operation_closed';
+  end if;
+  if current in ('launching', 'in_flight', 'paused', 'returning') then
+    raise exception 'operation %: its operators are fixed once it is %', operation, current
       using errcode = 'check_violation', constraint = 'operation_definition_frozen';
+  end if;
+  if tg_op <> 'DELETE' and not exists (
+    select 1 from public.memberships
+     where organization_id = new.organization_id and profile_id = new.profile_id
+       and deleted_at is null
+  ) then
+    raise exception 'operation %: an operator is a live member of its organization', operation
+      using errcode = 'check_violation', constraint = 'operator_live_member';
   end if;
   return coalesce(new, old);
 end;
@@ -707,7 +804,23 @@ declare
   what text := case tg_table_name when 'waylines' then 'wayline'
                                   when 'geofences' then 'geofence'
                                   else 'fleet' end;
+  flying uuid;
 begin
+  -- While a flight of it is prepared from its file, what it names stays as it is.
+  select o.id into flying
+    from soc.operations o
+    left join soc.assignments a on a.operation_id = o.id
+   where o.state in ('simulating', 'launching')
+     and case tg_table_name
+           when 'waylines' then a.wayline_id = new.id
+           when 'geofences' then o.geofence_id = new.id
+           else a.fleet_id = new.id
+         end
+   limit 1;
+  if found then
+    raise exception 'the % is fixed while operation % prepares a flight of it', what, flying
+      using errcode = 'check_violation', constraint = 'operation_definition_frozen';
+  end if;
   for operation in
     select distinct o.id
       from soc.operations o
@@ -761,6 +874,45 @@ create trigger fleet_keeps_identity_in_flight
   before update on soc.fleets
   for each row execute function soc.fleet_keeps_identity_in_flight();
 
+create function soc.operation_takes_no_more()
+returns trigger
+language plpgsql
+security definer
+set search_path = soc, pg_temp
+as $$
+declare
+  operation uuid;
+begin
+  -- Each branch names only its own table's columns: PL/pgSQL resolves them when run.
+  if tg_table_name = 'dry_runs' then
+    select operation_id into operation from soc.flight_files where id = new.file_id;
+  else
+    operation := new.operation_id;
+  end if;
+  if not soc.is_open(operation) then
+    raise exception 'operation %: closed, it takes no new %', operation, tg_table_name
+      using errcode = 'check_violation', constraint = 'operation_closed';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger flight_needs_an_open_operation
+  before insert on soc.flights
+  for each row execute function soc.operation_takes_no_more();
+create trigger flight_file_needs_an_open_operation
+  before insert on soc.flight_files
+  for each row execute function soc.operation_takes_no_more();
+create trigger dry_run_needs_an_open_operation
+  before insert on soc.dry_runs
+  for each row execute function soc.operation_takes_no_more();
+create trigger check_needs_an_open_operation
+  before insert or update on soc.operation_checks
+  for each row execute function soc.operation_takes_no_more();
+create trigger request_needs_an_open_operation
+  before insert on soc.transition_requests
+  for each row execute function soc.operation_takes_no_more();
+
 -- --- Transition requests (ADR-0006, IR-TRQ) ------------------------------------------
 
 -- A member asks an operation to move. Plan, prepare, unprepare and cancel need editor
@@ -786,6 +938,10 @@ begin
   if not found or not soc.has_live_role(target.organization_id, 'editor') then
     raise exception 'operation %: an editor of its organization asks it to move', operation
       using errcode = 'insufficient_privilege';
+  end if;
+  if soc.is_terminal(target.state) then
+    raise exception 'operation %: closed when it became %', operation, target.state
+      using errcode = 'check_violation', constraint = 'operation_closed';
   end if;
   if wanted in ('simulate', 'launch', 'stop') and not exists (
     select 1 from soc.operators
@@ -889,7 +1045,7 @@ begin
   if not found then
     return;
   end if;
-  if outcome in ('refused', 'failed') then
+  if outcome in ('refused', 'failed') and soc.is_open(decided.operation_id) then
     perform soc.log_event(decided.operation_id, 'transition_refused', 'soc-operations',
                           jsonb_build_object('transition', decided.transition,
                                              'request', decided.id,
@@ -936,8 +1092,9 @@ as $$
     join public.memberships m
       on m.organization_id = p.organization_id and m.profile_id = p.profile_id
     join public.organizations o on o.id = p.organization_id
+    join public.profiles f on f.id = p.profile_id
    where p.operation_id = operation and p.role = 'pilot'
-     and m.deleted_at is null and o.deleted_at is null
+     and m.deleted_at is null and o.deleted_at is null and f.deleted_at is null
      and m.role in ('owner', 'editor');
 $$;
 
@@ -1010,6 +1167,9 @@ declare
   fleet uuid;
 begin
   select fleet_id into fleet from soc.flights where id = new.flight_id;
+  if not soc.is_open(new.operation_id) then
+    return null;
+  end if;
   if tg_op = 'INSERT' then
     perform soc.log_event(new.operation_id, 'command_requested',
                           case when new.requested_by is null then 'soc-operations' else 'operator' end::soc.event_source,
@@ -1176,7 +1336,9 @@ begin
     status = excluded.status, result = excluded.result, percent = excluded.percent,
     current_waypoint_index = excluded.current_waypoint_index, break_point = excluded.break_point,
     end_reason = excluded.end_reason, updated_at = excluded.updated_at;
-  if before is distinct from reported then
+  -- A progress after its flight ended, or its operation closed, is kept, not acted on.
+  if before is distinct from reported and target.ended_at is null
+     and soc.is_open(target.operation_id) then
     perform soc.log_event(target.operation_id, 'flight_status_changed', 'soc-cloud',
                           jsonb_build_object('status', reported, 'percent', done_percent,
                                              'result', dji_result,
@@ -1209,7 +1371,7 @@ begin
          landed_at = case when moment = 'landed' then at else landed_at end
    where id = flight
   returning * into target;
-  if not found then
+  if not found or not soc.is_open(target.operation_id) then
     return;
   end if;
   perform soc.log_event(target.operation_id, moment, 'aircraft',
@@ -1620,6 +1782,7 @@ create policy soc_cloud_writes_tracks on soc.telemetry_samples
 -- Functions: nobody by default; each to whoever it is for.
 revoke execute on function soc.is_terminal(soc.operation_state) from public;
 revoke execute on function soc.is_frozen(soc.operation_state) from public;
+revoke execute on function soc.is_open(uuid) from public;
 revoke execute on function soc.log_event(uuid, text, soc.event_source, jsonb, uuid, uuid, uuid, uuid,
   timestamptz, soc.event_severity) from public;
 revoke execute on function soc.move_operation(uuid, soc.operation_state, text, soc.event_source, uuid,
@@ -1643,6 +1806,7 @@ revoke execute on function soc.record_stack_files_url(text, text) from public;
 
 grant execute on function soc.is_terminal(soc.operation_state) to authenticated, soc_cloud, soc_operations;
 grant execute on function soc.is_frozen(soc.operation_state) to authenticated, soc_cloud, soc_operations;
+grant execute on function soc.is_open(uuid) to soc_cloud, soc_operations;
 grant execute on function soc.request_transition(uuid, soc.transition, uuid, jsonb) to authenticated;
 grant execute on function soc.request_command(uuid, soc.command_verb, uuid, jsonb) to authenticated;
 grant execute on function soc.organization_members(uuid) to authenticated;

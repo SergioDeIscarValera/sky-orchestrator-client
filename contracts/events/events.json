@@ -1,5 +1,5 @@
 {
-  "description": "The closed list of operation event kinds (IR-EVT-02, FR-LOG-02): what an operation's append-only log can hold. Each kind names its severity, the units that may write it, and the keys its payload always carries; a payload may carry more. safety is reserved for FR-SAF events, so a filter on it is exact (IR-EVT-01). The database refuses a kind outside this list (database/migrations/0010-operations.sql); a gate test holds both to this file. A new kind is a contract change.",
+  "description": "The closed list of operation event kinds (IR-EVT-02, FR-LOG-02): what an operation's append-only log can hold. Each kind names its severity, the units that may write it, and the keys its payload always carries; a payload may carry more. A writer may raise an entry's severity above its kind's (a refused command is logged as a warning), never lower it. safety is reserved for FR-SAF events, so a filter on it is exact (IR-EVT-01). The database refuses a kind outside this list (database/migrations/0010-operations.sql); a gate test holds both to this file. A new kind is a contract change.",
   "x-version": "1.0.0",
   "kinds": {
     "operation_created": {
