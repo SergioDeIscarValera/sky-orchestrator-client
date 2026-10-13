@@ -372,7 +372,7 @@ async def _build_file(connection: asyncpg.Connection, loaded: Loaded) -> None:
         " size_bytes, profile_version, token) values ($1, $2, $3, $4, $5, $6, $7, $8) returning id",
         loaded.organization_id, loaded.snapshot.operation_id, wayline_id, kmz,
         flight_files.fingerprint(kmz), len(kmz), flight_files.PROFILE_VERSION,
-        secrets.token_urlsafe(16),
+        secrets.token_hex(16),
     )  # fmt: skip
     if loaded.stack is not None:
         await connection.execute(

@@ -30,7 +30,7 @@ from soc_operations.lifecycle import (
 from soc_operations.testing import ENVELOPE, operation
 
 FINGERPRINT = "a" * 64
-FILE = File(id=uuid.uuid4(), md5="0" * 32, token="t" * 22)
+FILE = File(id=uuid.uuid4(), md5="0" * 32, token="0f" * 16)
 
 
 @dataclass(frozen=True)
