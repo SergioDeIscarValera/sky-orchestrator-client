@@ -17,10 +17,13 @@ import socket
 import subprocess
 import time
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from typing import Any
 
 import aiomqtt
+from aiohttp import web
 from paho.mqtt.packettypes import PacketTypes
 from paho.mqtt.reasoncodes import ReasonCode
 
@@ -229,3 +232,118 @@ class FakeClient:
             if isinstance(item, BaseException):
                 raise item
             yield item
+
+
+# Sky Orchestrator's wayline API as the container lane serves it: the examples below are the
+# shapes so_api decodes, each stack answering as its test sets.
+SHA_CONFIG = "a" * 64
+SHA_ENVELOPE = "b" * 64
+WAYLINE_STATUS: dict[str, Any] = {
+    "schema_version": "1.3.0",
+    "at_ms": 1791000000000,
+    "simulator_mode": True,
+    "link": {"state": "up", "reason": "connected", "changed_at_ms": 1790999900000},
+    "simulator_active": True,
+    "aircraft_connected": True,
+    "aircraft_online": True,
+    "aircraft_reason": "link up, aircraft connected, telemetry fresh",
+    "armed": False,
+    "arming_remaining_s": None,
+    "clock_offset_ms": -180,
+    "clock_offset_uncertainty_ms": 25,
+    "contract_version": "2.1.0",
+    "config_fingerprint": SHA_CONFIG,
+    "warnings": [],
+}
+WAYLINE_ENVELOPE: dict[str, Any] = {
+    "envelope": {
+        "geofence_center": {"latitude_deg": 41.6523, "longitude_deg": -4.7245},
+        "geofence_radius_m": 3000.0,
+        "max_height_m": 120.0,
+        "max_home_distance_m": 2500.0,
+        "max_leg_m": 1500.0,
+        "max_transit_m": 2000.0,
+        "max_total_distance_m": 20000.0,
+        "max_waypoints": 200,
+        "max_horizontal_speed_ms": 15.0,
+    },
+    "envelope_fingerprint": SHA_ENVELOPE,
+    "config_fingerprint": SHA_CONFIG,
+    "application_in_force": None,
+}
+WAYLINE_VALIDATION: dict[str, Any] = {
+    "status": "REJECTED",
+    "fingerprint_md5": "0" * 32,
+    "size_bytes": 11,
+    "config_fingerprint": SHA_CONFIG,
+    "metadata": {"name": "reference", "waypoint_count": 1, "total_distance_m": 0.0},
+    "report": {
+        "status": "REJECTED",
+        "checks": [{"check": "geofence", "status": "failed", "detail": "1 waypoint outside"}],
+        "problems": [
+            {
+                "code": "outside_geofence",
+                "kind": "envelope",
+                "message": "waypoint 0 is 3412 m from the centre, the limit is 3000 m",
+                "waypoint_index": 0,
+            }
+        ],
+    },
+}
+
+
+@dataclass(frozen=True)
+class Judgement:
+    """One file SO was asked to judge: the query it came with, its body and its authorization."""
+
+    query: dict[str, str]
+    body: bytes
+    authorization: str | None
+
+
+@dataclass
+class WaylineServer:
+    """so-wayline's HTTP API on loopback, answering with the examples above, or with the status
+    code a test sets. Every judgement asked for is kept."""
+
+    base_url: str = ""
+    status_code: int = HTTPStatus.OK
+    envelope_code: int = HTTPStatus.OK
+    validation_code: int = HTTPStatus.OK
+    judgements: list[Judgement] = field(default_factory=list)
+
+    async def _status(self, _request: web.Request) -> web.Response:
+        if self.status_code != HTTPStatus.OK:
+            return web.Response(status=self.status_code, text="the status is refused")
+        return web.json_response(WAYLINE_STATUS)
+
+    async def _envelope(self, _request: web.Request) -> web.Response:
+        if self.envelope_code != HTTPStatus.OK:
+            return web.Response(status=self.envelope_code, text="the envelope is refused")
+        return web.json_response(WAYLINE_ENVELOPE)
+
+    async def _validate(self, request: web.Request) -> web.Response:
+        judgement = Judgement(
+            dict(request.query), await request.read(), request.headers.get("Authorization")
+        )
+        self.judgements.append(judgement)
+        if self.validation_code != HTTPStatus.OK:
+            return web.Response(status=self.validation_code, text="the judgement is refused")
+        return web.json_response(WAYLINE_VALIDATION)
+
+
+@asynccontextmanager
+async def wayline_server() -> AsyncIterator[WaylineServer]:
+    server = WaylineServer()
+    application = web.Application()
+    application.router.add_get("/v1/status", server._status)
+    application.router.add_get("/v1/envelope", server._envelope)
+    application.router.add_post("/v1/validations", server._validate)
+    runner = web.AppRunner(application)
+    await runner.setup()
+    await web.TCPSite(runner, "127.0.0.1", 0).start()
+    server.base_url = f"http://127.0.0.1:{runner.addresses[0][1]}"
+    try:
+        yield server
+    finally:
+        await runner.cleanup()
