@@ -12,6 +12,7 @@ COPY infra/migrate/pyproject.toml infra/migrate/
 COPY services/soc-cloud/pyproject.toml services/soc-cloud/
 COPY libs libs
 COPY contracts/config contracts/config
+COPY contracts/results contracts/results
 COPY services/soc-operations services/soc-operations
 RUN uv sync --frozen --no-dev --package soc-operations \
  && python -m compileall -q libs services/soc-operations/src
