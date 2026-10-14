@@ -261,7 +261,7 @@ describe('an operation in its list, and its members (FR-OPS-01, IR-OPR)', () => 
 
 describe("a flight's and a command's words and tones (FR-CMD-06, FR-SAF-04)", () => {
   it("names a flight's mode, a real flight in the danger tone and a simulated one in info", () => {
-    expect(FLIGHT_MODE_WORDS).toEqual({ simulated: 'Simulated', real: 'Real' })
+    expect(FLIGHT_MODE_WORDS).toEqual({ simulated: 'Simulated flight', real: 'Real flight' })
     expect(FLIGHT_MODE_TONE).toEqual({ simulated: 'progress', real: 'bad' })
   })
 

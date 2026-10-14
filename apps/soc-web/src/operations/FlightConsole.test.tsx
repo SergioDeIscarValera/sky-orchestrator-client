@@ -280,8 +280,8 @@ describe('the flight console in an operation (FR-CMD-01, FR-SAF-04)', () => {
 
 describe('the mode of the flight, unmistakable (FR-SAF-04)', () => {
   it.each([
-    ['simulated', 'Simulated', 'bg-info-subtle'],
-    ['real', 'Real', 'bg-danger-subtle'],
+    ['simulated', 'Simulated flight', 'bg-info-subtle'],
+    ['real', 'Real flight', 'bg-danger-subtle'],
   ] as const)('names a %s flight %s, in its tone', async (mode, words, tone) => {
     const backend = new FakeBackend(NEIGHBOUR)
     const operation = await flyingOperation(backend, 'in_flight', { flight: { mode } })
@@ -309,7 +309,9 @@ describe('the mode of the flight, unmistakable (FR-SAF-04)', () => {
       }),
     )
     const { inspector } = await openOperation(backend, operation)
-    expect(within(await consoleOf(inspector)).getByRole('status')).toHaveTextContent('Simulated')
+    expect(within(await consoleOf(inspector)).getByRole('status')).toHaveTextContent(
+      'Simulated flight',
+    )
   })
 
   it('reads an operation with no flight to fly as a mode unknown, never as one of the two', async () => {

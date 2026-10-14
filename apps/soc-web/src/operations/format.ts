@@ -247,9 +247,10 @@ export const COMMAND_STATUS_TONE: Readonly<Record<CommandStatus, PillTone>> = {
 }
 
 /** A flight's mode as words: a real flight in the danger tone, a simulated one in info (FR-SAF-04). */
+/** A flight's mode in the console's banner: a word apart from the operation's states (FR-SAF-04). */
 export const FLIGHT_MODE_WORDS: Readonly<Record<FlightMode, string>> = {
-  simulated: 'Simulated',
-  real: 'Real',
+  simulated: 'Simulated flight',
+  real: 'Real flight',
 }
 
 export const FLIGHT_MODE_TONE: Readonly<Record<FlightMode, PillTone>> = {
