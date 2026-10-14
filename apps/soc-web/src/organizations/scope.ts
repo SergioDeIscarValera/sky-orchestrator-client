@@ -19,6 +19,7 @@ export const EVENTS = 'events'
 export const REQUESTS = 'requests'
 export const FLIGHTS = 'flights'
 export const FLIGHT_STATES = 'flight-states'
+export const TRACK = 'track'
 export const COMMAND_INTENTS = 'command-intents'
 
 /** Every query about one organization's data starts with this key. */

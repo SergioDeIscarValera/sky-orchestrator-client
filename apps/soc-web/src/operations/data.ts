@@ -27,6 +27,7 @@ import {
   OPERATORS,
   REQUESTS,
   STACKS,
+  TRACK,
   organizationKey,
 } from '../organizations/scope'
 
@@ -122,6 +123,26 @@ export function useFlightStates(operationId: string) {
   return useQuery({
     queryKey: organizationKey(organization.id, FLIGHT_STATES, operationId),
     queryFn: () => backend.flightStates(operationId),
+  })
+}
+
+/**
+ * How often a live flight's track is read again. soc-cloud writes its samples in batches every
+ * `telemetry_batch_s` (ADR-0007), a setting the console does not know, so it reads every 5 s.
+ */
+export const TRACK_REFRESH_MS = 5_000
+
+/**
+ * A flight's stored track (FR-TEL-05), read again every TRACK_REFRESH_MS while the flight has not
+ * ended, and never after: what was stored by then is what the track keeps.
+ */
+export function useFlightTrack(flightId: string, ended: boolean) {
+  const backend = useBackend()
+  const { organization } = useOrganization()
+  return useQuery({
+    queryKey: organizationKey(organization.id, TRACK, flightId),
+    queryFn: () => backend.track(flightId),
+    refetchInterval: ended ? false : TRACK_REFRESH_MS,
   })
 }
 
