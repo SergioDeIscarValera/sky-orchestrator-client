@@ -42,10 +42,16 @@ export const TIMINGS = Object.freeze({
   taskMs: 60_000,
   telemetryTickMs: 500,
   takeOffMs: 1_000,
-  landMs: 3_000,
-  returnHomeMs: 6_000,
+  landMs: 20_000,
+  returnHomeMs: 20_000,
   readyMs: 2_000,
 })
+
+/**
+ * A flight's track keeps at most one sample a second, the first of each second, as soc-cloud keeps it
+ * (IR-TEL-01, its HISTORY_SLOT_MS); the live samples carry every one.
+ */
+const HISTORY_SLOT_MS = 1000
 
 /** The demo's configuration: the fingerprint its phone reports (soc-operations' config_fingerprint). */
 const CONFIGURATION = 'demo-configuration'
@@ -558,8 +564,8 @@ export function createLifecycle({
   let motion = groundMotion(aircraft?.home ?? [0, 0])
   /** The flight the aircraft last started flying: its samples are stored while it is unended. */
   let flightInAir = null
-  /** The last sample time stored as a track row: a row is stored once per millisecond, as the table keys it. */
-  let storedAtMs = -Infinity
+  /** The second of the last sample stored as a track row: one a second at most (HISTORY_SLOT_MS). */
+  let storedSlot = -Infinity
   /** How many returns home the aircraft has begun: each numbered, so only its own landing lands it. */
   let returns = 0
   let closed = false
@@ -979,7 +985,7 @@ export function createLifecycle({
   /** A flight's task starts: the aircraft takes its route, and the flight's samples are stored from now. */
   function flyRoute(flightId) {
     flightInAir = flightId
-    storedAtMs = -Infinity
+    storedSlot = -Infinity
     const route = routes.get(flightId) ?? null
     if (route !== null) motion = routeMotion(route, timings.taskMs, flightId)
   }
@@ -1008,8 +1014,9 @@ export function createLifecycle({
     const nowMs = Date.now()
     const sample = sampleOf(motion, aircraft, nowMs)
     telemetry.send(aircraft.organizationId, sample)
-    if (flightInAir !== null && flightRow(flightInAir).ended_at === null && nowMs > storedAtMs) {
-      storedAtMs = nowMs
+    const slot = Math.floor(nowMs / HISTORY_SLOT_MS)
+    if (flightInAir !== null && flightRow(flightInAir).ended_at === null && slot > storedSlot) {
+      storedSlot = slot
       telemetry.store({
         flight_id: flightInAir,
         sampled_at: new Date(nowMs).toISOString(),

@@ -822,6 +822,19 @@ describe('the aircraft in the air', () => {
     }
   })
 
+  it("stores at most one sample a second as the flight's track, while it sends every one (IR-TEL-01)", () => {
+    const s = scenario()
+    launchToFlight(s)
+    const from = s.sent.length
+    advance(10_000)
+    const own = rowsOf(s, flightOf(s))
+    const seconds = own.map((row) => Math.floor(Date.parse(String(row.sampled_at)) / 1000))
+    expect(own.length).toBeGreaterThanOrEqual(9)
+    expect(new Set(seconds).size).toBe(seconds.length)
+    expect(seconds).toEqual([...seconds].sort((a, b) => a - b))
+    expect(s.sent.length - from).toBe(10_000 / TIMINGS.telemetryTickMs)
+  })
+
   it('starts its task on the ground at the takeoff point, and climbs straight up in automatic takeoff', () => {
     const s = scenario()
     launchToFlight(s)
@@ -931,7 +944,7 @@ describe('the aircraft in the air', () => {
     const executed = String(flight.executed_at)
     const ended = String(flight.ended_at)
     const own = rowsOf(s, flight)
-    expect(own.length).toBeGreaterThan(100)
+    expect(own.length).toBeGreaterThanOrEqual(TIMINGS.taskMs / 1000)
     for (const row of own) {
       expect(String(row.sampled_at) >= executed).toBe(true)
       expect(String(row.sampled_at) <= ended).toBe(true)
