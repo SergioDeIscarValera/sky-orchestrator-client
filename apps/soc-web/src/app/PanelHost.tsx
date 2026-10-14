@@ -4,6 +4,7 @@ import { lazy, Suspense, useId } from 'react'
 import { Waiting } from '../fleets/Details'
 import { FleetPanel } from '../fleets/FleetPanel'
 import { DESTINATIONS } from './destinations'
+import { RegionBoundary } from './RegionBoundary'
 import { useChangeView, useView, withPanel } from './router'
 import { CARD, QUIET_BUTTON } from './styles'
 
@@ -47,25 +48,27 @@ export function PanelHost() {
           <X size={16} aria-hidden />
         </button>
       </div>
-      {destination.panel === 'fleet' ? (
-        <FleetPanel />
-      ) : destination.panel === 'geofences' ? (
-        <Suspense fallback={<Waiting>Loading the geofences…</Waiting>}>
-          <GeofencePanel />
-        </Suspense>
-      ) : destination.panel === 'waylines' ? (
-        <Suspense fallback={<Waiting>Loading the waylines…</Waiting>}>
-          <WaylinePanel />
-        </Suspense>
-      ) : destination.panel === 'operations' ? (
-        <Suspense fallback={<Waiting>Loading the operations…</Waiting>}>
-          <OperationPanel />
-        </Suspense>
-      ) : (
-        <p className="text-muted mt-3 text-sm">
-          {`${destination.label} arrive in ${destination.arrives ?? 'a later milestone'}.`}
-        </p>
-      )}
+      <RegionBoundary key={destination.panel} name="panel">
+        {destination.panel === 'fleet' ? (
+          <FleetPanel />
+        ) : destination.panel === 'geofences' ? (
+          <Suspense fallback={<Waiting>Loading the geofences…</Waiting>}>
+            <GeofencePanel />
+          </Suspense>
+        ) : destination.panel === 'waylines' ? (
+          <Suspense fallback={<Waiting>Loading the waylines…</Waiting>}>
+            <WaylinePanel />
+          </Suspense>
+        ) : destination.panel === 'operations' ? (
+          <Suspense fallback={<Waiting>Loading the operations…</Waiting>}>
+            <OperationPanel />
+          </Suspense>
+        ) : (
+          <p className="text-muted mt-3 text-sm">
+            {`${destination.label} arrive in ${destination.arrives ?? 'a later milestone'}.`}
+          </p>
+        )}
+      </RegionBoundary>
     </section>
   )
 }

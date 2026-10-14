@@ -4,6 +4,7 @@ import { lazy, Suspense } from 'react'
 import { Waiting } from '../fleets/Details'
 import { DeviceDetail } from '../fleets/DeviceDetail'
 import { FleetDetail } from '../fleets/FleetDetail'
+import { RegionBoundary } from './RegionBoundary'
 import { useSelect, useSelection } from './router'
 import { CARD, QUIET_BUTTON } from './styles'
 
@@ -57,23 +58,25 @@ export function Inspector() {
         >
           <X size={16} aria-hidden />
         </button>
-        {selection.kind === 'fleet' ? (
-          <FleetDetail fleetId={selection.fleetId} />
-        ) : selection.kind === 'geofence' ? (
-          <Suspense fallback={<Waiting>Loading the geofence…</Waiting>}>
-            <GeofenceDetail geofenceId={selection.geofenceId} />
-          </Suspense>
-        ) : selection.kind === 'wayline' ? (
-          <Suspense fallback={<Waiting>Loading the wayline…</Waiting>}>
-            <WaylineDetail waylineId={selection.waylineId} />
-          </Suspense>
-        ) : selection.kind === 'operation' ? (
-          <Suspense fallback={<Waiting>Loading the operation…</Waiting>}>
-            <OperationDetail operationId={selection.operationId} />
-          </Suspense>
-        ) : (
-          <DeviceDetail gatewaySn={selection.gatewaySn} aircraftSn={selection.aircraftSn} />
-        )}
+        <RegionBoundary name="inspector">
+          {selection.kind === 'fleet' ? (
+            <FleetDetail fleetId={selection.fleetId} />
+          ) : selection.kind === 'geofence' ? (
+            <Suspense fallback={<Waiting>Loading the geofence…</Waiting>}>
+              <GeofenceDetail geofenceId={selection.geofenceId} />
+            </Suspense>
+          ) : selection.kind === 'wayline' ? (
+            <Suspense fallback={<Waiting>Loading the wayline…</Waiting>}>
+              <WaylineDetail waylineId={selection.waylineId} />
+            </Suspense>
+          ) : selection.kind === 'operation' ? (
+            <Suspense fallback={<Waiting>Loading the operation…</Waiting>}>
+              <OperationDetail operationId={selection.operationId} />
+            </Suspense>
+          ) : (
+            <DeviceDetail gatewaySn={selection.gatewaySn} aircraftSn={selection.aircraftSn} />
+          )}
+        </RegionBoundary>
       </div>
     </aside>
   )
