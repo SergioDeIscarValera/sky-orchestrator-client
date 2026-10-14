@@ -19,6 +19,23 @@ export const OFFERED: Readonly<Record<OperationState, readonly Transition[]>> = 
   cancelled: [],
 }
 
+/** The states an operation's flight console shows in: its flight is prepared, executing or in the air (FR-CMD-01). */
+export const CONSOLE_STATES: readonly OperationState[] = [
+  'simulating',
+  'launching',
+  'in_flight',
+  'paused',
+  'returning',
+]
+
+/** The states whose flights the safety controls command: the aircraft are launching or in the air (FR-CMD-07). */
+export const AIRBORNE_STATES: readonly OperationState[] = [
+  'launching',
+  'in_flight',
+  'paused',
+  'returning',
+]
+
 /** The moves that fly: a pilot of the operation asks each one, and confirms it first (FR-OPS-06, FR-OPS-09, FR-CMD-04). */
 export const FLIGHT_MOVES = ['simulate', 'launch', 'stop'] as const
 
@@ -31,13 +48,25 @@ export function isFlightMove(transition: Transition): transition is FlightMove {
 /** Why a member may not ask a move, in the words its tooltip gives (FR-AUT-03, FR-CMD-01). */
 export type Withheld = 'Editors only' | 'Pilots only'
 
+/**
+ * Why a member may not command an operation's aircraft, or null when they may: an editor or an owner
+ * who is a pilot of the operation (FR-CMD-01). The flight moves and the console's commands share it.
+ */
+export function commandWithheldBy(member: {
+  readonly role: Role
+  readonly pilot: boolean
+}): Withheld | null {
+  if (!changesFleets(member.role)) return 'Editors only'
+  return member.pilot ? null : 'Pilots only'
+}
+
 /** Why a member may not ask this move, or null when they may. An editor or owner asks every move; a flight move needs a pilot too. */
 export function withheldBy(
   transition: Transition,
   member: { readonly role: Role; readonly pilot: boolean },
 ): Withheld | null {
-  if (!changesFleets(member.role)) return 'Editors only'
-  return isFlightMove(transition) && !member.pilot ? 'Pilots only' : null
+  if (isFlightMove(transition)) return commandWithheldBy(member)
+  return changesFleets(member.role) ? null : 'Editors only'
 }
 
 /** Whether a request is still being decided: while one is, the operation's moves wait for it (FR-OPS-09). */

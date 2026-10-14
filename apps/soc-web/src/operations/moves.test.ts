@@ -5,7 +5,17 @@ import type {
   TransitionRequest,
   TransitionStatus,
 } from '../backend/backend'
-import { FLIGHT_MOVES, OFFERED, isFlightMove, reasonsOf, undecided, withheldBy } from './moves'
+import {
+  AIRBORNE_STATES,
+  CONSOLE_STATES,
+  FLIGHT_MOVES,
+  OFFERED,
+  commandWithheldBy,
+  isFlightMove,
+  reasonsOf,
+  undecided,
+  withheldBy,
+} from './moves'
 
 const TRANSITIONS: readonly Transition[] = [
   'plan',
@@ -99,5 +109,39 @@ describe('the moves a member may ask (FR-OPS-02, FR-AUT-03, FR-CMD-01)', () => {
     ])
     expect(reasonsOf(request('refused', null))).toEqual([])
     expect(reasonsOf(request('accepted', ['stale']))).toEqual([])
+  })
+})
+
+const MEMBERS = [
+  { role: 'owner', pilot: true },
+  { role: 'owner', pilot: false },
+  { role: 'editor', pilot: true },
+  { role: 'editor', pilot: false },
+  { role: 'viewer', pilot: true },
+  { role: 'viewer', pilot: false },
+] as const
+
+describe("who commands an operation's aircraft (FR-CMD-01, FR-AUT-03)", () => {
+  it('asks an editor or owner who is a pilot, and names the reason of anyone else', () => {
+    expect(commandWithheldBy({ role: 'owner', pilot: true })).toBeNull()
+    expect(commandWithheldBy({ role: 'editor', pilot: true })).toBeNull()
+    expect(commandWithheldBy({ role: 'editor', pilot: false })).toBe('Pilots only')
+    expect(commandWithheldBy({ role: 'owner', pilot: false })).toBe('Pilots only')
+    expect(commandWithheldBy({ role: 'viewer', pilot: true })).toBe('Editors only')
+    expect(commandWithheldBy({ role: 'viewer', pilot: false })).toBe('Editors only')
+  })
+
+  it('withholds the flight moves exactly as it withholds a command', () => {
+    for (const member of MEMBERS) {
+      for (const move of FLIGHT_MOVES) {
+        expect(withheldBy(move, member)).toEqual(commandWithheldBy(member))
+      }
+    }
+  })
+
+  it('names the states the console shows in, and the airborne ones the safety controls command', () => {
+    expect(CONSOLE_STATES).toEqual(['simulating', 'launching', 'in_flight', 'paused', 'returning'])
+    expect(AIRBORNE_STATES).toEqual(['launching', 'in_flight', 'paused', 'returning'])
+    expect(AIRBORNE_STATES.every((state) => CONSOLE_STATES.includes(state))).toBe(true)
   })
 })

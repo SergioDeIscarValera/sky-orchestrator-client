@@ -130,7 +130,7 @@ the move back, in the operation's log; the console shows it beside the command (
 
 | Method | Code | Told as | Asserted by |
 | --- | --- | --- | --- |
-| prepare | `314010` | This file has not completed a simulation on this stack, or lies outside the phone's own envelope: the phone's record names the distance | `test_lifecycle.py::test_a_refused_prepare_returns_to_ready_with_its_meaning`; lane: `test_lifecycle_against_postgres.py::test_a_refused_launch_returns_to_ready_with_sky_orchestrators_meaning` |
+| prepare | `314010` | This file has not completed a simulation on this stack, lies outside the phone's own envelope, or asks a return height the aircraft did not take: the phone's record names which | `test_lifecycle.py::test_a_refused_prepare_returns_to_ready_with_its_meaning`; lane: `test_lifecycle_against_postgres.py::test_a_refused_launch_returns_to_ready_with_sky_orchestrators_meaning` |
 | prepare | `314003` | Sky Orchestrator refused the file | none |
 | prepare | `319015` | The stack's mode is not known yet | none |
 | prepare | `319004` | The task was prepared under the other mode: cancel it and prepare again | none |
@@ -142,6 +142,9 @@ the move back, in the operation's log; the console shows it beside the command (
 | execute | `316010`, otherwise | The aircraft is not detected | none |
 | execute | `319999` | The outcome is not known yet: SOC reads the flight's progress and the stack's status | `test_lifecycle.py::test_an_execute_with_an_unknown_outcome_waits_for_the_progress` (nothing moves) |
 | execute | `319015`, `319004` | As for prepare | none |
+| pause | `319046` | The task cannot be paused now: it is taking off, already paused, or over | `test_results.py::test_a_refusal_is_told_by_the_method_that_drew_it` |
+| recovery | `319042` | The task cannot be resumed now: it is not paused | `test_results.py::test_a_refusal_is_told_by_the_method_that_drew_it` |
+| recovery | `319044` | There is no task to resume | `test_results.py::test_a_refusal_is_told_by_the_method_that_drew_it` |
 | any | any other code | Sky Orchestrator refused it, with the number | none |
 
 ## Flight files
