@@ -11,7 +11,7 @@ import {
 import { BackendContext } from '../backend/context'
 import { useLiveState } from '../fleets/data'
 import { OrganizationContext } from '../organizations/context'
-import { organizationKey } from '../organizations/scope'
+import { CHECKS, EVENTS, organizationKey } from '../organizations/scope'
 import { FakeBackend, NORTH, PILOT } from '../test/FakeBackend'
 import { quietQueryClient } from '../test/render'
 import {
@@ -137,6 +137,105 @@ describe("the operation's log and checks, kept current from the state topic (FR-
       expect(result.current.data).toEqual([{ ...CHECK, state: 'fail', detail: 'Nine satellites.' }])
     })
     expect(reads).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a judgement that lands while an older read of the checks is still in flight', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await backend.createOperation(NORTH.id, DRAFT)
+    const waiting: OperationCheck = {
+      ...CHECK,
+      checkId: 'PF-SO-DRYRUN',
+      state: 'unknown',
+      detail: "Sky Orchestrator's dry run is still pending.",
+    }
+    const accepted: OperationCheck = { ...waiting, state: 'pass', detail: 'Accepts the file.' }
+    backend.addCheck(operation.id, waiting)
+    const { wrapper, queryClient } = opened(backend)
+    const { result } = renderHook(
+      () => {
+        useLiveState()
+        return useChecks(operation.id)
+      },
+      { wrapper },
+    )
+    await soon(() => {
+      expect(result.current.data).toEqual([waiting])
+    })
+    // A read asked before the judgement, which answers with the older judgement only after it lands.
+    let answer: () => void = () => undefined
+    vi.spyOn(backend, 'checks').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = () => {
+            resolve([waiting])
+          }
+        }),
+    )
+    act(() => {
+      void queryClient.invalidateQueries({
+        queryKey: organizationKey(NORTH.id, CHECKS, operation.id),
+      })
+    })
+    act(() => {
+      backend.addCheck(operation.id, accepted)
+    })
+    await soon(() => {
+      expect(result.current.data).toEqual([accepted])
+    })
+    await act(async () => {
+      answer()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(result.current.data).toEqual([accepted])
+  })
+
+  it('keeps a log entry that lands while an older read of the log is still in flight', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await backend.createOperation(NORTH.id, DRAFT)
+    const { wrapper, queryClient } = opened(backend)
+    const { result } = renderHook(
+      () => {
+        useLiveState()
+        return useEvents(operation.id)
+      },
+      { wrapper },
+    )
+    await soon(() => {
+      expect(result.current.data).toHaveLength(1)
+    })
+    // A read of the log asked before the entry, which answers without it only after the entry lands.
+    const older = result.current.data ?? []
+    let answer: () => void = () => undefined
+    vi.spyOn(backend, 'events').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = () => {
+            resolve(older)
+          }
+        }),
+    )
+    act(() => {
+      void queryClient.invalidateQueries({
+        queryKey: organizationKey(NORTH.id, EVENTS, operation.id),
+      })
+    })
+    act(() => {
+      backend.addEvent(
+        operation.id,
+        'transition_refused',
+        'soc-operations',
+        { transition: 'plan' },
+        'warning',
+      )
+    })
+    await soon(() => {
+      expect(result.current.data).toHaveLength(2)
+    })
+    await act(async () => {
+      answer()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(result.current.data).toHaveLength(2)
   })
 
   it('appends each log entry to the log in the cache, without reading the log again', async () => {
