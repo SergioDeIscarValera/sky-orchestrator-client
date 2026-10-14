@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import type {
   AssignmentChanges,
   AssignmentDraft,
+  Backend,
   OperationChanges,
   OperationCheck,
   OperationDraft,
@@ -27,6 +28,7 @@ import {
   OPERATORS,
   REQUESTS,
   STACKS,
+  TRACK,
   organizationKey,
 } from '../organizations/scope'
 
@@ -61,13 +63,21 @@ export function useAssignments(operationId: string) {
   })
 }
 
+/**
+ * An operation's operators, under the organization's key. Also read by the safety controls for each
+ * operation they command, so the flight console and the bar share one copy (useQueries takes it).
+ */
+export function operatorsQuery(backend: Backend, organizationId: string, operationId: string) {
+  return {
+    queryKey: organizationKey(organizationId, OPERATORS, operationId),
+    queryFn: () => backend.operators(operationId),
+  }
+}
+
 export function useOperators(operationId: string) {
   const backend = useBackend()
   const { organization } = useOrganization()
-  return useQuery({
-    queryKey: organizationKey(organization.id, OPERATORS, operationId),
-    queryFn: () => backend.operators(operationId),
-  })
+  return useQuery(operatorsQuery(backend, organization.id, operationId))
 }
 
 /** The members to name as operators: no broadcast carries a membership, so a join reads them again. */
@@ -107,13 +117,21 @@ export function useRequests(operationId: string) {
   })
 }
 
+/**
+ * An operation's flights, under the organization's key. The safety controls read each airborne
+ * operation's flights through it too, so the flight console and the bar share one copy.
+ */
+export function flightsQuery(backend: Backend, organizationId: string, operationId: string) {
+  return {
+    queryKey: organizationKey(organizationId, FLIGHTS, operationId),
+    queryFn: () => backend.flights(operationId),
+  }
+}
+
 export function useFlights(operationId: string) {
   const backend = useBackend()
   const { organization } = useOrganization()
-  return useQuery({
-    queryKey: organizationKey(organization.id, FLIGHTS, operationId),
-    queryFn: () => backend.flights(operationId),
-  })
+  return useQuery(flightsQuery(backend, organization.id, operationId))
 }
 
 export function useFlightStates(operationId: string) {
@@ -122,6 +140,26 @@ export function useFlightStates(operationId: string) {
   return useQuery({
     queryKey: organizationKey(organization.id, FLIGHT_STATES, operationId),
     queryFn: () => backend.flightStates(operationId),
+  })
+}
+
+/**
+ * How often a live flight's track is read again. soc-cloud writes its samples in batches every
+ * `telemetry_batch_s` (ADR-0007), a setting the console does not know, so it reads every 5 s.
+ */
+export const TRACK_REFRESH_MS = 5_000
+
+/**
+ * A flight's stored track (FR-TEL-05), read again every TRACK_REFRESH_MS while the flight has not
+ * ended, and never after: what was stored by then is what the track keeps.
+ */
+export function useFlightTrack(flightId: string, ended: boolean) {
+  const backend = useBackend()
+  const { organization } = useOrganization()
+  return useQuery({
+    queryKey: organizationKey(organization.id, TRACK, flightId),
+    queryFn: () => backend.track(flightId),
+    refetchInterval: ended ? false : TRACK_REFRESH_MS,
   })
 }
 

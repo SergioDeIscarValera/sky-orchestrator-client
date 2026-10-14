@@ -1,7 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 import { Raycaster } from 'three'
 
-import { useSelect, useView } from '../app/router'
+import { useSelect, useSelection, useView } from '../app/router'
 
 import type { Geodetic } from '../geometry/projection'
 import { Aircraft } from './Aircraft'
@@ -12,6 +12,7 @@ import { CANVAS_SETTINGS } from './canvas'
 import { Controls } from './Controls'
 import { GeofenceEditing } from './GeofenceEditing'
 import { Geofences } from './Geofences'
+import { OperationDrawing } from './OperationDrawing'
 import { WaylineDesigning } from './WaylineDesigning'
 import { Waylines } from './Waylines'
 import { useGroundTool } from './groundTool'
@@ -34,7 +35,9 @@ const RAYCASTER = { params: { ...new Raycaster().params, Line2: { threshold: LIN
 /** The one persistent scene (FR-SCN-01), loaded apart from the rest (NFR-PERF-05). */
 export default function Scene({ site, organizationId, origin, terrain }: Props) {
   const select = useSelect()
+  const selection = useSelection()
   const { panel } = useView()
+  const operationId = selection?.kind === 'operation' ? selection.operationId : null
   return (
     <Canvas
       {...CANVAS_SETTINGS}
@@ -61,6 +64,9 @@ export default function Scene({ site, organizationId, origin, terrain }: Props) 
       {origin !== null && <Geofences site={site} origin={origin} />}
       {origin !== null && panel === 'geofences' && <GeofenceEditing site={site} origin={origin} />}
       {origin !== null && <Waylines site={site} origin={origin} />}
+      {origin !== null && (
+        <OperationDrawing operationId={operationId} site={site} origin={origin} />
+      )}
       {origin !== null && panel === 'waylines' && <WaylineDesigning site={site} origin={origin} />}
       <Controls site={site} organizationId={organizationId} />
       <Meter />

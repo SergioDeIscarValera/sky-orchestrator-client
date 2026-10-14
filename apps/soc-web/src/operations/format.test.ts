@@ -9,9 +9,13 @@ import {
   CHECK_STATE_TONE,
   CHECK_STATE_WORDS,
   CHECK_WORDS,
+  COMMAND_STATUS_TONE,
   COMMAND_STATUS_WORDS,
   COMMAND_VERB_WORDS,
   EVENT_WORDS,
+  FLIGHT_MODE_TONE,
+  FLIGHT_MODE_WORDS,
+  FLIGHT_STATUS_TONE,
   FLIGHT_STATUS_WORDS,
   REQUEST_TONE,
   REQUEST_WORDS,
@@ -21,12 +25,14 @@ import {
   TRANSITION_WORDS,
   checkWords,
   eventWords,
+  formatPercent,
   inlineWords,
   isEventKind,
   localClock,
   memberName,
   operationSummary,
   operatorRoleWord,
+  requesterWords,
   valueWords,
 } from './format'
 
@@ -250,5 +256,55 @@ describe('an operation in its list, and its members (FR-OPS-01, IR-OPR)', () => 
 
   it('says the operator role in words', () => {
     expect([operatorRoleWord('pilot'), operatorRoleWord('observer')]).toEqual(['Pilot', 'Observer'])
+  })
+})
+
+describe("a flight's and a command's words and tones (FR-CMD-06, FR-SAF-04)", () => {
+  it("names a flight's mode, a real flight in the danger tone and a simulated one in info", () => {
+    expect(FLIGHT_MODE_WORDS).toEqual({ simulated: 'Simulated flight', real: 'Real flight' })
+    expect(FLIGHT_MODE_TONE).toEqual({ simulated: 'progress', real: 'bad' })
+  })
+
+  it('gives each flight status a tone of the pill palette, flying while it is in progress', () => {
+    expect(Object.keys(FLIGHT_STATUS_TONE).sort()).toEqual(Object.keys(FLIGHT_STATUS_WORDS).sort())
+    for (const tone of Object.values(FLIGHT_STATUS_TONE)) expect(PILL_TONE).toHaveProperty(tone)
+    expect(FLIGHT_STATUS_TONE).toMatchObject({
+      sent: 'progress',
+      in_progress: 'flying',
+      paused: 'caution',
+      ok: 'good',
+      failed: 'bad',
+      canceled: 'muted',
+    })
+  })
+
+  it('gives each command status its tone: progress while sent, bad when it is not accepted, muted when expired', () => {
+    expect(COMMAND_STATUS_TONE).toEqual({
+      pending: 'progress',
+      sent: 'progress',
+      accepted: 'good',
+      refused: 'bad',
+      failed: 'bad',
+      timed_out: 'bad',
+      expired: 'muted',
+    })
+  })
+
+  it('formats a percent with at most two decimals', () => {
+    expect(formatPercent(42)).toBe('42%')
+    expect(formatPercent(42.5)).toBe('42.5%')
+    expect(formatPercent(42.456)).toBe('42.46%')
+  })
+
+  it('names who asked a command: SOC when no one did, else the member, else the id', () => {
+    const ana: Member = {
+      profileId: 'user-ana',
+      displayName: 'Ana Ruiz',
+      email: null,
+      role: 'editor',
+    }
+    expect(requesterWords(null, [ana])).toBe('SOC')
+    expect(requesterWords('user-ana', [ana])).toBe('Ana Ruiz')
+    expect(requesterWords('user-gone', [ana])).toBe('user-gone')
   })
 })

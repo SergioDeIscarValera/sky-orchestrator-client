@@ -141,17 +141,18 @@ memory over an hour, the GPU's share and recorded flights as fixtures (#90).
 
 ## M4 — Operations · v0.5.0
 
-Needs Sky Orchestrator's M4 items `DEP-01` to `DEP-06`, listed in the
-dependency register of the requirements.
+Needs Sky Orchestrator's M4 items `DEP-01` to `DEP-06`, and `DEP-28` and `DEP-29`
+(delivered in SO's v0.4.3), listed in the dependency register of the
+requirements.
 
 | Step | Pull request |
 | --- | --- |
-| Operations, flights, files, events, telemetry history, and the operation transition requests `soc-operations` executes (ADR-0006) in the database | `feature/database/operations` |
-| `soc-operations`: the lifecycle, the checks, the simulated pass, launch and completion | `feature/operations/lifecycle` |
-| `soc-cloud`: commands on the wire, progress, the cloud geofence, telemetry history | `feature/cloud/flights` |
-| Operation wizard and preparation console | `feature/web/operation-preparation` |
-| Flight console: telemetry, commands, mode banner, track, live log | `feature/web/flight-console` |
-| End-to-end suite against SO's images and fake bridge in CI | `feature/infra/end-to-end` |
+| Operations, flights, files, events, telemetry history, and the operation transition requests `soc-operations` executes (ADR-0006) in the database | `feature/database/operations` (#115); the console's data, `feature/web/operations-data` (#116) |
+| `soc-operations`: the lifecycle, the checks, the simulated pass, launch and completion | `feature/operations/lifecycle` (#118) |
+| `soc-cloud`: commands on the wire, progress, the cloud geofence, telemetry history | `feature/libs/cloud-geofence` (#112), `feature/cloud/flight-progress` (#113), `feature/cloud/so-api` (#114), `feature/cloud/stack-watch` (#117: each stack's status and envelope, the dry runs), `feature/cloud/flights` (#119) |
+| Operation wizard and preparation console | `feature/web/operation-preparation` (#120) |
+| Flight console: telemetry, commands, mode banner, track, live log | `feature/web/flight-console` (#122, with the safety controls and a demo that flies the stored flight) |
+| End-to-end suite against SO's images and fake bridge in CI | `feature/infra/end-to-end` (#121, against SO v0.4.3: simulated and real) |
 
 **Exit criteria**
 

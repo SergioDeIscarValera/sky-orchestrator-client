@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 
 import type { FleetChanges, FleetDraft, StateEvent } from '../backend/backend'
 import { useBackend } from '../backend/context'
+import { openLive } from '../backend/live'
 import { placeRow } from '../operations/data'
 import { useOrganization } from '../organizations/context'
 import {
@@ -67,9 +68,11 @@ export function useLiveState(): void {
 
   useEffect(
     () =>
-      backend.onState(organization.id, (event) => {
-        void staleAfter(queryClient, organization.id, event)
-      }),
+      openLive('state', () =>
+        backend.onState(organization.id, (event) => {
+          void staleAfter(queryClient, organization.id, event)
+        }),
+      ),
     [backend, queryClient, organization.id],
   )
 }

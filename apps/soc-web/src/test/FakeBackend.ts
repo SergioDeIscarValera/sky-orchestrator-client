@@ -34,6 +34,7 @@ import {
   type SignInFailure,
   type StackView,
   type StateEvent,
+  type TrackPoint,
   type Transition,
   type TransitionRequest,
   type TransitionStatus,
@@ -408,6 +409,8 @@ export class FakeBackend implements Backend {
   readonly requestRows = new Map<string, TransitionRequest[]>()
   readonly flightRows = new Map<string, Flight[]>()
   readonly flightStateRows = new Map<string, FlightState>()
+  /** Each flight's stored samples, in time order: what soc-cloud wrote (FR-TEL-04). */
+  readonly trackRows = new Map<string, TrackPoint[]>()
   readonly commandRows = new Map<string, CommandIntent[]>()
   /** The stacks by organization, each with the envelope it last reported (IR-STK). */
   readonly stacksOf = new Map<string, StackView[]>()
@@ -936,6 +939,10 @@ export class FakeBackend implements Backend {
     return Promise.resolve(states)
   }
 
+  track(flightId: string): Promise<TrackPoint[]> {
+    return Promise.resolve([...(this.trackRows.get(flightId) ?? [])])
+  }
+
   commands(operationId: string): Promise<CommandIntent[]> {
     return Promise.resolve([...(this.commandRows.get(operationId) ?? [])].reverse())
   }
@@ -1027,6 +1034,19 @@ export class FakeBackend implements Backend {
       flight,
     ])
     this.emit(located[0], { kind: 'flight', payload: flightPayload(flight) })
+  }
+
+  /**
+   * Stores samples of a flight's track as soc-cloud writes them, kept in time order as the database
+   * reads them back (FR-TEL-05): a test's stand-in for the flight's recorded samples.
+   */
+  addTrackPoints(flightId: string, points: readonly TrackPoint[]): void {
+    if (this.findFlight(flightId) === undefined) throw new BackendError(`no flight ${flightId}`)
+    const kept = [...(this.trackRows.get(flightId) ?? []), ...points]
+    this.trackRows.set(
+      flightId,
+      kept.sort((a, b) => Date.parse(a.sampledAt) - Date.parse(b.sampledAt)),
+    )
   }
 
   /** A flight's latest progress, as soc-cloud reports it (IR-FST). */

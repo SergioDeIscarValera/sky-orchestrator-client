@@ -21,6 +21,8 @@ export class FakeSupabase {
   rpcFailure: { status: number; body: object } | null = null
   /** Answers for PostgREST tables, by method and path: `GET /rest/v1/fleets`. */
   readonly answers = new Map<string, { status: number; body: object | null }>()
+  /** The most rows an array answer holds, as PostgREST caps a response (Supabase's default is 1,000). */
+  maxRows = Number.POSITIVE_INFINITY
   unreachable = false
   /** As a browser sees GoTrue when CORS does not expose its API version header. */
   hidesApiVersion = false
@@ -62,9 +64,18 @@ export class FakeSupabase {
     if (answer !== undefined) {
       return answer.body === null
         ? new Response(null, { status: answer.status })
-        : this.json(answer.status, answer.body)
+        : this.json(answer.status, this.windowed(answer.body, url))
     }
     return this.json(404, { message: `the fake has no ${route}` })
+  }
+
+  /** An array answer as PostgREST windows it: the offset and limit the request names, capped at `maxRows`. */
+  private windowed(body: object, url: URL): object {
+    if (!Array.isArray(body)) return body
+    const rows: readonly unknown[] = body
+    const offset = Number(url.searchParams.get('offset') ?? 0)
+    const limit = Number(url.searchParams.get('limit') ?? Number.POSITIVE_INFINITY)
+    return rows.slice(offset, offset + Math.min(limit, this.maxRows))
   }
 
   private json(status: number, body: object): Response {
