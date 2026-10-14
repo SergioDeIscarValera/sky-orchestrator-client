@@ -242,6 +242,7 @@ services:
       FAKE_BRIDGE_ARM: ${FAKE_BRIDGE_ARM:-0}
       FAKE_BRIDGE_PACE: ${FAKE_BRIDGE_PACE:-1}
       FAKE_BRIDGE_REPLAY: ${FAKE_BRIDGE_REPLAY:-}
+      FAKE_BRIDGE_REAL: ${FAKE_BRIDGE_REAL:-0}
     volumes:
       - ${FAKE_BRIDGE_CONFIG:-../config/fake-bridge.json}:/etc/fake-bridge/config.json:ro
       # Recorded flights to play back (ADR-0034, NFR-TEST-05): synthetic, at the test site.
