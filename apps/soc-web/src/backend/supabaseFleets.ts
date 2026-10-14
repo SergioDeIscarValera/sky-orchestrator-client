@@ -131,6 +131,15 @@ const NOT_ALLOWED = '42501'
 /** The words the trigger raises fleet_identity_in_flight with: PostgREST sends no constraint name. */
 const FLYING = 'its aircraft is flying'
 
+/**
+ * How long after joining the state topic the console reads everything once more when no broadcast
+ * has come. Realtime starts delivering the database's broadcasts to a join a moment after it: a
+ * change committed in between reaches no listener, and the read the join set off may have run
+ * before it was committed (found by the console's end to end against Sky Orchestrator: Plan
+ * accepted, the header still reading Draft). The first broadcast after the join ends the wait.
+ */
+export const JOIN_SETTLE_MS = 5000
+
 export function refusal(error: PostgrestError): BackendError {
   const constraint = /constraint "([^"]+)"/.exec(error.message)?.[1]
   const known = constraint === undefined ? undefined : REFUSALS[constraint]
@@ -301,16 +310,42 @@ export function fleetOperations(client: SupabaseClient, channel: ChannelFactory)
 
     onState(organizationId: string, listener: (event: StateEvent) => void): () => void {
       const subscription = channel(`org:${organizationId}:soc:state`)
+      const joined = () => {
+        listener({ kind: 'joined', payload: {} })
+      }
+      // Whether the database's broadcasts are yet known to reach this join, and the read once more
+      // set for when none has come by JOIN_SETTLE_MS.
+      let delivering = true
+      let settle: ReturnType<typeof setTimeout> | null = null
+      const stopSettling = () => {
+        if (settle !== null) clearTimeout(settle)
+        settle = null
+      }
       for (const kind of STATE_EVENTS) {
         subscription.on('broadcast', { event: kind }, ({ payload }) => {
           listener({ kind, payload })
+          // The first broadcast after a join shows the database's broadcasts reach it: whatever
+          // was committed before, and lost on the way, is read now.
+          if (!delivering) {
+            delivering = true
+            stopSettling()
+            joined()
+          }
         })
       }
       // Realtime calls back SUBSCRIBED on the first join and on every rejoin after a drop.
       subscription.subscribe((status) => {
-        if (status === 'SUBSCRIBED') listener({ kind: 'joined', payload: {} })
+        if (status !== 'SUBSCRIBED') return
+        joined()
+        delivering = false
+        stopSettling()
+        settle = setTimeout(() => {
+          settle = null
+          joined()
+        }, JOIN_SETTLE_MS)
       })
       return () => {
+        stopSettling()
         void subscription.unsubscribe()
       }
     },

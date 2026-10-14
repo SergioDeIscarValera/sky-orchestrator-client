@@ -439,7 +439,9 @@ export class FieldRefusedError extends BackendError {
 /**
  * A change on the organization's state topic (ADR-0007), from the database's triggers, or
  * `joined` each time the topic is joined: broadcasts sent while away are not replayed, so
- * whatever was read before then may be stale.
+ * whatever was read before then may be stale. `joined` comes once more after a join, with its
+ * first broadcast or JOIN_SETTLE_MS without one, since Realtime delivers to a join only a
+ * moment after it (supabaseFleets.ts).
  */
 export interface StateEvent {
   readonly kind:
