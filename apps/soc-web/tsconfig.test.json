@@ -21,6 +21,7 @@
   },
   "include": [
     "src",
+    "scripts/demo/aircraft.test.ts",
     "scripts/demo/fake-supabase.test.ts",
     "scripts/demo/fake-operations.test.ts",
     "scripts/demo/lifecycle.test.ts",

@@ -9,6 +9,7 @@ import {
   TRANSITION_REQUEST_ROW,
 } from '../../src/backend/operationRows'
 import { z } from '../../src/schema'
+import { sampleOf as consoleSampleOf } from '../../src/telemetry/sample'
 import { startFakeSupabase, type FakeSupabase } from './fake-supabase.mjs'
 import { demoSupabaseKey } from './run.mjs'
 
@@ -17,9 +18,14 @@ const NORTH = '11111111-1111-4111-8111-111111111111'
 const OPERATION = '66666666-6666-4666-8666-666666666666'
 const ASSIGNMENT = '77777777-7777-4777-8777-777777777777'
 const STATE_TOPIC = `realtime:org:${NORTH}:soc:state`
+// The topic the console joins for the live telemetry of Finca Norte (src/backend/supabaseTelemetry.ts).
+const TELEMETRY_TOPIC = `realtime:org:${NORTH}:soc:telemetry`
 const OTHER_TOPIC = 'realtime:org:22222222-2222-4222-8222-222222222222:soc:state'
 
-/** The state events of an operation: the seven the console's STATE_EVENTS lists for it. */
+/**
+ * The state events the console reads for an operation (STATE_EVENTS), once the simulation is ready: the
+ * operation's seven, and the stack's change to real mode (soc.broadcast_stack), sent at ready.
+ */
 const OPERATION_EVENTS = [
   'operation',
   'flight',
@@ -28,6 +34,7 @@ const OPERATION_EVENTS = [
   'transition_request',
   'operation_check',
   'command_intent',
+  'stack',
 ]
 
 /** Short timings, so a whole operation runs in well under a second of real time. */
@@ -37,6 +44,7 @@ const FAST = {
   commandStepMs: 3,
   progressTickMs: 4,
   taskMs: 40,
+  telemetryTickMs: 3,
   takeOffMs: 6,
   landMs: 6,
   returnHomeMs: 10,
@@ -209,9 +217,9 @@ describe('the operations broadcast on the state topic, as the database does', ()
     await waitFor(
       () =>
         client.broadcasts.some(
-          (each) => each.event === 'operation' && each.payload.state === 'simulated',
+          (each) => each.event === 'operation' && each.payload.state === 'ready',
         ),
-      'the simulated broadcast',
+      'the ready broadcast',
     )
 
     const events = new Set(client.broadcasts.map((each) => each.event))
@@ -227,7 +235,8 @@ describe('the operations broadcast on the state topic, as the database does', ()
         expect(Object.keys(payload).sort()).toEqual(['end_reason', 'id', 'state', 'updated_at'])
       }
     }
-    expect(client.broadcasts.filter((each) => each.event === 'operation_check')).toHaveLength(16)
+    // The sixteen checks, and the two mode checks written again when the stack turns to real mode.
+    expect(client.broadcasts.filter((each) => each.event === 'operation_check')).toHaveLength(18)
     const logged = client.broadcasts
       .filter((each) => each.event === 'operation_event')
       .map((each) => each.payload.kind)
@@ -287,5 +296,82 @@ describe('the operations broadcast on the state topic, as the database does', ()
     })
     expect(refused.status).toBe(403)
     expect(refused.payload).toMatchObject({ code: '42501' })
+  })
+})
+
+/** A flight of the operation as PostgREST answers it: when it executed, and when it ended. */
+const FLIGHT = z.object({ id: z.string(), executed_at: z.string(), ended_at: z.string() })
+
+/** A sample of a flight's track, as the console's track read selects it (FR-TEL-05). */
+const TRACK_SAMPLE = z.object({
+  sampled_at: z.string(),
+  latitude: z.number(),
+  longitude: z.number(),
+  height_m: z.number(),
+})
+
+/** The operation's flights, in the order they were prepared. */
+async function flightsOf(url: string): Promise<z.infer<typeof FLIGHT>[]> {
+  const path = `/rest/v1/flights?operation_id=eq.${OPERATION}`
+  const parsed = z.array(FLIGHT).safeParse((await call(url, 'GET', path)).payload)
+  if (!parsed.success) throw new Error('the flights are not a list of flights')
+  return parsed.data
+}
+
+/** A flight's track, asked for as the console asks for it: its samples in time order. */
+async function trackOf(url: string, flight: string): Promise<z.infer<typeof TRACK_SAMPLE>[]> {
+  const path = `/rest/v1/telemetry_samples?flight_id=eq.${flight}&select=sampled_at,latitude,longitude,height_m&order=sampled_at.asc`
+  const parsed = z.array(TRACK_SAMPLE).safeParse((await call(url, 'GET', path)).payload)
+  if (!parsed.success) throw new Error('the track is not a list of samples')
+  return parsed.data
+}
+
+describe("the aircraft's telemetry, sent on its topic and stored as its flight's track (FR-TEL-01, FR-TEL-05)", () => {
+  it("sends the aircraft's samples to a socket joined to the telemetry topic, each one parsing as the console reads it", async () => {
+    const client = await listenTo(TELEMETRY_TOPIC)
+    await waitFor(() => client.broadcasts.length >= 3, 'three samples')
+    for (const { event, payload } of client.broadcasts) {
+      expect(event).toBe('sample')
+      expect(consoleSampleOf(payload)).not.toBeNull()
+      expect(payload).toMatchObject({
+        stack: 'lab',
+        gateway_sn: 'SOTESTDOCK01',
+        aircraft_sn: '1WNBH9E00A0042',
+      })
+    }
+  })
+
+  it("stores each flight's samples as its track, in time order, a simulation's apart from a launch's", async () => {
+    await makeFlyable(fake.url)
+    await ask(fake.url, 'plan')
+    await waitFor(async () => (await stateOf(fake.url)) === 'planned', 'planned')
+    await ask(fake.url, 'prepare')
+    await waitFor(async () => (await stateOf(fake.url)) === 'preparing', 'preparing')
+    await ask(fake.url, 'simulate')
+    await waitFor(async () => (await stateOf(fake.url)) === 'ready', 'ready after the simulation')
+    await ask(fake.url, 'launch')
+    await waitFor(async () => (await stateOf(fake.url)) === 'completed', 'completed')
+
+    const [simulated, launched] = await flightsOf(fake.url)
+    if (simulated === undefined || launched === undefined) throw new Error('two flights were flown')
+    const simulation = await trackOf(fake.url, simulated.id)
+    const launch = await trackOf(fake.url, launched.id)
+    expect(simulation.length).toBeGreaterThan(0)
+    expect(launch.length).toBeGreaterThan(0)
+    for (const track of [simulation, launch]) {
+      const times = track.map((sample) => Date.parse(sample.sampled_at))
+      expect(times).toEqual([...times].sort((a, b) => a - b))
+      expect(new Set(times).size).toBe(times.length)
+    }
+    // Each track lies within its own flight, from its execute until it ended.
+    for (const sample of simulation) {
+      expect(sample.sampled_at >= simulated.executed_at).toBe(true)
+      expect(sample.sampled_at <= simulated.ended_at).toBe(true)
+    }
+    for (const sample of launch) {
+      expect(sample.sampled_at >= launched.executed_at).toBe(true)
+      expect(sample.sampled_at <= launched.ended_at).toBe(true)
+    }
+    expect(simulated.ended_at <= launched.executed_at).toBe(true)
   })
 })

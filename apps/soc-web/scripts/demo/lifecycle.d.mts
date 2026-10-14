@@ -1,3 +1,4 @@
+import type { Identity, Position, Sample } from './aircraft.mjs'
 import type { Db, Row } from './operation-tables.mjs'
 
 /** The demo's timings in milliseconds (lifecycle.mjs, TIMINGS). */
@@ -7,6 +8,7 @@ export interface Timings {
     readonly commandStepMs: number
     readonly progressTickMs: number
     readonly taskMs: number
+    readonly telemetryTickMs: number
     readonly takeOffMs: number
     readonly landMs: number
     readonly returnHomeMs: number
@@ -15,11 +17,15 @@ export interface Timings {
 
 export declare const TIMINGS: Readonly<Timings>
 
-/** The demo's one stack as soc-cloud reports it: real mode, under one configuration. */
-export declare const STACK: Readonly<{
-    readonly simulatorMode: boolean
-    readonly configFingerprint: string
-}>
+/** The demo's stack as soc-operations reads it: its mode, its phone's simulator, its configuration; null where unknown. */
+export interface StackState {
+    readonly simulatorMode: boolean | null
+    readonly simulatorActive: boolean | null
+    readonly configFingerprint: string | null
+}
+
+/** The status soc-cloud records for the demo's stack (soc.stacks.status), in the mode given. */
+export declare function stackStatus(simulatorMode: boolean): Readonly<Record<string, unknown>>
 
 /** The moves the module makes, each as [from, to]. */
 export declare const MOVES: ReadonlyArray<readonly [string, string]>
@@ -36,8 +42,8 @@ export interface JudgedCheck {
     readonly evaluated_at: string
 }
 
-/** The sixteen checks, as judged at `evaluatedAt`: every one passes. */
-export declare function judgeChecks(evaluatedAt: string): JudgedCheck[]
+/** The sixteen checks, as judged at `evaluatedAt` for a stack in the state given: every one passes, but the mode checks. */
+export declare function judgeChecks(evaluatedAt: string, stack: StackState): JudgedCheck[]
 
 export interface Lifecycle {
     /** A transition request was inserted: it is claimed and decided on its timers. */
@@ -48,11 +54,25 @@ export interface Lifecycle {
     close(): void
 }
 
+/** The demo's aircraft: where it is named, and its takeoff point, where it stands before its first flight. */
+export interface DemoAircraft extends Identity {
+    readonly organizationId: string
+    readonly home: Position
+}
+
+/** Where the lifecycle sends each sample of the aircraft, and stores the rows of a flight's track. */
+export interface Telemetry {
+    readonly send: (organization: string, sample: Sample) => void
+    readonly store: (row: Row) => void
+}
+
 export interface LifecycleOptions {
     readonly db: Db
     readonly roles: { readonly canEdit: (organization: string, profile?: string) => boolean }
     readonly timings?: Partial<Timings>
     readonly onError?: (error: unknown) => void
+    readonly aircraft?: DemoAircraft | null
+    readonly telemetry?: Telemetry
 }
 
 /** soc-operations and soc-cloud on the database, on the demo's timers. */

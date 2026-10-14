@@ -3,36 +3,64 @@
 // services/soc-operations/src/soc_operations/lifecycle.py: onRequest, onOutcome, onProgress and
 // onChecks are pure functions of a snapshot of the operation, and the moves they make are the ones
 // contracts/operations/lifecycle.json lists. The stack's side is soc-cloud's: it replies to each
-// command, reports each flight's progress, and sees the aircraft take off and land. Those are timers,
-// at the TIMINGS below, so a run is deterministic and nothing else reads the clock.
+// command, reports each flight's progress, and sees the aircraft take off and land. The stack's mode is
+// state: its phone starts in simulator mode, turns to real mode once a simulation is ready (as its operator
+// turns it), and back to simulator mode when its operation closes. The aircraft flies
+// each task along the flight's stored route (aircraft.mjs has the pose), sends a sample every
+// telemetryTickMs, heartbeat included, and a flight's samples are stored as its track. Those are timers,
+// at the TIMINGS below, so a run is deterministic: a pose follows the elapsed times of the timers, and
+// only the stamps of the samples read the clock.
 import { createHash, randomUUID } from 'node:crypto'
 
-import { DatabaseError } from './operation-tables.mjs'
+import {
+  groundMotion,
+  landedMotion,
+  MODES,
+  progressedMotion,
+  returnMotion,
+  routeMotion,
+  routeOf,
+  sampleOf,
+  tickedMotion,
+} from './aircraft.mjs'
+import { DatabaseError, TERMINAL } from './operation-tables.mjs'
 
 /**
  * The demo's timings, in milliseconds from when each thing is asked or sent. A transition request is
  * claimed (running) and decided (accepted or refused) after claimMs and decideMs. A command intent is
  * sent and then answered, commandStepMs apart. A task runs from 0 to 100 percent in taskMs, its
- * progress written every progressTickMs. A real flight lands landMs after its task ends, or
- * returnHomeMs after a return home. A simulated operation becomes ready readyMs after its simulation.
+ * progress written every progressTickMs, and the aircraft flies its route over the same time. The
+ * aircraft sends a sample every telemetryTickMs. A flight's aircraft lands landMs after its task ends,
+ * or returnHomeMs after a return home, simulated or real. A real flight's take-off is takeOffMs after
+ * its execute. A simulated operation becomes ready readyMs after its simulation.
  */
 export const TIMINGS = Object.freeze({
   claimMs: 200,
   decideMs: 800,
   commandStepMs: 300,
   progressTickMs: 500,
-  taskMs: 12_000,
+  taskMs: 60_000,
+  telemetryTickMs: 500,
   takeOffMs: 1_000,
   landMs: 3_000,
   returnHomeMs: 6_000,
   readyMs: 2_000,
 })
 
-/** The demo's one stack as soc-cloud last reported it: in real mode, under one configuration. */
-export const STACK = Object.freeze({
-  simulatorMode: false,
-  configFingerprint: 'demo-configuration',
-})
+/** The demo's configuration: the fingerprint its phone reports (soc-operations' config_fingerprint). */
+const CONFIGURATION = 'demo-configuration'
+
+/**
+ * The status soc-cloud records for the demo's stack (soc.stacks.status): its mode, its phone's simulator
+ * (on in simulator mode, off in real mode) and its configuration. The demo's stack starts in simulator mode.
+ */
+export function stackStatus(simulatorMode) {
+  return {
+    simulator_mode: simulatorMode,
+    simulator_active: simulatorMode,
+    config_fingerprint: CONFIGURATION,
+  }
+}
 
 /** The moves this module makes. Each is one contracts/operations/lifecycle.json lists (a test holds it). */
 export const MOVES = Object.freeze([
@@ -60,9 +88,9 @@ export const MOVES = Object.freeze([
 ])
 
 /**
- * The sixteen preflight checks (FR-OPS-05), in the console's order (src/operations/format.ts), with
- * the values a stack in real mode reads them at: each passes, against the config contract's own
- * thresholds. PF-CLOCK is a warning and does not block.
+ * The fourteen preflight checks (FR-OPS-05) that do not depend on the stack's mode, with the values a
+ * stack reads them at: each passes, against the config contract's own thresholds. PF-MODE and
+ * PF-SIMULATOR are judged from the mode by modeChecks. PF-CLOCK is a warning and does not block.
  */
 const PASSING = [
   [
@@ -116,13 +144,6 @@ const PASSING = [
     { radius_m: 1000, envelope_max_height_m: 120, ceiling_m: 30 },
     "All 5 vertices lie within the envelope's 1000.0 m circle, and the 30.0 m ceiling is within its 120.0 m limit.",
   ],
-  ['PF-MODE', true, { simulator_mode: false }, 'The stack is in real mode.'],
-  [
-    'PF-SIMULATOR',
-    true,
-    { simulator_mode: false, simulator_active: false },
-    "The phone's simulator is off, as real mode requires.",
-  ],
   [
     'PF-ARMED',
     true,
@@ -139,11 +160,83 @@ const PASSING = [
 ]
 
 /** The sixteen check ids, in the console's order. */
-export const PF_CHECK_IDS = Object.freeze(PASSING.map(([id]) => id))
+export const PF_CHECK_IDS = Object.freeze([
+  'PF-LINK',
+  'PF-ONLINE',
+  'PF-FRESH',
+  'PF-GNSS',
+  'PF-BATTERY',
+  'PF-GROUNDED',
+  'PF-INSIDE',
+  'PF-TAKEOFF',
+  'PF-WAYLINE',
+  'PF-SO-DRYRUN',
+  'PF-ENVELOPE',
+  'PF-MODE',
+  'PF-SIMULATOR',
+  'PF-ARMED',
+  'PF-IDLE',
+  'PF-CLOCK',
+])
 
-/** The checks as judged at `evaluatedAt`: every one passes. */
-export function judgeChecks(evaluatedAt) {
-  return PASSING.map(([check_id, blocking, value, detail]) => ({
+/**
+ * PF-MODE and PF-SIMULATOR as the stack's mode reads (soc-operations' _mode and _simulator): both name
+ * the mode and pass in either mode, when the phone's simulator agrees with it. A mode the stack does not
+ * report is unknown, and so is a simulator state it does not report; a disagreement fails and names the
+ * one thing the operator must do on the phone. Both block, as every blocking check does.
+ */
+function modeChecks(stack, evaluatedAt) {
+  const { simulatorMode: mode, simulatorActive: active } = stack
+  const check = (check_id, state, value, detail) => ({
+    check_id,
+    state,
+    blocking: true,
+    value,
+    detail,
+    evaluated_at: evaluatedAt,
+  })
+  if (mode === null) {
+    return [
+      check('PF-MODE', 'unknown', { simulator_mode: null }, 'The stack reports no simulator mode.'),
+      check(
+        'PF-SIMULATOR',
+        'unknown',
+        { simulator_mode: null, simulator_active: active },
+        "The stack's simulator mode is not known.",
+      ),
+    ]
+  }
+  const value = { simulator_mode: mode, simulator_active: active }
+  const modeCheck = check(
+    'PF-MODE',
+    'pass',
+    { simulator_mode: mode },
+    mode ? 'The stack is in simulator mode.' : 'The stack is in real mode.',
+  )
+  if (active === null) {
+    return [
+      modeCheck,
+      check('PF-SIMULATOR', 'unknown', value, "The phone's simulator state is not known."),
+    ]
+  }
+  if (active !== mode) {
+    const detail = mode
+      ? "The stack is in simulator mode: turn the phone's simulator on"
+      : "The stack is in real mode: turn the phone's simulator off"
+    return [modeCheck, check('PF-SIMULATOR', 'fail', value, detail)]
+  }
+  const detail = mode
+    ? "The phone's simulator is on, as simulator mode requires."
+    : "The phone's simulator is off, as real mode requires."
+  return [modeCheck, check('PF-SIMULATOR', 'pass', value, detail)]
+}
+
+/**
+ * The checks as judged at `evaluatedAt`, for a stack in the state `stack` names: every check passes but
+ * the two mode checks, which name the mode the stack is in (modeChecks), in the console's order.
+ */
+export function judgeChecks(evaluatedAt, stack) {
+  const passing = PASSING.map(([check_id, blocking, value, detail]) => ({
     check_id,
     state: 'pass',
     blocking,
@@ -151,13 +244,15 @@ export function judgeChecks(evaluatedAt) {
     detail,
     evaluated_at: evaluatedAt,
   }))
+  const armed = passing.findIndex((check) => check.check_id === 'PF-ARMED')
+  return [...passing.slice(0, armed), ...modeChecks(stack, evaluatedAt), ...passing.slice(armed)]
 }
 
 /** DJI's result for a return home the operator sent (soc-cloud's END_RESULTS: USER_SEND_RTH). */
 const RETURN_HOME_RESULT = 322283
-/** DJI's flight modes the demo's flights report: automatic takeoff, then on the ground. */
-const TOOK_OFF_MODE = 4
-const LANDED_MODE = 0
+/** The modes of the two moments the log records: automatic takeoff, and idle once on the ground. */
+const TOOK_OFF_MODE = MODES.automaticTakeoff
+const LANDED_MODE = MODES.idle
 /** The lowest return-to-home altitude Sky Orchestrator sends (soc-operations' LEAST_RTH_ALTITUDE_M). */
 const LEAST_RTH_ALTITUDE_M = 20
 /** The flight statuses that end a task (soc-cloud's TERMINAL). */
@@ -271,6 +366,14 @@ function onSimulate(snapshot, checks) {
   if (snapshot.state !== 'preparing')
     return refuse(`the operation is ${snapshot.state}, not preparing`)
   const reasons = blockingReasons(checks)
+  // A simulation runs in simulator mode, and only then (soc-operations' _simulate).
+  if (snapshot.stack.simulatorMode !== true) {
+    reasons.push(
+      snapshot.stack.simulatorMode === false
+        ? 'the stack is in real mode: a simulation needs simulator mode'
+        : "the stack's mode is not known",
+    )
+  }
   const assignment = snapshot.assignments[0]
   if (snapshot.file === null) reasons.push('the operation has no flight file: prepare it again')
   if (snapshot.takeoffSecurityHeightM === null || assignment === undefined) {
@@ -426,12 +529,20 @@ const messageOf = (error) => (error instanceof Error ? error.message : String(er
  * The play: soc-operations and soc-cloud on `db` (operation-tables.mjs), with the timers of TIMINGS.
  * `transitionAsked` and `commandAsked` are called once for each request the database inserted;
  * `close` clears every timer, so the process can exit. `onError` hears an error a timer met.
+ *
+ * `aircraft` is the demo's aircraft: its organization, its stack and gateway and aircraft, and its
+ * takeoff point ([longitude, latitude]), where it stands before its first flight. With it, the aircraft
+ * sends a sample every telemetryTickMs through `telemetry.send(organization, sample)`, and the samples
+ * of a flight are handed to `telemetry.store(row)` as its track while the flight is unended. Without
+ * it, the lifecycle sends no telemetry.
  */
 export function createLifecycle({
   db,
   roles,
   timings: given = {},
   onError = (error) => console.error(error),
+  aircraft = null,
+  telemetry = { send: () => undefined, store: () => undefined },
 }) {
   const timings = { ...TIMINGS, ...given }
   const pending = new Set()
@@ -439,8 +550,18 @@ export function createLifecycle({
   const files = new Map()
   /** How many waypoints each flight's stored flight has: the waypoint its progress follows. */
   const waypointCounts = new Map()
+  /** Each flight's route, as the aircraft flies it, built at its prepare (null when it has no waypoint). */
+  const routes = new Map()
   /** Each flight's task: whether it runs, and the timers that drive it. */
   const tasks = new Map()
+  /** The aircraft's motion: what it stands on, flies or returns along. Starts on the ground at home. */
+  let motion = groundMotion(aircraft?.home ?? [0, 0])
+  /** The flight the aircraft last started flying: its samples are stored while it is unended. */
+  let flightInAir = null
+  /** The last sample time stored as a track row: a row is stored once per millisecond, as the table keys it. */
+  let storedAtMs = -Infinity
+  /** How many returns home the aircraft has begun: each numbered, so only its own landing lands it. */
+  let returns = 0
   let closed = false
 
   function schedule(ms, action) {
@@ -543,7 +664,7 @@ export function createLifecycle({
             row.transition === 'stop' &&
             row.status === 'accepted',
         ),
-      stack: STACK,
+      stack: stackOf(),
     }
   }
 
@@ -551,6 +672,35 @@ export function createLifecycle({
     const flight = db.rows('flights').find((row) => row.id === flightId)
     if (flight === undefined) throw new DatabaseError('P0002', `flight ${flightId} does not exist`)
     return flight
+  }
+
+  /** The row of the demo's stack (soc.stacks), or undefined when there is no aircraft to fly. */
+  function stackRow() {
+    if (aircraft === null) return undefined
+    return db.rows('stacks').find((row) => row.gateway_sn === aircraft.gatewaySn)
+  }
+
+  /** The stack as soc-operations reads it: its mode, its phone's simulator and its configuration; null where unknown. */
+  function stackOf() {
+    const status = stackRow()?.status ?? null
+    return {
+      simulatorMode: status?.simulator_mode ?? null,
+      simulatorActive: status?.simulator_active ?? null,
+      configFingerprint: status?.config_fingerprint ?? null,
+    }
+  }
+
+  /**
+   * The demo's phone turns to its simulator (`simulatorMode` true) or to real mode, as its operator turns
+   * it. Its row is written, and the write is broadcast as a stack change; a phone already in that mode is left.
+   */
+  function setStackMode(simulatorMode) {
+    const row = stackRow()
+    if (row === undefined || row.status?.simulator_mode === simulatorMode) return
+    db.updateRow('stacks', row, {
+      status: { ...row.status, ...stackStatus(simulatorMode) },
+      updated_at: new Date().toISOString(),
+    })
   }
 
   function waypointAt(flightId, fraction) {
@@ -582,6 +732,8 @@ export function createLifecycle({
         case 'move':
           db.move(operation, action.to, action.cause, 'soc-operations', actor, action.endReason)
           if (action.to === 'simulated') schedule(timings.readyMs, () => becomeReady(operation))
+          // The operator readies the phone's simulator again once its operation is closed.
+          if (TERMINAL.has(action.to)) setStackMode(true)
           break
         case 'build':
           buildFile(snapshot)
@@ -647,6 +799,7 @@ export function createLifecycle({
       ? assignment.flight.waypoints.length
       : 0
     waypointCounts.set(flight.id, count)
+    routes.set(flight.id, routeOf(assignment.flight.waypoints))
     db.log(
       snapshot.operationId,
       'flight_prepared',
@@ -716,6 +869,7 @@ export function createLifecycle({
 
   function startTask(flightId) {
     const flight = flightRow(flightId)
+    flyRoute(flightId)
     const task = { running: true, stopped: false, elapsedMs: 0, timer: null }
     tasks.set(flightId, task)
     progressTo(flightId, 'in_progress', {
@@ -731,6 +885,7 @@ export function createLifecycle({
     const task = tasks.get(flightId)
     if (task === undefined || !task.running || flightRow(flightId).ended_at !== null) return
     task.elapsedMs = Math.min(timings.taskMs, task.elapsedMs + timings.progressTickMs)
+    motion = progressedMotion(motion, flightId, task.elapsedMs)
     if (task.elapsedMs >= timings.taskMs) {
       finishTask(flightId)
       return
@@ -746,12 +901,14 @@ export function createLifecycle({
   function finishTask(flightId) {
     const task = tasks.get(flightId)
     if (task !== undefined) task.running = false
+    motion = progressedMotion(motion, flightId, timings.taskMs)
     progressTo(flightId, 'ok', {
       result: 0,
       percent: 100,
       waypoint: waypointAt(flightId, 1),
       endReason: 'completed',
     })
+    aircraftReturns(timings.landMs)
     if (flightRow(flightId).mode === 'real') schedule(timings.landMs, () => land(flightId))
   }
 
@@ -804,6 +961,7 @@ export function createLifecycle({
       result: RETURN_HOME_RESULT,
       endReason: 'operator_return',
     })
+    aircraftReturns(timings.returnHomeMs)
     if (flight.mode === 'real') schedule(timings.returnHomeMs, () => land(flightId))
   }
 
@@ -816,6 +974,51 @@ export function createLifecycle({
       result: 0,
       endReason: 'cancelled',
     })
+  }
+
+  /** A flight's task starts: the aircraft takes its route, and the flight's samples are stored from now. */
+  function flyRoute(flightId) {
+    flightInAir = flightId
+    storedAtMs = -Infinity
+    const route = routes.get(flightId) ?? null
+    if (route !== null) motion = routeMotion(route, timings.taskMs, flightId)
+  }
+
+  /**
+   * The aircraft returns home from where it is, over `durationMs`, and stands on its takeoff point once
+   * that time is up. A return already under way is not begun again.
+   */
+  function aircraftReturns(durationMs) {
+    if (motion.kind === 'return') return
+    returns += 1
+    const returnId = returns
+    motion = returnMotion(motion, durationMs, returnId)
+    schedule(durationMs, () => {
+      if (motion.kind === 'return' && motion.returnId === returnId) motion = landedMotion(motion)
+    })
+  }
+
+  /**
+   * One telemetry tick: the aircraft's sample is sent, and it is stored as a row of the flight in the air
+   * while that flight is unended. The next tick is set first, so an error in this one, which schedule
+   * reports, does not stop the heartbeat.
+   */
+  function telemetryTick() {
+    schedule(timings.telemetryTickMs, telemetryTick)
+    const nowMs = Date.now()
+    const sample = sampleOf(motion, aircraft, nowMs)
+    telemetry.send(aircraft.organizationId, sample)
+    if (flightInAir !== null && flightRow(flightInAir).ended_at === null && nowMs > storedAtMs) {
+      storedAtMs = nowMs
+      telemetry.store({
+        flight_id: flightInAir,
+        sampled_at: new Date(nowMs).toISOString(),
+        latitude: sample.latitude_deg,
+        longitude: sample.longitude_deg,
+        height_m: sample.height_m,
+      })
+    }
+    motion = tickedMotion(motion, timings.telemetryTickMs)
   }
 
   function endFlight(flightId, reason) {
@@ -833,9 +1036,11 @@ export function createLifecycle({
   }
 
   function becomeReady(operationId) {
+    if (snapshotOf(operationId).state !== 'simulated') return
+    // The operator turns the phone to real mode once its simulation is through: then the checks are judged.
+    setStackMode(false)
     const snapshot = snapshotOf(operationId)
-    if (snapshot.state !== 'simulated') return
-    const checks = judgeChecks(new Date().toISOString())
+    const checks = judgeChecks(new Date().toISOString(), snapshot.stack)
     db.recordChecks(operationId, checks)
     apply(snapshot, onChecks(snapshot, checks).actions, null)
   }
@@ -846,7 +1051,7 @@ export function createLifecycle({
     if (request === undefined || request.status !== 'running') return
     try {
       const snapshot = snapshotOf(request.operation_id)
-      const checks = judgeChecks(new Date().toISOString())
+      const checks = judgeChecks(new Date().toISOString(), snapshot.stack)
       db.recordChecks(request.operation_id, checks)
       const decision = onRequest(snapshot, request.transition, checks)
       apply(snapshot, decision.actions, request.requested_by)
@@ -859,6 +1064,7 @@ export function createLifecycle({
     }
   }
 
+  if (aircraft !== null) schedule(timings.telemetryTickMs, telemetryTick)
   return {
     /** A transition request was asked: claimed after claimMs, decided after decideMs. */
     transitionAsked(requestId) {

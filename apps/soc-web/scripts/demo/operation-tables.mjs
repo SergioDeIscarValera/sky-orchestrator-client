@@ -83,6 +83,16 @@ const BROADCASTS = {
   ],
   operation_events: (row) => ['operation_event', { ...row }],
   operation_checks: (row) => ['operation_check', { ...row }],
+  // soc.broadcast_stack (migration 0007): the stack's name and link, not its status.
+  stacks: (row) => [
+    'stack',
+    {
+      gateway_sn: row.gateway_sn,
+      name: row.name,
+      link_state: row.link_state,
+      updated_at: row.updated_at,
+    },
+  ],
   transition_requests: (row) => [
     'transition_request',
     {
