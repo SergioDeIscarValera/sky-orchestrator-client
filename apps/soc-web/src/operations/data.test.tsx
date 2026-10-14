@@ -18,6 +18,7 @@ import {
   TRACK_REFRESH_MS,
   useChecks,
   useChangeOperation,
+  useCommands,
   useCreateOperation,
   useEvents,
   useFlightStates,
@@ -190,6 +191,32 @@ describe("the operation's log and checks, kept current from the state topic (FR-
       backend.emit(NORTH.id, {
         kind: 'flight_state',
         payload: { flight_id: '88888888-8888-4888-8888-888888888888', status: 'ok' },
+      })
+    })
+    await soon(() => {
+      expect(reads).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it("reads the commands again when one changes, so a second console sees each one's outcome (FR-CMD-06)", async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await backend.createOperation(NORTH.id, DRAFT)
+    const reads = vi.spyOn(backend, 'commands')
+    const { wrapper } = opened(backend)
+    renderHook(
+      () => {
+        useLiveState()
+        return useCommands(operation.id)
+      },
+      { wrapper },
+    )
+    await soon(() => {
+      expect(reads).toHaveBeenCalledOnce()
+    })
+    act(() => {
+      backend.emit(NORTH.id, {
+        kind: 'command_intent',
+        payload: { operation_id: operation.id, status: 'accepted' },
       })
     })
     await soon(() => {
