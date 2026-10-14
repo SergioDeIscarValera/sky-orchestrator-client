@@ -4,12 +4,12 @@
 clock, no database and no socket: `now` is an input, and the caller decides when to judge again
 (soc-operations' timer and its notifications, ADR-0025). The same inputs give the same checks.
 
-Freshness (FR-SAF-02). A value is current when it was read no more than
-`telemetry_stale_after_ms` before `now`, with the same bound for each kind of value: a sample by
-now - received_at (when soc-cloud recorded it), the stack's status by now - status_read_at, and
-the envelope by now - envelope_read_at. PF-FRESH fails on a stale sample. Every other check that
-reads a stale value is unknown, never pass. A stale or unknown envelope fails PF-ENVELOPE, as
-FR-OPS-08 says an unknown one does.
+Freshness (FR-SAF-02). A value is current when it was read no more than its bound before `now`:
+a sample by now - received_at (when soc-cloud recorded it) and the stack's status by now -
+status_read_at, each within `telemetry_stale_after_ms`; the envelope, which soc-cloud reads only
+every `stack_envelope_poll_s`, by now - envelope_read_at within twice that interval, one read
+missed. PF-FRESH fails on a stale sample. Every other check that reads a stale value is unknown,
+never pass. A stale or unknown envelope fails PF-ENVELOPE, as FR-OPS-08 says an unknown one does.
 
 States (FR-SAF-03). A check passes only when every input it needs is present, current and as its
 contract gives it. A missing or null input leaves it unknown. A value of another kind than its
@@ -304,6 +304,7 @@ def _read[T: msgspec.Struct](
     kind: type[T],
     what: str,
     stale_after_ms: int,
+    bound: str,
 ) -> _Read[T]:
     """`raw` as `kind`, when it is present, current, and of the kind its contract gives.
 
@@ -316,10 +317,7 @@ def _read[T: msgspec.Struct](
     if age_ms is None or age_ms < -stale_after_ms:
         return _Read(unknown=f"{what} has no usable read time")
     if age_ms > stale_after_ms:
-        return _Read(
-            unknown=f"{what} is {_seconds(age_ms)} old, past telemetry_stale_after_ms "
-            f"{stale_after_ms}"
-        )
+        return _Read(unknown=f"{what} is {_seconds(age_ms)} old, past {bound}")
     try:
         return _Read(value=msgspec.convert(raw, kind, strict=True))
     except msgspec.ValidationError as error:
@@ -337,7 +335,14 @@ def _read_status(inputs: Inputs) -> _Read[_Status]:
         _Status,
         "the stack's status",
         inputs.tunables.telemetry_stale_after_ms,
+        f"telemetry_stale_after_ms {inputs.tunables.telemetry_stale_after_ms}",
     )
+
+
+def envelope_stale_after_ms(tunables: Tunables) -> int:
+    """How old an envelope may be and still be current: two of soc-cloud's read intervals, so one
+    read that went unanswered does not fail PF-ENVELOPE (FR-LNK-09, FR-SAF-02)."""
+    return 2 * 1000 * tunables.stack_envelope_poll_s
 
 
 def _read_envelope(inputs: Inputs) -> _Read[_Envelope]:
@@ -350,7 +355,8 @@ def _read_envelope(inputs: Inputs) -> _Read[_Envelope]:
         read_at,
         _Envelope,
         "the stack's envelope",
-        inputs.tunables.telemetry_stale_after_ms,
+        envelope_stale_after_ms(inputs.tunables),
+        f"twice stack_envelope_poll_s {inputs.tunables.stack_envelope_poll_s}",
     )
 
 
@@ -365,6 +371,7 @@ def _read_sample(inputs: Inputs) -> _Read[_Sample]:
         _Sample,
         "the latest telemetry sample",
         inputs.tunables.telemetry_stale_after_ms,
+        f"telemetry_stale_after_ms {inputs.tunables.telemetry_stale_after_ms}",
     )
 
 

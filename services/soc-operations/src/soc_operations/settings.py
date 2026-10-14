@@ -17,6 +17,7 @@ class Tunables(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     served_organizations: tuple[uuid.UUID, ...]
     telemetry_stale_after_ms: int
     telemetry_lost_after_ms: int
+    stack_envelope_poll_s: int
     command_intent_ttl_s: int
     geofence_max_vertices: int
     min_satellites: int

@@ -247,9 +247,9 @@
       "maximum": 600,
       "default": 30,
       "x-unit": "s",
-      "x-consumers": ["soc-cloud"],
+      "x-consumers": ["soc-cloud", "soc-operations"],
       "x-safety": true,
-      "description": "How often each stack's flight envelope, the limits every flight file is judged against, is read from its wayline API. A read with no answer within the interval is recorded as unknown (FR-LNK-09)."
+      "description": "How often each stack's flight envelope, the limits every flight file is judged against, is read from its wayline API. A read with no answer within the interval is recorded as unknown (FR-LNK-09). soc-operations holds an envelope current for twice this interval, one read missed, and judges PF-ENVELOPE on it while it is."
     }
   },
   "$defs": {
