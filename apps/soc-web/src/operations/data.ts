@@ -309,6 +309,15 @@ function invalidate(queryClient: QueryClient, queryKey: readonly unknown[], exac
 }
 
 /**
+ * Cancels the read of `queryKey` still in flight before a broadcast is written into its cache. Such
+ * a read answers the state from before the broadcast, and it would land over the write once it
+ * arrives: a judgement that had just been written would show as it was before (FR-OPS-04).
+ */
+function cancelReadsOf(queryClient: QueryClient, queryKey: readonly unknown[]) {
+  return queryClient.cancelQueries({ queryKey, exact: true })
+}
+
+/**
  * Writes a log entry or a check the state topic carries whole into its cache, as it came, so the
  * log streams (FR-LOG-03) and a check shows within one sample (FR-OPS-04). A payload it cannot
  * read, or a cache not read yet, is read again instead: nothing is guessed into the cache.
@@ -325,6 +334,7 @@ export async function placeRow(
       return
     }
     const key = organizationKey(organizationId, CHECKS, placed.operationId)
+    await cancelReadsOf(queryClient, key)
     const cached = queryClient.getQueryData<OperationCheck[]>(key)
     if (cached === undefined) {
       await invalidate(queryClient, key, true)
@@ -339,6 +349,7 @@ export async function placeRow(
     return
   }
   const key = organizationKey(organizationId, EVENTS, entry.operationId)
+  await cancelReadsOf(queryClient, key)
   const cached = queryClient.getQueryData<OperationEvent[]>(key)
   if (cached === undefined) {
     await invalidate(queryClient, key, true)
