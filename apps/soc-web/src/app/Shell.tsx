@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 
+import { SafetyBar } from '../operations/SafetyBar'
 import { MapTools } from '../scene/MapTools'
 import { Inspector } from './Inspector'
 import { NavigationRail } from './NavigationRail'
@@ -57,11 +58,17 @@ export function Shell() {
         </div>
         <div className="flex min-h-0 flex-col items-start justify-between">
           <PanelHost />
-          {/* Bottom right whether or not a panel is open (the design system). */}
-          <div className="mt-auto self-end">
-            <RegionBoundary name="map tools">
-              <MapTools />
+          {/* The safety controls bottom left and the map tools bottom right, whether or not a
+              panel is open (the design system), so the controls are on every screen (FR-CMD-07). */}
+          <div className="mt-auto flex w-full items-end justify-between gap-4">
+            <RegionBoundary name="safety controls">
+              <SafetyBar />
             </RegionBoundary>
+            <div className="ml-auto">
+              <RegionBoundary name="map tools">
+                <MapTools />
+              </RegionBoundary>
+            </div>
           </div>
         </div>
         <Inspector />

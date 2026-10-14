@@ -762,9 +762,13 @@ describe('the flight that cannot be read (FR-OPS-01)', () => {
     const operation = await flyingOperation(backend, 'in_flight', {
       progress: { status: 'in_progress' },
     })
-    vi.spyOn(backend, 'flights').mockRejectedValueOnce(new BackendError('The flights are down'))
+    // The safety controls read the same flights, so the failure holds until the test lets it go.
+    const failing = vi
+      .spyOn(backend, 'flights')
+      .mockRejectedValue(new BackendError('The flights are down'))
     const { inspector, user } = await openOperation(backend, operation)
     expect(await within(inspector).findByRole('alert')).toHaveTextContent('The flights are down')
+    failing.mockRestore()
     await user.click(within(inspector).getByRole('button', { name: 'Try again' }))
     expect(await consoleOf(inspector)).toBeVisible()
   })

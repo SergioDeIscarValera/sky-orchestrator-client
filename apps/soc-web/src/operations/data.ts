@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import type {
   AssignmentChanges,
   AssignmentDraft,
+  Backend,
   OperationChanges,
   OperationCheck,
   OperationDraft,
@@ -61,13 +62,21 @@ export function useAssignments(operationId: string) {
   })
 }
 
+/**
+ * An operation's operators, under the organization's key. Also read by the safety controls for each
+ * operation they command, so the flight console and the bar share one copy (useQueries takes it).
+ */
+export function operatorsQuery(backend: Backend, organizationId: string, operationId: string) {
+  return {
+    queryKey: organizationKey(organizationId, OPERATORS, operationId),
+    queryFn: () => backend.operators(operationId),
+  }
+}
+
 export function useOperators(operationId: string) {
   const backend = useBackend()
   const { organization } = useOrganization()
-  return useQuery({
-    queryKey: organizationKey(organization.id, OPERATORS, operationId),
-    queryFn: () => backend.operators(operationId),
-  })
+  return useQuery(operatorsQuery(backend, organization.id, operationId))
 }
 
 /** The members to name as operators: no broadcast carries a membership, so a join reads them again. */
@@ -107,13 +116,21 @@ export function useRequests(operationId: string) {
   })
 }
 
+/**
+ * An operation's flights, under the organization's key. The safety controls read each airborne
+ * operation's flights through it too, so the flight console and the bar share one copy.
+ */
+export function flightsQuery(backend: Backend, organizationId: string, operationId: string) {
+  return {
+    queryKey: organizationKey(organizationId, FLIGHTS, operationId),
+    queryFn: () => backend.flights(operationId),
+  }
+}
+
 export function useFlights(operationId: string) {
   const backend = useBackend()
   const { organization } = useOrganization()
-  return useQuery({
-    queryKey: organizationKey(organization.id, FLIGHTS, operationId),
-    queryFn: () => backend.flights(operationId),
-  })
+  return useQuery(flightsQuery(backend, organization.id, operationId))
 }
 
 export function useFlightStates(operationId: string) {
