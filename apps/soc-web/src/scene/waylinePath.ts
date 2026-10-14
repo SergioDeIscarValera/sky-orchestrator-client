@@ -2,7 +2,7 @@ import type { Geodetic } from '../geometry/projection'
 import { flatOf } from './groundTool'
 import type { Site } from './site'
 
-type Spot = [number, number, number]
+export type Spot = [number, number, number]
 
 /** What a wayline flies: from where, how high it climbs first, then its waypoints. */
 export interface Flown {
@@ -12,17 +12,19 @@ export interface Flown {
   readonly waypoints: readonly (Geodetic & { readonly heightM: number })[]
 }
 
+/** A flown path in the scene: its line, and each waypoint's place, in order. */
+export interface FlownPath {
+  readonly points: Spot[]
+  readonly waypoints: Spot[]
+}
+
 /**
  * A wayline in the scene as it flies (FR-WAY-07): up from the takeoff to its climb height,
  * then from waypoint to waypoint, each at its height above the takeoff point's ground
  * (ADR-0014), not above the ground under it. `points` is the path; `waypoints` each one's
  * place, in order.
  */
-export function flownPath(
-  flown: Flown,
-  origin: Geodetic,
-  site: Site,
-): { readonly points: Spot[]; readonly waypoints: Spot[] } {
+export function flownPath(flown: Flown, origin: Geodetic, site: Site): FlownPath {
   const takeoff = flatOf(origin, flown.referencePoint)
   const base = site.ground(takeoff.x, takeoff.z)
   const waypoints = flown.waypoints.map((waypoint): Spot => {
