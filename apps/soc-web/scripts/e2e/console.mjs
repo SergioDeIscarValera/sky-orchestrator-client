@@ -28,6 +28,7 @@ import { createInterface } from 'node:readline'
 import { chromium } from 'playwright-core'
 
 import { chromePath } from '../measure/path.mjs'
+import { chromeArguments, emit, required, run, tracer } from './driver.mjs'
 import { sampleOf, summary } from './frames.mjs'
 
 // The catalogue's identifier, as contracts/catalogue/aircraft-models.json names the Mavic Air 2.
@@ -36,20 +37,7 @@ const WAIT_MS = 30_000
 /** NFR-REL-07: how long the browser's network is cut. */
 const CUT_MS = 10_000
 
-function required(name) {
-  const value = process.env[name]
-  if (value === undefined || value === '') throw new Error(`${name} is not set`)
-  return value
-}
-
-const emit = (line) => {
-  process.stdout.write(`${JSON.stringify(line)}\n`)
-}
-
-/** Where the browser is, on stderr, for a run that stops half way. */
-const trace = (step) => {
-  process.stderr.write(`[console.mjs ${new Date().toISOString()}] ${step}\n`)
-}
+const trace = tracer('console.mjs')
 
 /** The live value a row of the inspector's Live card shows. */
 function liveValue(page, label) {
@@ -116,10 +104,7 @@ async function main() {
     executablePath: chromePath(process.env.SOC_E2E_CHROME ?? null),
     headless: true,
     // Without a GPU, as on the runners, WebGL needs SwiftShader allowed explicitly.
-    args:
-      process.env.SOC_E2E_SOFTWARE_GL === '1'
-        ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']
-        : ['--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=gl'],
+    args: chromeArguments(),
   })
   try {
     const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
@@ -314,12 +299,4 @@ async function main() {
   }
 }
 
-// Exits once done: the harness's open stdin, and Playwright's own SIGTERM handler,
-// would otherwise keep Node running after the browser has closed.
-main().then(
-  () => process.exit(0),
-  (error) => {
-    emit({ event: 'failed', message: error.message })
-    process.exit(1)
-  },
-)
+run(main)
