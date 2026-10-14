@@ -9,12 +9,14 @@ envelope is so-wayline's, and the credentials are what SO's secrets accept.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
 import jsonschema_rs
 import pytest
 
+from soc_e2e import so_stack
 from soc_e2e.so_stack import (
     PROJECT_PREFIX,
     SECRET,
@@ -153,3 +155,17 @@ def test_the_release_is_the_vendored_one() -> None:
         ).read_text()
     )
     assert release() == provenance["describe"]
+
+
+def test_an_image_it_cannot_pull_is_named_with_dockers_reason(
+    stack: SoStack, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refused(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        assert "pull" in arguments and not check
+        return subprocess.CompletedProcess(
+            list(arguments), 1, "", "Error response from daemon: denied\n"
+        )
+
+    monkeypatch.setattr(so_stack, "docker", refused)
+    with pytest.raises(RuntimeError, match=f"cannot pull .*{release()}.*: .*denied$"):
+        stack.start()

@@ -277,7 +277,12 @@ class SoStack:
     def start(self, ready_within_s: float = READY_WITHIN_S) -> None:
         """Pulls the release's images, starts the stack and waits for it to fly."""
         self.write()
-        self.compose("pull", "--quiet")
+        pulled = self.compose("pull", "--quiet", check=False)
+        if pulled.returncode != 0:
+            # Docker's own words say why: a registry that denies the token reads "denied".
+            raise RuntimeError(
+                f"cannot pull Sky Orchestrator's {release()} images: {pulled.stderr.strip()}"
+            )
         self.compose("up", "--detach", "--quiet-pull", "--no-build")
         deadline = time.monotonic() + ready_within_s
         self.wait_healthy(deadline)
