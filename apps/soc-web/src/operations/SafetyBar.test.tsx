@@ -3,6 +3,7 @@ import { RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 import { AccountContext } from '../account/account'
+import { Console } from '../app/Console'
 import { createConsoleRouter } from '../app/router'
 import { Shell } from '../app/Shell'
 import {
@@ -370,5 +371,45 @@ describe('the safety controls while the rest of the console fails (FR-CMD-07)', 
     await hold(within(controls).getByRole('button', { name: 'Return all home' }))
     expect(ask).toHaveBeenCalledTimes(2)
     expect(ask.mock.calls[1]?.slice(0, 2)).toEqual([FLIGHT_OWN, 'return_home'])
+  })
+
+  it('sends pause all from the console whose live subscriptions do not open', async () => {
+    const backend = new FakeBackend(NEIGHBOUR)
+    const operation = await operationIn(backend, 'in_flight', [NEIGHBOUR.userId])
+    backend.addFlight(flightOf(operation, FLIGHT_OWN))
+    backend.setFlightState(progressOf(FLIGHT_OWN))
+    const refused = () => {
+      throw new Error('the socket is closed')
+    }
+    vi.spyOn(backend, 'onState').mockImplementation(refused)
+    vi.spyOn(backend, 'onTelemetry').mockImplementation(refused)
+    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const ask = vi.spyOn(backend, 'requestCommand')
+    window.history.replaceState(null, '', '/')
+    const choice = { organization: NORTH, organizations: [NORTH], choose: () => undefined }
+    render(
+      <SettingsContext value={SETTINGS}>
+        <BackendContext value={backend}>
+          <QueryClientProvider client={quietQueryClient()}>
+            <AccountContext value={NEIGHBOUR}>
+              <OrganizationContext value={choice}>
+                <Console />
+              </OrganizationContext>
+            </AccountContext>
+          </QueryClientProvider>
+        </BackendContext>
+      </SettingsContext>,
+    )
+
+    const controls = await screen.findByRole('region', { name: 'Safety controls' })
+    expect(report).toHaveBeenCalledWith('The state subscription did not open', expect.any(Error))
+    expect(report).toHaveBeenCalledWith(
+      'The telemetry subscription did not open',
+      expect.any(Error),
+    )
+    freezeClock()
+    await hold(within(controls).getByRole('button', { name: 'Pause all' }))
+    expect(ask).toHaveBeenCalledOnce()
+    expect(ask.mock.calls[0]?.slice(0, 2)).toEqual([FLIGHT_OWN, 'pause'])
   })
 })
