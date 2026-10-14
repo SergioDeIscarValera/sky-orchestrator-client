@@ -7,12 +7,14 @@ import aiohttp
 import websockets
 
 import soc_log
-from soc_cloud.commands import CHANNEL, Commands, PostgresCommandStore
+from soc_cloud.commands import CHANNEL, Commands, Intent, PostgresCommandStore
 from soc_cloud.dry_runs import CHANNEL as DRY_RUNS_CHANNEL
 from soc_cloud.dry_runs import DryRuns, PostgresDryRunStore
 from soc_cloud.fanout import Fanout, telemetry_topic
 from soc_cloud.files import FileServer, FlightFiles
+from soc_cloud.flights import FlightWatch, PostgresFlightStore
 from soc_cloud.latency import Latencies
+from soc_cloud.link.progress import FlightProgress
 from soc_cloud.link.stack import StackLink
 from soc_cloud.link.telemetry import Sample
 from soc_cloud.presence import PostgresPresenceStore, PresenceRecorder
@@ -76,6 +78,8 @@ class CloudService:
                 files=functools.partial(self.files.offer, stack.name),
                 on_reply=self._replied,
                 on_announced=self._dock_announced,
+                on_progress=self._progressed,
+                on_presence=self._presence_changed,
                 presence=self.presence.for_stack(stack.name, stack.organization),
             )
             for stack in settings.tunables.stacks
@@ -86,6 +90,17 @@ class CloudService:
             self.wire,
             ttl_s=settings.tunables.command_intent_ttl_s,
             reply_timeout_s=settings.tunables.command_reply_timeout_s,
+            latencies=self.latencies,
+            on_prepare=self._preparing,
+            on_settled=self._settled,
+        )
+        self.flights = FlightWatch(
+            PostgresFlightStore(self.database),
+            self.files,
+            self.commands,
+            stale_after_ms=settings.tunables.telemetry_stale_after_ms,
+            warning_band_m=settings.tunables.geofence_warning_band_m,
+            batch_s=settings.tunables.telemetry_batch_s,
             latencies=self.latencies,
         )
         self.stack_watcher = StackWatcher(
@@ -133,6 +148,7 @@ class CloudService:
             group.create_task(self.presence.run())
             group.create_task(self.fanout.run(broadcaster))
             group.create_task(self.latencies.run())
+            group.create_task(self.flights.run())
             group.create_task(self.stack_watcher.run(apis))
             group.create_task(self.dry_runs.run(apis))
             for link in self.links:
@@ -148,7 +164,20 @@ class CloudService:
 
     def _sampled(self, sample: Sample) -> None:
         self.latest[sample.aircraft] = sample
+        self.flights.sampled(sample)
         self.fanout.sampled(sample)
+
+    def _progressed(self, progress: FlightProgress) -> None:
+        self.flights.progressed(progress)
+
+    def _presence_changed(self, aircraft: str, online: bool) -> None:
+        self.flights.presence(aircraft, online)
+
+    async def _preparing(self, intent: Intent) -> bool:
+        return await self.flights.preparing(intent)
+
+    def _settled(self, intent: Intent, result: int) -> None:
+        self.flights.settled(intent, result)
 
     async def _announced(self, payload: str) -> None:
         await self.commands.announced(payload)
@@ -158,6 +187,8 @@ class CloudService:
 
     async def _connected(self) -> None:
         self.presence.rewrite_all()
+        # The flights first: a prepare the commands' sweep sends finds its file kept.
+        await self.flights.sweep()
         await self.commands.sweep()
         await self.dry_runs.sweep()
 

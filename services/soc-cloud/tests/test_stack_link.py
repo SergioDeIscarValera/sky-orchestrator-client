@@ -10,9 +10,11 @@ from typing import Any, cast
 
 import aiomqtt
 import pytest
+from structlog.testing import capture_logs
 
 import soc_config
 from soc_cloud.link import topics
+from soc_cloud.link.progress import FlightProgress, FlightStatus
 from soc_cloud.link.stack import FileOffer, StackLink
 from soc_cloud.link.telemetry import Sample
 from soc_cloud.presence import Device, LinkState
@@ -71,6 +73,8 @@ class Harness:
     def __init__(self, files: Callable[[str], FileOffer | None] | None = None) -> None:
         self.presence = FakePresence()
         self.samples: list[Sample] = []
+        self.progress: list[FlightProgress] = []
+        self.presences: list[tuple[str, bool]] = []
         self.clients: list[FakeClient] = []
         self.down_reasons: list[str | None] = []
         self.link = StackLink(
@@ -78,6 +82,8 @@ class Harness:
             CREDENTIALS,
             WIRE,
             on_sample=self.samples.append,
+            on_progress=self.progress.append,
+            on_presence=lambda aircraft, online: self.presences.append((aircraft, online)),
             files=files or (lambda _flight: None),
             presence=self.presence,
             client_factory=self.client,
@@ -307,6 +313,42 @@ async def test_unreadable_and_unhandled_messages_are_dropped_quietly() -> None:
         client = await harness.receive(topic, message)
         assert client.published == []
     assert harness.samples == []
+
+
+async def test_a_flights_progress_is_handed_on_as_the_dock_sent_it() -> None:
+    harness = Harness()
+    client = await harness.receive(
+        f"thing/product/{DOCK}/events", example("events.flighttask_progress")
+    )
+    ((progress),) = harness.progress
+    assert (progress.flight_id, progress.status, progress.percent) == (
+        "flight-0001",
+        FlightStatus.IN_PROGRESS,
+        0,
+    )
+    # The dock asks no reply for it.
+    assert client.published == []
+
+
+async def test_other_events_and_an_unreadable_progress_are_not_handed_on() -> None:
+    harness = Harness()
+    other = example("events.flighttask_progress")
+    other["method"] = "hms"
+    broken = example("events.flighttask_progress")
+    broken["data"]["output"]["status"] = 7
+    with capture_logs() as logs:
+        for message in (other, broken, b"not json"):
+            await harness.receive(f"thing/product/{DOCK}/events", message)
+    assert harness.progress == []
+    assert [entry["event"] for entry in logs] == ["message_unreadable", "message_unreadable"]
+
+
+async def test_the_aircraft_going_online_and_offline_is_handed_on() -> None:
+    harness = Harness()
+    await harness.receive(f"sys/product/{DOCK}/status", example("sys.update_topo"))
+    await harness.receive(f"thing/product/{DOCK}/osd", dock_osd(online=1))
+    await harness.receive(f"thing/product/{DOCK}/osd", dock_osd(online=0))
+    assert harness.presences == [(AIRCRAFT, True), (AIRCRAFT, False)]
 
 
 async def test_the_link_opens_a_persistent_v5_session_and_subscribes() -> None:
