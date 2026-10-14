@@ -96,6 +96,25 @@ describe('the view in the URL (NFR-UX-03)', () => {
     expect(selectionOf(select({}, selection))).toEqual(selection)
   })
 
+  it('reads an operation, after a wayline and before an aircraft', () => {
+    const wayline = '33333333-3333-4333-8333-333333333333'
+    const operation = '66666666-6666-4666-8666-666666666666'
+    const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
+    expect(readView({ panel: 'operations', operation })).toEqual({
+      panel: 'operations',
+      operation,
+    })
+    expect(readView({ operation, wayline })).toEqual({ wayline })
+    expect(readView({ ...aircraft, operation })).toEqual({ operation })
+    expect(readView({ operation: 'North corridor' })).toEqual({})
+    const selection = { kind: 'operation', operationId: operation } as const
+    expect(select({ panel: 'operations', wayline }, selection)).toEqual({
+      panel: 'operations',
+      operation,
+    })
+    expect(selectionOf(select({}, selection))).toEqual(selection)
+  })
+
   it("reads a selection's open form, and no form without a selection", () => {
     const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
     expect(readView({ ...aircraft, form: 'register' })).toEqual({ ...aircraft, form: 'register' })
@@ -137,9 +156,9 @@ describe('the view in the URL (NFR-UX-03)', () => {
     expect(window.location.search).toBe('')
   })
 
-  it('opens the panel a shared link names, and says when its content arrives', async () => {
+  it('opens the operations panel a shared link names, empty until one is made', async () => {
     await openAt('?panel=operations')
-    expect(await screen.findByText('Operations arrive in M4.')).toBeInTheDocument()
+    expect(await screen.findByText('No operations yet.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Operations' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -167,7 +186,7 @@ describe('the view in the URL (NFR-UX-03)', () => {
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'Operations' }))
     })
-    expect(await screen.findByText('Operations arrive in M4.')).toBeInTheDocument()
+    expect(await screen.findByText('No operations yet.')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Fleet' })).toBeNull()
   })
 })
@@ -192,6 +211,23 @@ describe('changing the panel drops the selection (NFR-UX-03)', () => {
     await user.click(screen.getByRole('button', { name: 'Geofences' }))
     expect(await screen.findByRole('heading', { name: 'Geofences' })).toBeVisible()
     expect([params().get('panel'), params().get('wayline')]).toEqual(['geofences', null])
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+    })
+  })
+
+  it('drops an operation when the rail opens geofences', async () => {
+    const backend = new FakeBackend(NEIGHBOUR)
+    const operation = await backend.createOperation(NORTH.id, {
+      name: 'North corridor',
+      geofenceId: null,
+      takeoffSecurityHeightM: null,
+    })
+    const { user } = await openAt(`?panel=operations&operation=${operation.id}`, backend)
+    await within(inspector()).findByRole('heading', { name: 'North corridor' })
+    await user.click(screen.getByRole('button', { name: 'Geofences' }))
+    expect(await screen.findByRole('heading', { name: 'Geofences' })).toBeVisible()
+    expect([params().get('panel'), params().get('operation')]).toEqual(['geofences', null])
     await waitFor(() => {
       expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
     })

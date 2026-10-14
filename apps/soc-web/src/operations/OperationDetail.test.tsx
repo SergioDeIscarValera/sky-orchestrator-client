@@ -1,0 +1,344 @@
+import { screen, waitFor, within } from '@testing-library/react'
+
+import {
+  BackendError,
+  FieldRefusedError,
+  type Assignment,
+  type OperationState,
+  type Role,
+} from '../backend/backend'
+import { bake, type Design } from '../geometry/bake'
+import { envelopeFromSkyOrchestrator, flightToJson } from '../geometry/designJson'
+import { planFlight } from '../geometry/flight'
+import { geodeticAt, type Geodetic } from '../geometry/projection'
+import { formatLength } from '../plans/format'
+import { draftOf } from '../plans/waylines'
+import { FakeBackend, MAVIC_AIR_2, NEIGHBOUR, NORTH } from '../test/FakeBackend'
+import { renderApp } from '../test/render'
+
+const FARM: Geodetic = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
+const at = (east: number, north: number) => geodeticAt(FARM, { eastM: east, northM: north })
+
+/** A climb to 30 m over the takeoff, then 100 m north and east, as the designer bakes it. */
+const DESIGN: Design = {
+  takeoff: at(0, 0),
+  defaultHeightM: 30,
+  primitives: [{ kind: 'route', points: [at(0, 50), at(100, 50)] }],
+}
+const BAKED = bake(DESIGN, { origin: FARM, maxArcSpacingM: 10 })
+
+const ENVELOPE = {
+  geofence_center: { latitude_deg: 41.6523, longitude_deg: -4.7245 },
+  geofence_radius_m: 1000,
+  max_height_m: 120,
+  max_home_distance_m: 1000,
+  max_leg_m: 300,
+  max_transit_m: 300,
+  max_total_distance_m: 5000,
+  max_waypoints: 200,
+  max_horizontal_speed_ms: 15,
+}
+
+const FLEET = {
+  name: 'Norte 1',
+  model: MAVIC_AIR_2.model,
+  airframeSerial: '1WNBH9',
+  controllerSerial: null,
+  gatewaySn: 'SOTESTDOCK01',
+  aircraftSn: 'SOTESTUAV001',
+  flightTimeBeforeSocS: 5400,
+}
+
+/** The moves that reach each state from a draft, as the lifecycle allows them (FR-OPS-02). */
+const PATH: Partial<Record<OperationState, readonly OperationState[]>> = {
+  planned: ['planned'],
+  simulating: ['planned', 'preparing', 'simulating'],
+  launching: ['planned', 'preparing', 'simulating', 'simulated', 'ready', 'launching'],
+}
+
+/**
+ * NORTH with Norte 1, the corridor wayline, a stack that reads `envelope`, and one operation in
+ * `state`. Written as an owner, then the member's role is set as `role` asks.
+ */
+async function farm({
+  state = 'draft',
+  role = 'owner',
+  envelope = ENVELOPE,
+}: {
+  readonly state?: OperationState
+  readonly role?: Role
+  readonly envelope?: Record<string, unknown> | null
+} = {}) {
+  const backend = new FakeBackend(NEIGHBOUR)
+  const fleet = await backend.registerFleet(NORTH.id, FLEET)
+  const wayline = await backend.createWayline(NORTH.id, draftOf('North corridor', DESIGN, BAKED))
+  backend.stacksOf.set(NORTH.id, [
+    {
+      gatewaySn: 'SOTESTDOCK01',
+      name: 'lab',
+      linkState: 'connected',
+      envelope,
+      envelopeReadAt: envelope === null ? null : '2026-10-11T10:00:00Z',
+    },
+  ])
+  const operation = await backend.createOperation(NORTH.id, {
+    name: 'North corridor',
+    geofenceId: null,
+    takeoffSecurityHeightM: null,
+  })
+  for (const step of PATH[state] ?? []) backend.moveOperation(operation.id, step)
+  if (role !== 'owner') backend.memberships.set(NEIGHBOUR.userId, [{ ...NORTH, role }])
+  return { backend, fleet, wayline, operation }
+}
+
+async function openAt(backend: FakeBackend, operationId: string) {
+  window.history.replaceState(null, '', `/?panel=operations&operation=${operationId}`)
+  const rendered = renderApp(backend)
+  await screen.findByRole('banner')
+  await within(inspector()).findByRole('heading', { name: 'North corridor' })
+  return rendered
+}
+
+const inspector = () => screen.getByRole('complementary', { name: 'Inspector' })
+
+/** The flight the stored assignment must hold: planFlight of the same inputs, written as the file reads it. */
+function flightFor(height: number, speed: number, envelope: typeof ENVELOPE | null = ENVELOPE) {
+  return planFlight(DESIGN.takeoff, BAKED, {
+    origin: FARM,
+    takeoffSecurityHeightM: height,
+    speedMs: speed,
+    finishAction: 'return_home',
+    envelope: envelope === null ? null : envelopeFromSkyOrchestrator(envelope),
+  })
+}
+
+afterEach(() => {
+  window.history.replaceState(null, '', '/')
+})
+
+describe('an operation in the inspector (FR-OPS-01, FR-OPS-07)', () => {
+  it('saves the definition: the operation, and the assignment with the flight planFlight gives', async () => {
+    const { backend, fleet, wayline, operation } = await farm()
+    const { user } = await openAt(backend, operation.id)
+    await user.type(within(inspector()).getByLabelText('Takeoff security height'), '30')
+    await user.selectOptions(within(inspector()).getByLabelText('Wayline'), wayline.id)
+    await user.selectOptions(within(inspector()).getByLabelText('Fleet'), fleet.id)
+    await user.type(within(inspector()).getByLabelText('Speed'), '10')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(backend.assignmentRows.get(operation.id)).toHaveLength(1)
+    })
+    const [saved] = await backend.operations(NORTH.id)
+    expect(saved).toMatchObject({ name: 'North corridor', takeoffSecurityHeightM: 30 })
+    const [assignment] = await backend.assignments(operation.id)
+    expect(assignment).toMatchObject({ waylineId: wayline.id, fleetId: fleet.id, speedMs: 10 })
+    const flight = flightFor(30, 10)
+    expect(assignment?.flight).toEqual(flightToJson(flight))
+    expect(await screen.findByText(formatLength(flight.distanceM))).toBeVisible()
+    expect(screen.getByText('Waypoints').nextElementSibling).toHaveTextContent(
+      String(flight.waypoints.length),
+    )
+  })
+
+  it('marks a stored flight its definition no longer makes, and writes the new one on Save', async () => {
+    const { backend, fleet, wayline, operation } = await farm()
+    await backend.changeOperation(operation.id, { takeoffSecurityHeightM: 30 })
+    // Stored as another console saved it, at 8 m/s, while the assignment now says 10.
+    await backend.assign(operation.id, NORTH.id, {
+      waylineId: wayline.id,
+      fleetId: fleet.id,
+      speedMs: 10,
+      flight: flightToJson(flightFor(30, 8)),
+    })
+    const { user } = await openAt(backend, operation.id)
+    expect(await within(inspector()).findByText('Out of date')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(async () => {
+      const [assignment] = await backend.assignments(operation.id)
+      expect(assignment?.flight).toEqual(flightToJson(flightFor(30, 10)))
+    })
+    await waitFor(() => {
+      expect(within(inspector()).queryByText('Out of date')).toBeNull()
+    })
+  })
+
+  it('stores no flight while the height or the speed is not yet set', async () => {
+    const { backend, fleet, wayline, operation } = await farm()
+    const { user } = await openAt(backend, operation.id)
+    await user.selectOptions(within(inspector()).getByLabelText('Wayline'), wayline.id)
+    await user.selectOptions(within(inspector()).getByLabelText('Fleet'), fleet.id)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(backend.assignmentRows.get(operation.id)).toHaveLength(1)
+    })
+    const [assignment] = await backend.assignments(operation.id)
+    expect(assignment?.flight).toBeNull()
+    expect(await screen.findByText('Not planned')).toBeVisible()
+  })
+
+  it('names each envelope and geofence problem of the flight, by its rule and waypoint', async () => {
+    const { backend, fleet, wayline, operation } = await farm({
+      envelope: { ...ENVELOPE, max_height_m: 20 },
+    })
+    const geofence = await backend.createGeofence(NORTH.id, {
+      name: 'Field',
+      polygon: [at(-20, -20), at(20, -20), at(20, 20), at(-20, 20)],
+      maxHeightM: 100,
+      origin: 'drawn',
+      marginM: null,
+    })
+    const { user } = await openAt(backend, operation.id)
+    await user.type(within(inspector()).getByLabelText('Takeoff security height'), '30')
+    await user.selectOptions(within(inspector()).getByLabelText('Geofence'), geofence.id)
+    await user.selectOptions(within(inspector()).getByLabelText('Wayline'), wayline.id)
+    await user.selectOptions(within(inspector()).getByLabelText('Fleet'), fleet.id)
+    await user.type(within(inspector()).getByLabelText('Speed'), '10')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    const problems = await screen.findByRole('list', { name: 'Problems' })
+    expect(within(problems).getByText('takeoff_security_height_above_max')).toBeVisible()
+    expect(within(problems).getByText('height_above_max · waypoint 0')).toBeVisible()
+    expect(within(problems).getByText('outside_geofence_polygon · waypoint 1')).toBeVisible()
+    expect(within(problems).getByText('waypoint 1 is outside the geofence')).toBeVisible()
+  })
+
+  it('shows the refusal the database names beside the field it is about', async () => {
+    const { backend, operation } = await farm()
+    vi.spyOn(backend, 'changeOperation').mockRejectedValueOnce(
+      new FieldRefusedError(
+        'The takeoff security height must be above zero.',
+        'takeoffSecurityHeightM',
+        '23514',
+      ),
+    )
+    const { user } = await openAt(backend, operation.id)
+    await user.type(within(inspector()).getByLabelText('Takeoff security height'), '30')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    const message = await screen.findByText('The takeoff security height must be above zero.')
+    const height = within(inspector()).getByLabelText('Takeoff security height')
+    expect(height).toHaveAttribute('aria-invalid', 'true')
+    expect(height).toHaveAttribute('aria-describedby', message.id)
+  })
+
+  it('shows a refusal that names no field under Save', async () => {
+    const { backend, operation } = await farm()
+    vi.spyOn(backend, 'changeOperation').mockRejectedValueOnce(
+      new BackendError('the connection dropped'),
+    )
+    const { user } = await openAt(backend, operation.id)
+    await user.type(within(inspector()).getByLabelText('Takeoff security height'), '30')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('the connection dropped')
+  })
+
+  it('refuses what it can read before it asks the database, field by field', async () => {
+    const { backend, operation } = await farm()
+    const change = vi.spyOn(backend, 'changeOperation')
+    const { user } = await openAt(backend, operation.id)
+    await user.clear(within(inspector()).getByLabelText('Name'))
+    await user.type(within(inspector()).getByLabelText('Takeoff security height'), '0')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('An operation needs a name.')).toBeVisible()
+    expect(screen.getByText('The takeoff security height must be above zero.')).toBeVisible()
+    expect(change).not.toHaveBeenCalled()
+  })
+
+  it("holds a speed to the fleet's model maximum, and names it", async () => {
+    const { backend, fleet, wayline, operation } = await farm()
+    const { user } = await openAt(backend, operation.id)
+    await user.selectOptions(within(inspector()).getByLabelText('Wayline'), wayline.id)
+    await user.selectOptions(within(inspector()).getByLabelText('Fleet'), fleet.id)
+    await user.type(within(inspector()).getByLabelText('Speed'), '25')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText("Above the fleet's model maximum of 19 m/s.")).toBeVisible()
+    expect(backend.assignmentRows.get(operation.id) ?? []).toEqual([])
+  })
+
+  it('names a stored flight that cannot be read, rather than showing a guess', async () => {
+    const { backend, fleet, wayline, operation } = await farm()
+    const assignment: Assignment = {
+      id: '77777777-7777-4777-8777-777777777777',
+      operationId: operation.id,
+      waylineId: wayline.id,
+      fleetId: fleet.id,
+      speedMs: 10,
+      flight: { schema_version: '1.0.0' },
+    }
+    backend.assignmentRows.set(operation.id, [assignment])
+    await openAt(backend, operation.id)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/flight\./)
+    expect(screen.queryByText('Waypoints')).toBeNull()
+  })
+
+  it('reads the same values, with nothing to change, for a viewer', async () => {
+    const { backend, operation } = await farm()
+    await backend.changeOperation(operation.id, { takeoffSecurityHeightM: 30 })
+    backend.memberships.set(NEIGHBOUR.userId, [{ ...NORTH, role: 'viewer' }])
+    await openAt(backend, operation.id)
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.queryByLabelText('Takeoff security height')).toBeNull()
+    expect(screen.getByText('Takeoff security height')).toBeVisible()
+    expect(screen.getByText('30 m')).toBeVisible()
+    expect(screen.queryByRole('combobox', { name: /Operator role of/ })).toBeNull()
+  })
+
+  it('reads the definition once a flight is being prepared, and keeps the operators open', async () => {
+    const { backend, operation } = await farm({ state: 'simulating' })
+    await openAt(backend, operation.id)
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(within(inspector()).getByText('Simulating')).toBeVisible()
+    expect(
+      await within(inspector()).findByRole('combobox', {
+        name: 'Operator role of neighbour@farm.test',
+      }),
+    ).toBeEnabled()
+  })
+
+  it('reads the operators only from launching on', async () => {
+    const { backend, operation } = await farm({ state: 'launching' })
+    await openAt(backend, operation.id)
+    expect(within(inspector()).getByText('Launching')).toBeVisible()
+    expect(screen.queryByRole('combobox', { name: /Operator role of/ })).toBeNull()
+    expect(await within(inspector()).findByText('neighbour@farm.test')).toBeVisible()
+  })
+
+  it('says so, with the way out, for a link to an operation the organization does not have', async () => {
+    const { backend } = await farm()
+    window.history.replaceState(
+      null,
+      '',
+      '/?panel=operations&operation=99999999-9999-4999-8999-999999999999',
+    )
+    renderApp(backend)
+    await screen.findByRole('banner')
+    const shown = await screen.findByRole('complementary', { name: 'Inspector' })
+    expect(
+      await within(shown).findByText(
+        `${NORTH.name} has no operation with this link: it may belong to another organization.`,
+      ),
+    ).toBeVisible()
+    expect(within(shown).getByRole('button', { name: 'Clear the selection' })).toBeVisible()
+  })
+
+  it('reads a definition whose wayline has since been retired, as Retired', async () => {
+    const { backend, fleet, wayline, operation } = await farm()
+    backend.assignmentRows.set(operation.id, [
+      {
+        id: '77777777-7777-4777-8777-777777777777',
+        operationId: operation.id,
+        waylineId: wayline.id,
+        fleetId: fleet.id,
+        speedMs: null,
+        flight: null,
+      },
+    ])
+    await backend.retireWayline(wayline.id)
+    backend.memberships.set(NEIGHBOUR.userId, [{ ...NORTH, role: 'viewer' }])
+    await openAt(backend, operation.id)
+    expect(screen.getByText('Retired')).toBeVisible()
+  })
+})
