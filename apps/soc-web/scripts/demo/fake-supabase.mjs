@@ -3,8 +3,10 @@
 // geofences and waylines change in memory, and a restart resets them. The operations' tables
 // are the database's (operation-tables.mjs), and soc-operations and soc-cloud play on them
 // (lifecycle.mjs): each change to an operation is broadcast on its organization's state topic
-// as the database broadcasts it, and the console reads it. No telemetry is sent, and a fleet,
-// geofence or wayline changed from another console shows once the console reads again.
+// as the database broadcasts it, and the console reads it. The fleet's aircraft flies its operation's
+// flight (lifecycle.mjs, aircraft.mjs): it sends a sample every telemetryTickMs on the organization's
+// telemetry topic, heartbeat included, and each sample of a flight is stored as a row of its track. A
+// fleet, geofence or wayline changed from another console shows once the console reads again.
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -36,6 +38,9 @@ const NORTE_1 = '33333333-3333-4333-8333-333333333333'
 const NORTH_CORRIDOR = '55555555-5555-4555-8555-555555555555'
 const USER_ID = '6f1c2a52-34c5-4d7b-9a43-0b0f9e1d2c11'
 const GATEWAY = 'SOTESTDOCK01'
+/** The aircraft of Norte 1, the fleet that flies the demo's operation, on the stack the demo names. */
+const NORTE_1_AIRCRAFT = '1WNBH9E00A0042'
+const DEMO_STACK = 'lab'
 const OPERATION = '66666666-6666-4666-8666-666666666666'
 const ASSIGNMENT = '77777777-7777-4777-8777-777777777777'
 /** The address the demo answers for its one member: the demo signs in with any address. */
@@ -138,7 +143,7 @@ function device(aircraftSn, { online, linkState, firmware, firstSeen, lastSeen }
     firmware_version: firmware,
     first_seen_at: firstSeen,
     last_seen_at: lastSeen,
-    stacks: { name: 'lab', link_state: linkState },
+    stacks: { name: DEMO_STACK, link_state: linkState },
   }
 }
 
@@ -162,7 +167,7 @@ const DEVICES_BY_ORGANIZATION = new Map([
     NORTH,
     [
       // In a fleet.
-      device('1WNBH9E00A0042', {
+      device(NORTE_1_AIRCRAFT, {
         online: true,
         linkState: 'connected',
         firmware: '10.01.0004',
@@ -202,7 +207,7 @@ function seedFleets() {
       airframe_serial: '1WNBH9',
       controller_serial: null,
       gateway_sn: GATEWAY,
-      aircraft_sn: '1WNBH9E00A0042',
+      aircraft_sn: NORTE_1_AIRCRAFT,
       flight_time_before_soc_s: 45240,
       created_at: '2026-10-11T08:10:00+00:00',
       updated_at: '2026-10-11T08:10:00+00:00',
@@ -220,9 +225,12 @@ function nearNorth(east, north) {
   ]
 }
 
+/** The takeoff point of Finca Norte's wayline, where the demo's aircraft stands before it flies. */
+const TAKEOFF = nearNorth(0, 0)
+
 /** One wayline of Finca Norte, a corridor along its north field, to generate a geofence round. */
 function seedWaylines() {
-  const takeoff = nearNorth(0, 0)
+  const takeoff = TAKEOFF
   const route = [
     [0, 60],
     [180, 60],
@@ -306,7 +314,7 @@ function seedStacks() {
   return [
     {
       gateway_sn: GATEWAY,
-      name: 'lab',
+      name: DEMO_STACK,
       organization_id: NORTH,
       link_state: 'connected',
       envelope: ENVELOPE,
@@ -357,10 +365,10 @@ export function startFakeSupabase({ port = 0, telemetry = [], timings = {} } = {
       stacks: seedStacks(),
     },
   }
-  /** The sockets joined to each topic: a broadcast on a state topic is sent to those. */
+  /** The sockets joined to each topic: a broadcast on a topic is sent to those that joined it. */
   const topics = new Map()
-  const publish = (organizationId, event, payload) => {
-    const topic = stateTopic(organizationId)
+  /** A broadcast on a topic, framed as the Realtime protocol carries it, sent to each socket joined to it. */
+  const broadcast = (topic, event, payload) => {
     const frame = JSON.stringify([
       null,
       null,
@@ -372,12 +380,29 @@ export function startFakeSupabase({ port = 0, telemetry = [], timings = {} } = {
       if (client.readyState === WebSocket.OPEN) client.send(frame)
     }
   }
+  const publish = (organizationId, event, payload) =>
+    broadcast(stateTopic(organizationId), event, payload)
   const db = createOperationTables({
     rows: (name) => rowsOf(state, name),
     publish,
     roles: { canEdit },
   })
-  const lifecycle = createLifecycle({ db, roles: { canEdit }, timings: { ...TIMINGS, ...timings } })
+  const lifecycle = createLifecycle({
+    db,
+    roles: { canEdit },
+    timings: { ...TIMINGS, ...timings },
+    aircraft: {
+      organizationId: NORTH,
+      stack: DEMO_STACK,
+      gatewaySn: GATEWAY,
+      aircraftSn: NORTE_1_AIRCRAFT,
+      home: TAKEOFF,
+    },
+    telemetry: {
+      send: (organizationId, sample) => broadcast(telemetryTopic(organizationId), 'sample', sample),
+      store: (row) => state.telemetry.push(row),
+    },
+  })
   const app = { state, db, lifecycle }
   const server = createServer((request, response) => {
     void answer(app, request, response)
@@ -454,6 +479,11 @@ function joinTopic(topics, topic, client) {
 /** The Realtime topic of an organization's state (ADR-0007): the console joins `org:<id>:soc:state`. */
 function stateTopic(organizationId) {
   return `realtime:org:${organizationId}:soc:state`
+}
+
+/** The Realtime topic of an organization's telemetry (FR-TEL-01): the console joins `org:<id>:soc:telemetry`. */
+function telemetryTopic(organizationId) {
+  return `realtime:org:${organizationId}:soc:telemetry`
 }
 
 /** The live rows of a table, by name: the operations' tables and the plans and fleets alike. */

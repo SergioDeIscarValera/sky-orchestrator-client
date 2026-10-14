@@ -3,25 +3,42 @@
 // services/soc-operations/src/soc_operations/lifecycle.py: onRequest, onOutcome, onProgress and
 // onChecks are pure functions of a snapshot of the operation, and the moves they make are the ones
 // contracts/operations/lifecycle.json lists. The stack's side is soc-cloud's: it replies to each
-// command, reports each flight's progress, and sees the aircraft take off and land. Those are timers,
-// at the TIMINGS below, so a run is deterministic and nothing else reads the clock.
+// command, reports each flight's progress, and sees the aircraft take off and land. The aircraft flies
+// each task along the flight's stored route (aircraft.mjs has the pose), sends a sample every
+// telemetryTickMs, heartbeat included, and a flight's samples are stored as its track. Those are timers,
+// at the TIMINGS below, so a run is deterministic: a pose follows the elapsed times of the timers, and
+// only the stamps of the samples read the clock.
 import { createHash, randomUUID } from 'node:crypto'
 
+import {
+  groundMotion,
+  landedMotion,
+  MODES,
+  progressedMotion,
+  returnMotion,
+  routeMotion,
+  routeOf,
+  sampleOf,
+  tickedMotion,
+} from './aircraft.mjs'
 import { DatabaseError } from './operation-tables.mjs'
 
 /**
  * The demo's timings, in milliseconds from when each thing is asked or sent. A transition request is
  * claimed (running) and decided (accepted or refused) after claimMs and decideMs. A command intent is
  * sent and then answered, commandStepMs apart. A task runs from 0 to 100 percent in taskMs, its
- * progress written every progressTickMs. A real flight lands landMs after its task ends, or
- * returnHomeMs after a return home. A simulated operation becomes ready readyMs after its simulation.
+ * progress written every progressTickMs, and the aircraft flies its route over the same time. The
+ * aircraft sends a sample every telemetryTickMs. A flight's aircraft lands landMs after its task ends,
+ * or returnHomeMs after a return home, simulated or real. A real flight's take-off is takeOffMs after
+ * its execute. A simulated operation becomes ready readyMs after its simulation.
  */
 export const TIMINGS = Object.freeze({
   claimMs: 200,
   decideMs: 800,
   commandStepMs: 300,
   progressTickMs: 500,
-  taskMs: 12_000,
+  taskMs: 60_000,
+  telemetryTickMs: 500,
   takeOffMs: 1_000,
   landMs: 3_000,
   returnHomeMs: 6_000,
@@ -155,9 +172,9 @@ export function judgeChecks(evaluatedAt) {
 
 /** DJI's result for a return home the operator sent (soc-cloud's END_RESULTS: USER_SEND_RTH). */
 const RETURN_HOME_RESULT = 322283
-/** DJI's flight modes the demo's flights report: automatic takeoff, then on the ground. */
-const TOOK_OFF_MODE = 4
-const LANDED_MODE = 0
+/** The modes of the two moments the log records: automatic takeoff, and idle once on the ground. */
+const TOOK_OFF_MODE = MODES.automaticTakeoff
+const LANDED_MODE = MODES.idle
 /** The lowest return-to-home altitude Sky Orchestrator sends (soc-operations' LEAST_RTH_ALTITUDE_M). */
 const LEAST_RTH_ALTITUDE_M = 20
 /** The flight statuses that end a task (soc-cloud's TERMINAL). */
@@ -426,12 +443,20 @@ const messageOf = (error) => (error instanceof Error ? error.message : String(er
  * The play: soc-operations and soc-cloud on `db` (operation-tables.mjs), with the timers of TIMINGS.
  * `transitionAsked` and `commandAsked` are called once for each request the database inserted;
  * `close` clears every timer, so the process can exit. `onError` hears an error a timer met.
+ *
+ * `aircraft` is the demo's aircraft: its organization, its stack and gateway and aircraft, and its
+ * takeoff point ([longitude, latitude]), where it stands before its first flight. With it, the aircraft
+ * sends a sample every telemetryTickMs through `telemetry.send(organization, sample)`, and the samples
+ * of a flight are handed to `telemetry.store(row)` as its track while the flight is unended. Without
+ * it, the lifecycle sends no telemetry.
  */
 export function createLifecycle({
   db,
   roles,
   timings: given = {},
   onError = (error) => console.error(error),
+  aircraft = null,
+  telemetry = { send: () => undefined, store: () => undefined },
 }) {
   const timings = { ...TIMINGS, ...given }
   const pending = new Set()
@@ -439,8 +464,18 @@ export function createLifecycle({
   const files = new Map()
   /** How many waypoints each flight's stored flight has: the waypoint its progress follows. */
   const waypointCounts = new Map()
+  /** Each flight's route, as the aircraft flies it, built at its prepare (null when it has no waypoint). */
+  const routes = new Map()
   /** Each flight's task: whether it runs, and the timers that drive it. */
   const tasks = new Map()
+  /** The aircraft's motion: what it stands on, flies or returns along. Starts on the ground at home. */
+  let motion = groundMotion(aircraft?.home ?? [0, 0])
+  /** The flight the aircraft last started flying: its samples are stored while it is unended. */
+  let flightInAir = null
+  /** The last sample time stored as a track row: a row is stored once per millisecond, as the table keys it. */
+  let storedAtMs = -Infinity
+  /** How many returns home the aircraft has begun: each numbered, so only its own landing lands it. */
+  let returns = 0
   let closed = false
 
   function schedule(ms, action) {
@@ -647,6 +682,7 @@ export function createLifecycle({
       ? assignment.flight.waypoints.length
       : 0
     waypointCounts.set(flight.id, count)
+    routes.set(flight.id, routeOf(assignment.flight.waypoints))
     db.log(
       snapshot.operationId,
       'flight_prepared',
@@ -716,6 +752,7 @@ export function createLifecycle({
 
   function startTask(flightId) {
     const flight = flightRow(flightId)
+    flyRoute(flightId)
     const task = { running: true, stopped: false, elapsedMs: 0, timer: null }
     tasks.set(flightId, task)
     progressTo(flightId, 'in_progress', {
@@ -731,6 +768,7 @@ export function createLifecycle({
     const task = tasks.get(flightId)
     if (task === undefined || !task.running || flightRow(flightId).ended_at !== null) return
     task.elapsedMs = Math.min(timings.taskMs, task.elapsedMs + timings.progressTickMs)
+    motion = progressedMotion(motion, flightId, task.elapsedMs)
     if (task.elapsedMs >= timings.taskMs) {
       finishTask(flightId)
       return
@@ -746,12 +784,14 @@ export function createLifecycle({
   function finishTask(flightId) {
     const task = tasks.get(flightId)
     if (task !== undefined) task.running = false
+    motion = progressedMotion(motion, flightId, timings.taskMs)
     progressTo(flightId, 'ok', {
       result: 0,
       percent: 100,
       waypoint: waypointAt(flightId, 1),
       endReason: 'completed',
     })
+    aircraftReturns(timings.landMs)
     if (flightRow(flightId).mode === 'real') schedule(timings.landMs, () => land(flightId))
   }
 
@@ -804,6 +844,7 @@ export function createLifecycle({
       result: RETURN_HOME_RESULT,
       endReason: 'operator_return',
     })
+    aircraftReturns(timings.returnHomeMs)
     if (flight.mode === 'real') schedule(timings.returnHomeMs, () => land(flightId))
   }
 
@@ -816,6 +857,51 @@ export function createLifecycle({
       result: 0,
       endReason: 'cancelled',
     })
+  }
+
+  /** A flight's task starts: the aircraft takes its route, and the flight's samples are stored from now. */
+  function flyRoute(flightId) {
+    flightInAir = flightId
+    storedAtMs = -Infinity
+    const route = routes.get(flightId) ?? null
+    if (route !== null) motion = routeMotion(route, timings.taskMs, flightId)
+  }
+
+  /**
+   * The aircraft returns home from where it is, over `durationMs`, and stands on its takeoff point once
+   * that time is up. A return already under way is not begun again.
+   */
+  function aircraftReturns(durationMs) {
+    if (motion.kind === 'return') return
+    returns += 1
+    const returnId = returns
+    motion = returnMotion(motion, durationMs, returnId)
+    schedule(durationMs, () => {
+      if (motion.kind === 'return' && motion.returnId === returnId) motion = landedMotion(motion)
+    })
+  }
+
+  /**
+   * One telemetry tick: the aircraft's sample is sent, and it is stored as a row of the flight in the air
+   * while that flight is unended. The next tick is set first, so an error in this one, which schedule
+   * reports, does not stop the heartbeat.
+   */
+  function telemetryTick() {
+    schedule(timings.telemetryTickMs, telemetryTick)
+    const nowMs = Date.now()
+    const sample = sampleOf(motion, aircraft, nowMs)
+    telemetry.send(aircraft.organizationId, sample)
+    if (flightInAir !== null && flightRow(flightInAir).ended_at === null && nowMs > storedAtMs) {
+      storedAtMs = nowMs
+      telemetry.store({
+        flight_id: flightInAir,
+        sampled_at: new Date(nowMs).toISOString(),
+        latitude: sample.latitude_deg,
+        longitude: sample.longitude_deg,
+        height_m: sample.height_m,
+      })
+    }
+    motion = tickedMotion(motion, timings.telemetryTickMs)
   }
 
   function endFlight(flightId, reason) {
@@ -859,6 +945,7 @@ export function createLifecycle({
     }
   }
 
+  if (aircraft !== null) schedule(timings.telemetryTickMs, telemetryTick)
   return {
     /** A transition request was asked: claimed after claimMs, decided after decideMs. */
     transitionAsked(requestId) {

@@ -1,3 +1,4 @@
+import type { Identity, Position, Sample } from './aircraft.mjs'
 import type { Db, Row } from './operation-tables.mjs'
 
 /** The demo's timings in milliseconds (lifecycle.mjs, TIMINGS). */
@@ -7,6 +8,7 @@ export interface Timings {
     readonly commandStepMs: number
     readonly progressTickMs: number
     readonly taskMs: number
+    readonly telemetryTickMs: number
     readonly takeOffMs: number
     readonly landMs: number
     readonly returnHomeMs: number
@@ -48,11 +50,25 @@ export interface Lifecycle {
     close(): void
 }
 
+/** The demo's aircraft: where it is named, and its takeoff point, where it stands before its first flight. */
+export interface DemoAircraft extends Identity {
+    readonly organizationId: string
+    readonly home: Position
+}
+
+/** Where the lifecycle sends each sample of the aircraft, and stores the rows of a flight's track. */
+export interface Telemetry {
+    readonly send: (organization: string, sample: Sample) => void
+    readonly store: (row: Row) => void
+}
+
 export interface LifecycleOptions {
     readonly db: Db
     readonly roles: { readonly canEdit: (organization: string, profile?: string) => boolean }
     readonly timings?: Partial<Timings>
     readonly onError?: (error: unknown) => void
+    readonly aircraft?: DemoAircraft | null
+    readonly telemetry?: Telemetry
 }
 
 /** soc-operations and soc-cloud on the database, on the demo's timers. */

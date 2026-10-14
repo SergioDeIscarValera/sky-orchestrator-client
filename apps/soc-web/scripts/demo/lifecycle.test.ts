@@ -2,6 +2,8 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
+import { sampleOf as consoleSampleOf } from '../../src/telemetry/sample'
+import { MODES, type Sample } from './aircraft.mjs'
 import { createLifecycle, judgeChecks, MOVES, PF_CHECK_IDS, STACK, TIMINGS } from './lifecycle.mjs'
 import {
   createOperationTables,
@@ -19,6 +21,16 @@ const OPERATION = '66666666-6666-4666-8666-666666666666'
 const ASSIGNMENT = '77777777-7777-4777-8777-777777777777'
 const FLEET = '33333333-3333-4333-8333-333333333333'
 const WAYLINE = '55555555-5555-4555-8555-555555555555'
+/** The takeoff point of the wayline, where the aircraft stands before it flies. */
+const HOME = [-4.7245, 41.6523] as const
+/** The aircraft Norte 1 flies, as the demo names it: on stack lab, through its gateway. */
+const AIRCRAFT = {
+  organizationId: NORTH,
+  stack: 'lab',
+  gatewaySn: 'SOTESTDOCK01',
+  aircraftSn: '1WNBH9E00A0042',
+  home: HOME,
+}
 
 /** A contract file the demo reads, relative to this test. */
 const contract = (path: string): unknown =>
@@ -30,12 +42,22 @@ interface Frame {
   readonly payload: Row
 }
 
+/** A sample the aircraft sent, with the organization whose telemetry topic it went to. */
+interface Sent {
+  readonly organization: string
+  readonly sample: Sample
+}
+
 interface Scenario {
   readonly db: Db
   readonly lifecycle: ReturnType<typeof createLifecycle>
   readonly frames: Frame[]
   readonly errors: unknown[]
   readonly tables: Record<string, Row[]>
+  /** Each sample the aircraft sent, in order. */
+  readonly sent: Sent[]
+  /** Each row the lifecycle stored as a flight's track, in order. */
+  readonly stored: Row[]
 }
 
 /** One draft operation of North corridor, flown by Norte 1 with its pilot, and nothing run yet. */
@@ -98,6 +120,8 @@ function scenario({ pilot = true }: { readonly pilot?: boolean } = {}): Scenario
   ]
   const frames: Frame[] = []
   const errors: unknown[] = []
+  const sent: Sent[] = []
+  const stored: Row[] = []
   const rows = (name: string): Row[] => {
     if (name === 'fleets') return fleets
     if (name === 'waylines') return waylines
@@ -114,8 +138,17 @@ function scenario({ pilot = true }: { readonly pilot?: boolean } = {}): Scenario
     db,
     roles: { canEdit: () => true },
     onError: (error) => errors.push(error),
+    aircraft: AIRCRAFT,
+    telemetry: {
+      send: (organization, sample) => {
+        sent.push({ organization, sample })
+      },
+      store: (row) => {
+        stored.push(row)
+      },
+    },
   })
-  return { db, lifecycle, frames, errors, tables }
+  return { db, lifecycle, frames, errors, tables, sent, stored }
 }
 
 /** The operation's row, which the database holds in one array. */
@@ -390,7 +423,7 @@ describe('a preparation and a simulation', () => {
     expect(broadcast).toHaveLength(16)
   })
 
-  it('simulates: logs the checks, prepares a simulated flight, plays 12 s of progress, and ends ok', () => {
+  it('simulates: logs the checks, prepares a simulated flight, plays its task, and ends ok', () => {
     const s = scenario()
     simulateToReady(s)
     expect(kindsOf(s).slice(0, 8)).toEqual([
@@ -720,11 +753,182 @@ describe('the log and the contracts it holds to', () => {
   })
 })
 
+/** The keys the telemetry contract requires of every sample (contracts/broadcast/telemetry.schema.json). */
+const CONTRACT_KEYS = (
+  contract('../../../../contracts/broadcast/telemetry.schema.json') as { required: string[] }
+).required
+
+/** The samples the aircraft sent from the `from`th on, in order. */
+const sentSince = (s: Scenario, from: number): Sample[] =>
+  s.sent.slice(from).map(({ sample }) => sample)
+
+/** The track rows a flight stored, in the order they were stored. */
+const rowsOf = (s: Scenario, flight: Row): Row[] =>
+  s.stored.filter((row) => row.flight_id === flight.id)
+
+describe('the aircraft in the air', () => {
+  it('stands on the ground at its takeoff point before any flight, sending a sample each tick and storing none', () => {
+    const s = scenario()
+    advance(3 * TIMINGS.telemetryTickMs)
+    expect(s.sent).toHaveLength(3)
+    for (const { organization, sample } of s.sent) {
+      expect(organization).toBe(NORTH)
+      expect(sample).toMatchObject({
+        stack: 'lab',
+        gateway_sn: 'SOTESTDOCK01',
+        aircraft_sn: '1WNBH9E00A0042',
+        latitude_deg: HOME[1],
+        longitude_deg: HOME[0],
+        height_m: 0,
+        heading_deg: 0,
+        home_distance_m: 0,
+        battery_pct: 96,
+        mode_code: MODES.idle,
+      })
+    }
+    expect(s.stored).toEqual([])
+  })
+
+  it("sends every sample on the telemetry contract, each with exactly the contract's keys", () => {
+    const s = scenario()
+    launchToFlight(s)
+    advance(TIMINGS.takeOffMs + TIMINGS.taskMs + TIMINGS.landMs)
+    expect(s.sent.length).toBeGreaterThan(100)
+    for (const { sample } of s.sent) {
+      expect(Object.keys(sample).sort()).toEqual([...CONTRACT_KEYS].sort())
+      expect(consoleSampleOf(sample)).not.toBeNull()
+    }
+  })
+
+  it('starts its task on the ground at the takeoff point, and climbs straight up in automatic takeoff', () => {
+    const s = scenario()
+    launchToFlight(s)
+    advance(TIMINGS.progressTickMs + 4 * TIMINGS.telemetryTickMs)
+    // The simulation before the launch stored its own track too: this is the launch's.
+    const own = rowsOf(s, flightOf(s))
+    expect(own.length).toBeGreaterThan(0)
+    expect(own[0]).toMatchObject({ latitude: HOME[1], longitude: HOME[0] })
+    expect(Number(own[0]?.height_m)).toBeLessThan(30)
+    const climbing = sentSince(s, 0).filter((sample) => sample.mode_code === MODES.automaticTakeoff)
+    expect(climbing.length).toBeGreaterThan(0)
+    for (const sample of climbing) {
+      expect(sample.latitude_deg).toBeCloseTo(HOME[1], 9)
+      expect(sample.longitude_deg).toBeCloseTo(HOME[0], 9)
+      expect(sample.height_m).toBeGreaterThan(0)
+      expect(sample.height_m).toBeLessThan(30)
+    }
+  })
+
+  it('flies the wayline, then returns from its last waypoint and lands on the takeoff point, the modes in order', () => {
+    const s = scenario()
+    launchToFlight(s)
+    advance(TIMINGS.takeOffMs + TIMINGS.taskMs + TIMINGS.landMs)
+    expect(stateOf(s)).toBe('completed')
+    const modes = sentSince(s, 0).map((sample) => sample.mode_code)
+    const first = (mode: number): number => modes.indexOf(mode)
+    expect(first(MODES.automaticTakeoff)).toBeGreaterThanOrEqual(0)
+    expect(first(MODES.wayline)).toBeGreaterThan(first(MODES.automaticTakeoff))
+    expect(first(MODES.automaticReturn)).toBeGreaterThan(first(MODES.wayline))
+    expect(first(MODES.automaticLanding)).toBeGreaterThan(first(MODES.automaticReturn))
+    const landed = s.sent.at(-1)?.sample
+    expect(landed).toMatchObject({ height_m: 0, mode_code: MODES.idle, home_distance_m: 0 })
+    expect(landed?.latitude_deg).toBeCloseTo(HOME[1], 9)
+    expect(landed?.longitude_deg).toBeCloseTo(HOME[0], 9)
+  })
+
+  it('holds its position across the ticks of a pause, and resumes from it', () => {
+    const s = scenario()
+    launchToFlight(s)
+    advance(TIMINGS.takeOffMs + 10 * TIMINGS.progressTickMs)
+    askCommand(s, 'pause')
+    advance(2 * TIMINGS.commandStepMs)
+    expect(stateOf(s)).toBe('paused')
+    const held = s.sent.length
+    advance(5 * TIMINGS.telemetryTickMs)
+    const paused = sentSince(s, held)
+    expect(paused).toHaveLength(5)
+    for (const sample of paused) {
+      expect(sample).toMatchObject({
+        latitude_deg: paused[0]?.latitude_deg,
+        longitude_deg: paused[0]?.longitude_deg,
+        height_m: paused[0]?.height_m,
+        heading_deg: paused[0]?.heading_deg,
+        mode_code: MODES.wayline,
+      })
+    }
+    askCommand(s, 'recovery')
+    advance(2 * TIMINGS.commandStepMs)
+    const resumed = s.sent.length
+    advance(4 * TIMINGS.telemetryTickMs)
+    const moved = sentSince(s, resumed).at(-1)
+    expect(moved?.latitude_deg).not.toBe(paused[0]?.latitude_deg)
+    expect(moved?.longitude_deg).not.toBe(paused[0]?.longitude_deg)
+  })
+
+  it('returns home from where it stands: back above the takeoff point, down onto it, on the ground when the return is over', () => {
+    const s = scenario()
+    launchToFlight(s)
+    advance(TIMINGS.takeOffMs + 10 * TIMINGS.progressTickMs)
+    askCommand(s, 'return_home')
+    advance(2 * TIMINGS.commandStepMs)
+    const returning = s.sent.length
+    advance(TIMINGS.returnHomeMs + TIMINGS.telemetryTickMs)
+    const home = sentSince(s, returning)
+    const modes = home.map((sample) => sample.mode_code)
+    expect(modes).toContain(MODES.automaticReturn)
+    expect(modes).toContain(MODES.automaticLanding)
+    expect(modes.indexOf(MODES.automaticLanding)).toBeGreaterThan(
+      modes.indexOf(MODES.automaticReturn),
+    )
+    expect(home.at(-1)).toMatchObject({ height_m: 0, mode_code: MODES.idle, home_distance_m: 0 })
+    expect(home.at(-1)?.latitude_deg).toBeCloseTo(HOME[1], 9)
+    expect(home.at(-1)?.longitude_deg).toBeCloseTo(HOME[0], 9)
+    expect(stateOf(s)).toBe('aborted')
+    expect(flightOf(s).landed_at).not.toBeNull()
+  })
+
+  it('flies a simulated flight the same way, lands it, and stores its track only while it is unended', () => {
+    const s = scenario()
+    simulateToReady(s)
+    advance(TIMINGS.landMs)
+    const simulated = flightOf(s, 'simulated')
+    expect(s.stored.length).toBeGreaterThan(0)
+    expect(new Set(s.stored.map((row) => row.flight_id))).toEqual(new Set([simulated.id]))
+    for (const row of s.stored) {
+      expect(String(row.sampled_at) <= String(simulated.ended_at)).toBe(true)
+    }
+    expect(s.sent.at(-1)?.sample).toMatchObject({ height_m: 0, mode_code: MODES.idle })
+  })
+
+  it("stores a flight's samples from its execute until it ends, in time order, and none after", () => {
+    const s = scenario()
+    launchToFlight(s)
+    advance(TIMINGS.takeOffMs + TIMINGS.taskMs + TIMINGS.landMs)
+    const flight = flightOf(s)
+    expect(flight.ended_at).not.toBeNull()
+    const executed = String(flight.executed_at)
+    const ended = String(flight.ended_at)
+    const own = rowsOf(s, flight)
+    expect(own.length).toBeGreaterThan(100)
+    for (const row of own) {
+      expect(String(row.sampled_at) >= executed).toBe(true)
+      expect(String(row.sampled_at) <= ended).toBe(true)
+    }
+    const times = own.map((row) => Date.parse(String(row.sampled_at)))
+    expect(times).toEqual([...times].sort((a, b) => a - b))
+    expect(new Set(times).size).toBe(times.length)
+    const count = s.stored.length
+    advance(10 * TIMINGS.telemetryTickMs)
+    expect(s.stored).toHaveLength(count)
+  })
+})
+
 describe('the timers', () => {
-  it('stops every timer on close, so nothing is written after the fake stops', () => {
+  it("stops every timer on close, the aircraft's heartbeat included, so nothing is written after the fake stops", () => {
     const s = scenario()
     makeFlyable(s)
     const request = ask(s, 'plan')
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
     s.lifecycle.close()
     advance(10 * TIMINGS.decideMs)
     expect(request.status).toBe('pending')
