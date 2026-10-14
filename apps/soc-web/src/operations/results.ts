@@ -15,7 +15,7 @@ export type ResultMethod =
   | 'return_home'
   | 'flighttask_undo'
 
-export const RESULTS_VERSION = '1.0.0'
+export const RESULTS_VERSION = '1.1.0'
 
 /** What a code with no entry reads as; the console shows it with the code's number. */
 export const RESULT_DEFAULT = 'Sky Orchestrator refused it'
@@ -36,7 +36,7 @@ export const RESULT_MEANINGS: Readonly<
 > = {
   flighttask_prepare: {
     '314010':
-      "This file has not completed a simulation on this stack, or lies outside the phone's own envelope: the phone's record names the distance",
+      "This file has not completed a simulation on this stack, lies outside the phone's own envelope, or asks a return height the aircraft did not take: the phone's record names which",
     '314003': 'Sky Orchestrator refused the file',
     '319015': "The stack's mode is not known yet",
     '319004': 'The task was prepared under the other mode: cancel it and prepare again',
@@ -58,8 +58,12 @@ export const RESULT_MEANINGS: Readonly<
     '319015': "The stack's mode is not known yet",
     '319004': 'The task was prepared under the other mode: cancel it and prepare again',
   },
-  flighttask_pause: {},
+  flighttask_pause: {
+    '319046': 'The task cannot be paused now: it is taking off, already paused, or over',
+  },
   flighttask_recovery: {
+    '319042': 'The task cannot be resumed now: it is not paused',
+    '319044': 'There is no task to resume',
     '319999': "The outcome is not known yet: SOC reads the flight's progress",
   },
   return_home: {},

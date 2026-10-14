@@ -82,7 +82,7 @@ describe("the results' meanings (FR-OPS-09, FR-CMD-06)", () => {
 
   it('tells one code apart by the method that drew it', () => {
     expect(resultWords('prepare', 314010)).toBe(
-      "This file has not completed a simulation on this stack, or lies outside the phone's own envelope: the phone's record names the distance",
+      "This file has not completed a simulation on this stack, lies outside the phone's own envelope, or asks a return height the aircraft did not take: the phone's record names which",
     )
     expect(resultWords('execute', 314010)).toBe(
       "Arm the phone, release the aircraft held from the phone's console, or confirm real flight on the phone's screen, and retry",
