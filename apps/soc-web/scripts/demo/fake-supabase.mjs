@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { WebSocket, WebSocketServer } from 'ws'
 
-import { createLifecycle, TIMINGS } from './lifecycle.mjs'
+import { createLifecycle, stackStatus, TIMINGS } from './lifecycle.mjs'
 import { createOperationTables, DatabaseError } from './operation-tables.mjs'
 
 const HOST = '127.0.0.1'
@@ -317,16 +317,21 @@ function seedStacks() {
       name: DEMO_STACK,
       organization_id: NORTH,
       link_state: 'connected',
+      // The phone starts in its simulator (lifecycle.mjs): a simulation runs before the real flight.
+      status: stackStatus(true),
       envelope: ENVELOPE,
       envelope_read_at: '2026-10-11T12:40:00+00:00',
+      updated_at: '2026-10-11T12:40:00+00:00',
     },
     ...['REPLAYDOCK', 'REPLAYDOCK2'].map((gatewaySn) => ({
       gateway_sn: gatewaySn,
       name: 'replay',
       organization_id: NORTH,
       link_state: 'connected',
+      status: null,
       envelope: null,
       envelope_read_at: null,
+      updated_at: '2026-10-11T12:41:00+00:00',
     })),
   ]
 }

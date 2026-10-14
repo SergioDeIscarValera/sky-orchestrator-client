@@ -4,7 +4,14 @@ import { readFileSync } from 'node:fs'
 
 import { sampleOf as consoleSampleOf } from '../../src/telemetry/sample'
 import { MODES, type Sample } from './aircraft.mjs'
-import { createLifecycle, judgeChecks, MOVES, PF_CHECK_IDS, STACK, TIMINGS } from './lifecycle.mjs'
+import {
+  createLifecycle,
+  judgeChecks,
+  MOVES,
+  PF_CHECK_IDS,
+  stackStatus,
+  TIMINGS,
+} from './lifecycle.mjs'
 import {
   createOperationTables,
   DatabaseError,
@@ -105,6 +112,18 @@ function scenario({ pilot = true }: { readonly pilot?: boolean } = {}): Scenario
     flights: [],
     flight_states: [],
     command_intents: [],
+    stacks: [
+      {
+        gateway_sn: 'SOTESTDOCK01',
+        organization_id: NORTH,
+        name: 'lab',
+        link_state: 'connected',
+        status: stackStatus(true),
+        envelope: null,
+        envelope_read_at: null,
+        updated_at: '2026-10-11T12:40:00+00:00',
+      },
+    ],
   }
   const fleets: Row[] = [
     {
@@ -748,8 +767,11 @@ describe('the log and the contracts it holds to', () => {
     const block = /CHECK_ORDER = \[([\s\S]*?)\] as const/.exec(source)?.[1] ?? ''
     const ids = [...block.matchAll(/'(PF-[A-Z-]+)'/g)].map((match) => match[1])
     expect(ids).toEqual([...PF_CHECK_IDS])
-    expect(judgeChecks('2026-10-13T10:00:00.000Z').map((check) => check.check_id)).toEqual(ids)
-    expect(STACK.simulatorMode).toBe(false)
+    const real = { simulatorMode: false, simulatorActive: false, configFingerprint: 'demo' }
+    expect(judgeChecks('2026-10-13T10:00:00.000Z', real).map((check) => check.check_id)).toEqual(
+      ids,
+    )
+    expect(stackStatus(true)).toMatchObject({ simulator_mode: true, simulator_active: true })
   })
 })
 
@@ -920,6 +942,98 @@ describe('the aircraft in the air', () => {
     const count = s.stored.length
     advance(10 * TIMINGS.telemetryTickMs)
     expect(s.stored).toHaveLength(count)
+  })
+})
+
+/** The demo's stack row, as the scenario holds it. */
+const stackOfScenario = (s: Scenario): Row => s.tables.stacks?.[0] ?? {}
+
+/** The operation check the scenario last wrote for an id, if it wrote one. */
+const checkOf = (s: Scenario, id: string): Row | undefined =>
+  (s.tables.operation_checks ?? []).find((check) => check.check_id === id)
+
+describe("the demo's stack, in simulator mode for a simulation and in real mode for a launch (FR-SAF-04)", () => {
+  it('judges a simulation in simulator mode: PF-MODE and PF-SIMULATOR say so, and pass', () => {
+    const s = scenario()
+    makeFlyable(s)
+    ask(s, 'plan')
+    advance(TIMINGS.decideMs)
+    ask(s, 'prepare')
+    advance(TIMINGS.decideMs)
+    ask(s, 'simulate')
+    advance(TIMINGS.decideMs)
+    expect(stateOf(s)).toBe('simulating')
+    expect(checkOf(s, 'PF-MODE')).toMatchObject({
+      state: 'pass',
+      detail: 'The stack is in simulator mode.',
+      value: { simulator_mode: true },
+    })
+    expect(checkOf(s, 'PF-SIMULATOR')).toMatchObject({
+      state: 'pass',
+      detail: "The phone's simulator is on, as simulator mode requires.",
+      value: { simulator_mode: true, simulator_active: true },
+    })
+  })
+
+  it('turns the stack to real mode when the simulated operation becomes ready, then judges the real-mode checks', () => {
+    const s = scenario()
+    simulateToReady(s)
+    expect(stateOf(s)).toBe('ready')
+    expect(stackOfScenario(s).status).toEqual(stackStatus(false))
+    expect(checkOf(s, 'PF-MODE')).toMatchObject({
+      state: 'pass',
+      detail: 'The stack is in real mode.',
+      value: { simulator_mode: false },
+    })
+    expect(checkOf(s, 'PF-SIMULATOR')).toMatchObject({
+      state: 'pass',
+      detail: "The phone's simulator is off, as real mode requires.",
+      value: { simulator_mode: false, simulator_active: false },
+    })
+    // The stack's change is broadcast like any other, and before the operation's move to ready.
+    const stackAt = s.frames.findIndex((frame) => frame.event === 'stack')
+    const readyAt = s.frames.findIndex(
+      (frame) => frame.event === 'operation' && frame.payload.state === 'ready',
+    )
+    expect(stackAt).toBeGreaterThanOrEqual(0)
+    expect(stackAt).toBeLessThan(readyAt)
+    expect(s.frames[stackAt]?.payload).toMatchObject({ gateway_sn: 'SOTESTDOCK01', name: 'lab' })
+  })
+
+  it('refuses a simulation while the stack is in real mode, naming the mode', () => {
+    const s = scenario()
+    makeFlyable(s)
+    stackOfScenario(s).status = stackStatus(false)
+    ask(s, 'plan')
+    advance(TIMINGS.decideMs)
+    ask(s, 'prepare')
+    advance(TIMINGS.decideMs)
+    const simulate = ask(s, 'simulate')
+    advance(TIMINGS.decideMs)
+    expect(simulate.status).toBe('refused')
+    expect(simulate.reasons).toEqual([
+      'the stack is in real mode: a simulation needs simulator mode',
+    ])
+    expect(stateOf(s)).toBe('preparing')
+  })
+
+  it('never launches with the stack in simulator mode: the launch is refused, naming the mode', () => {
+    const s = scenario()
+    simulateToReady(s)
+    stackOfScenario(s).status = stackStatus(true)
+    const launch = ask(s, 'launch')
+    advance(TIMINGS.decideMs)
+    expect(launch.status).toBe('refused')
+    expect(launch.reasons).toEqual(['the stack is not in real mode'])
+    expect(stateOf(s)).toBe('ready')
+  })
+
+  it('turns the stack back to its simulator when its operation closes, ready for the next simulation', () => {
+    const s = scenario()
+    launchToFlight(s)
+    advance(TIMINGS.takeOffMs + TIMINGS.taskMs + TIMINGS.landMs)
+    expect(stateOf(s)).toBe('completed')
+    expect(stackOfScenario(s).status).toEqual(stackStatus(true))
   })
 })
 

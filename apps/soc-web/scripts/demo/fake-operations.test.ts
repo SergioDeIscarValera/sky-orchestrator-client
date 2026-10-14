@@ -22,7 +22,10 @@ const STATE_TOPIC = `realtime:org:${NORTH}:soc:state`
 const TELEMETRY_TOPIC = `realtime:org:${NORTH}:soc:telemetry`
 const OTHER_TOPIC = 'realtime:org:22222222-2222-4222-8222-222222222222:soc:state'
 
-/** The state events of an operation: the seven the console's STATE_EVENTS lists for it. */
+/**
+ * The state events the console reads for an operation (STATE_EVENTS), once the simulation is ready: the
+ * operation's seven, and the stack's change to real mode (soc.broadcast_stack), sent at ready.
+ */
 const OPERATION_EVENTS = [
   'operation',
   'flight',
@@ -31,6 +34,7 @@ const OPERATION_EVENTS = [
   'transition_request',
   'operation_check',
   'command_intent',
+  'stack',
 ]
 
 /** Short timings, so a whole operation runs in well under a second of real time. */
@@ -213,9 +217,9 @@ describe('the operations broadcast on the state topic, as the database does', ()
     await waitFor(
       () =>
         client.broadcasts.some(
-          (each) => each.event === 'operation' && each.payload.state === 'simulated',
+          (each) => each.event === 'operation' && each.payload.state === 'ready',
         ),
-      'the simulated broadcast',
+      'the ready broadcast',
     )
 
     const events = new Set(client.broadcasts.map((each) => each.event))
@@ -231,7 +235,8 @@ describe('the operations broadcast on the state topic, as the database does', ()
         expect(Object.keys(payload).sort()).toEqual(['end_reason', 'id', 'state', 'updated_at'])
       }
     }
-    expect(client.broadcasts.filter((each) => each.event === 'operation_check')).toHaveLength(16)
+    // The sixteen checks, and the two mode checks written again when the stack turns to real mode.
+    expect(client.broadcasts.filter((each) => each.event === 'operation_check')).toHaveLength(18)
     const logged = client.broadcasts
       .filter((each) => each.event === 'operation_event')
       .map((each) => each.payload.kind)

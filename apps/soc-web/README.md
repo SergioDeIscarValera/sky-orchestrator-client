@@ -319,7 +319,8 @@ draft, North corridor, flown by Norte 1 along the north corridor wayline, with i
 user) and an empty log. The operations panel lists it; Save stores the flight of its definition, and
 New and the operators write in memory like the rest. The demo plays soc-operations and soc-cloud, so
 an operation can be flown end to end in it: plan, prepare, simulate, launch, pause, return home and
-stop. Fleets change in memory, and a restart resets them. Realtime answers the console's joins and
+stop. The phone starts in its simulator, so a simulation runs there; it turns to real mode once the
+simulation is ready, for the launch. Fleets change in memory, and a restart resets them. Realtime answers the console's joins and
 heartbeats, so the link reads up, and it sends each change to an operation as the database broadcasts
 it; the fleet's aircraft flies its operation's stored flight (it takes off from the wayline's takeoff point, flies the route over the task's minute, then lands), its samples broadcast twice a second on the telemetry topic and stored as the flight's track; a fleet, geofence or wayline changed elsewhere shows once the console
 reads again; `http://localhost:5199/?replay` flies the development replay

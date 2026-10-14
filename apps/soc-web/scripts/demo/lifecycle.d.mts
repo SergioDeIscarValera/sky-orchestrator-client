@@ -17,11 +17,15 @@ export interface Timings {
 
 export declare const TIMINGS: Readonly<Timings>
 
-/** The demo's one stack as soc-cloud reports it: real mode, under one configuration. */
-export declare const STACK: Readonly<{
-    readonly simulatorMode: boolean
-    readonly configFingerprint: string
-}>
+/** The demo's stack as soc-operations reads it: its mode, its phone's simulator, its configuration; null where unknown. */
+export interface StackState {
+    readonly simulatorMode: boolean | null
+    readonly simulatorActive: boolean | null
+    readonly configFingerprint: string | null
+}
+
+/** The status soc-cloud records for the demo's stack (soc.stacks.status), in the mode given. */
+export declare function stackStatus(simulatorMode: boolean): Readonly<Record<string, unknown>>
 
 /** The moves the module makes, each as [from, to]. */
 export declare const MOVES: ReadonlyArray<readonly [string, string]>
@@ -38,8 +42,8 @@ export interface JudgedCheck {
     readonly evaluated_at: string
 }
 
-/** The sixteen checks, as judged at `evaluatedAt`: every one passes. */
-export declare function judgeChecks(evaluatedAt: string): JudgedCheck[]
+/** The sixteen checks, as judged at `evaluatedAt` for a stack in the state given: every one passes, but the mode checks. */
+export declare function judgeChecks(evaluatedAt: string, stack: StackState): JudgedCheck[]
 
 export interface Lifecycle {
     /** A transition request was inserted: it is claimed and decided on its timers. */
