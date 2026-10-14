@@ -293,9 +293,11 @@ aircraft on stack `lab`: one online in a fleet, one online in no fleet, and one 
 be registered. Almendral (viewer) has no aircraft and no fleets. Finca Norte has one operation in
 draft, North corridor, flown by Norte 1 along the north corridor wayline, with its pilot (the demo
 user) and an empty log. The operations panel lists it; Save stores the flight of its definition, and
-New and the operators write in memory like the rest. Fleets change in memory, and a
-restart resets them. Realtime answers the console's joins and heartbeats, so the link reads up, but
-it sends nothing live: there is no live telemetry, and a change made elsewhere shows once the console
+New and the operators write in memory like the rest. The demo plays soc-operations and soc-cloud, so
+an operation can be flown end to end in it: plan, prepare, simulate, launch, pause, return home and
+stop. Fleets change in memory, and a restart resets them. Realtime answers the console's joins and
+heartbeats, so the link reads up, and it sends each change to an operation as the database broadcasts
+it; it sends no telemetry, and a fleet, geofence or wayline changed elsewhere shows once the console
 reads again; `http://localhost:5199/?replay` flies the development replay
 around Finca Norte, idle for 2 s, then taking off and circling, listed in the fleet panel as
 REPLAYUAV, to select, follow or register; `?replay=2` flies two, both listed there. `SOC_DEMO_PORT` moves the fake off `54399`. Ctrl-C stops both.

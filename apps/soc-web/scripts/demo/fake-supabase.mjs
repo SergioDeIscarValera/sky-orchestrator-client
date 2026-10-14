@@ -1,12 +1,17 @@
 // The demo's Supabase: the GoTrue, PostgREST and Realtime calls the console makes, answered
 // from memory, so `pnpm demo` runs the console with no server behind it (run.mjs). Fleets,
-// geofences and waylines change in memory, and a restart resets them. Realtime answers the
-// console's joins and heartbeats, so its link reads up, and sends nothing live: no telemetry,
-// and no change made from another console until the console reads again.
+// geofences and waylines change in memory, and a restart resets them. The operations' tables
+// are the database's (operation-tables.mjs), and soc-operations and soc-cloud play on them
+// (lifecycle.mjs): each change to an operation is broadcast on its organization's state topic
+// as the database broadcasts it, and the console reads it. No telemetry is sent, and a fleet,
+// geofence or wayline changed from another console shows once the console reads again.
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { WebSocketServer } from 'ws'
+import { WebSocket, WebSocketServer } from 'ws'
+
+import { createLifecycle, TIMINGS } from './lifecycle.mjs'
+import { createOperationTables, DatabaseError } from './operation-tables.mjs'
 
 const HOST = '127.0.0.1'
 const CATALOGUE = new URL('../../../../contracts/catalogue/aircraft-models.json', import.meta.url)
@@ -45,9 +50,6 @@ const ENVELOPE = {
   max_waypoints: 200,
   max_horizontal_speed_ms: 15,
 }
-const PILOT_ONLY = new Set(['simulate', 'launch', 'stop'])
-const PILOT_VERBS = new Set(['pause', 'recovery', 'return_home', 'undo'])
-
 const ORGANIZATIONS = [
   {
     id: NORTH,
@@ -326,10 +328,11 @@ export function unsignedJwt(payload) {
 }
 
 /**
- * Starts the fake on 127.0.0.1 at `port`, 0 taking a free one. `url` is the address the
- * console is given as its Supabase URL; `close` stops the server and drops its connections.
+ * Starts the fake on 127.0.0.1 at `port`, 0 taking a free one. `timings` overrides the demo's
+ * TIMINGS (a test shortens them). `url` is the address the console is given as its Supabase URL;
+ * `close` stops the lifecycle's timers, the server and its connections.
  */
-export function startFakeSupabase({ port = 0 } = {}) {
+export function startFakeSupabase({ port = 0, timings = {} } = {}) {
   const state = {
     fleets: seedFleets(),
     geofences: [],
@@ -349,8 +352,30 @@ export function startFakeSupabase({ port = 0 } = {}) {
       stacks: seedStacks(),
     },
   }
+  /** The sockets joined to each topic: a broadcast on a state topic is sent to those. */
+  const topics = new Map()
+  const publish = (organizationId, event, payload) => {
+    const topic = stateTopic(organizationId)
+    const frame = JSON.stringify([
+      null,
+      null,
+      topic,
+      'broadcast',
+      { type: 'broadcast', event, payload },
+    ])
+    for (const client of topics.get(topic) ?? []) {
+      if (client.readyState === WebSocket.OPEN) client.send(frame)
+    }
+  }
+  const db = createOperationTables({
+    rows: (name) => rowsOf(state, name),
+    publish,
+    roles: { canEdit },
+  })
+  const lifecycle = createLifecycle({ db, roles: { canEdit }, timings: { ...TIMINGS, ...timings } })
+  const app = { state, db, lifecycle }
   const server = createServer((request, response) => {
-    void answer(state, request, response)
+    void answer(app, request, response)
   })
   const realtime = new WebSocketServer({ noServer: true })
   server.on('upgrade', (request, socket, head) => {
@@ -362,7 +387,11 @@ export function startFakeSupabase({ port = 0 } = {}) {
     }
     realtime.handleUpgrade(request, socket, head, (client) => {
       client.on('message', (data, isBinary) => {
-        if (!isBinary) answerFrame(client, data.toString('utf8'))
+        if (!isBinary) answerFrame(client, data.toString('utf8'), topics)
+      })
+      // A socket that closes leaves every topic, so no broadcast is sent to it.
+      client.on('close', () => {
+        for (const sockets of topics.values()) sockets.delete(client)
       })
       // An error event nobody handles would crash the demo, so one client's error only drops it.
       client.on('error', () => client.terminate())
@@ -377,6 +406,8 @@ export function startFakeSupabase({ port = 0 } = {}) {
         url: `http://${HOST}:${bound}`,
         close: () =>
           new Promise((done, failed) => {
+            // Nothing is written after the fake stops: the lifecycle's timers go first.
+            lifecycle.close()
             // ws leaves its clients open when its server closes, and an open socket keeps the
             // HTTP server from closing and the process from exiting: each is terminated first.
             for (const client of realtime.clients) client.terminate()
@@ -397,13 +428,34 @@ export function startFakeSupabase({ port = 0 } = {}) {
  * the console binds none, and the client takes such a join as joined. Any other frame is ignored,
  * a binary user broadcast included.
  */
-function answerFrame(client, text) {
+function answerFrame(client, text, topics) {
   const frame = frameOf(text)
   if (frame === null) return
   const [joinRef, ref, topic, event] = frame
   const heartbeat = topic === 'phoenix' && event === 'heartbeat'
   if (!heartbeat && !ANSWERED_EVENTS.has(event)) return
+  // A join makes the socket one of the topic's listeners for its broadcasts, a leave takes it off.
+  if (event === 'phx_join') joinTopic(topics, topic, client)
+  if (event === 'phx_leave') topics.get(topic)?.delete(client)
   client.send(JSON.stringify([joinRef, ref, topic, 'phx_reply', { status: 'ok', response: {} }]))
+}
+
+function joinTopic(topics, topic, client) {
+  const sockets = topics.get(topic) ?? new Set()
+  sockets.add(client)
+  topics.set(topic, sockets)
+}
+
+/** The Realtime topic of an organization's state (ADR-0007): the console joins `org:<id>:soc:state`. */
+function stateTopic(organizationId) {
+  return `realtime:org:${organizationId}:soc:state`
+}
+
+/** The live rows of a table, by name: the operations' tables and the plans and fleets alike. */
+function rowsOf(state, name) {
+  if (name === 'fleets') return state.fleets
+  if (name === 'waylines') return state.waylines
+  return state.tables[name]
 }
 
 /** The five parts of a frame, or null when the text is not one: the client sends no other text. */
@@ -416,7 +468,7 @@ function frameOf(text) {
   }
 }
 
-async function answer(state, request, response) {
+async function answer(app, request, response) {
   const headers = corsHeaders(request)
   try {
     if (request.method === 'OPTIONS') {
@@ -425,7 +477,7 @@ async function answer(state, request, response) {
     }
     const url = new URL(request.url ?? '/', `http://${HOST}`)
     const { status, payload } = route(
-      state,
+      app,
       request.method ?? '',
       url,
       parse(await readBody(request)),
@@ -476,7 +528,8 @@ function parse(text) {
   }
 }
 
-function route(state, method, url, body) {
+function route(app, method, url, body) {
+  const { state } = app
   const { pathname, searchParams } = url
   if (pathname === '/auth/v1/token' && method === 'POST') {
     return token(state, searchParams.get('grant_type'), body)
@@ -503,14 +556,14 @@ function route(state, method, url, body) {
     return { status: 200, payload: membersOf(organization) }
   }
   if (pathname === '/rest/v1/rpc/request_transition' && method === 'POST') {
-    return requestTransition(state, body)
+    return requestTransition(app, body)
   }
   if (pathname === '/rest/v1/rpc/request_command' && method === 'POST') {
-    return requestCommand(state, body)
+    return requestCommand(app, body)
   }
   const name = pathname.slice('/rest/v1/'.length)
   if (pathname.startsWith('/rest/v1/') && Object.hasOwn(state.tables, name)) {
-    return operationTable(state, name, method, searchParams, body)
+    return operationTable(app, name, method, searchParams, body)
   }
   return { status: 404, payload: { message: `the demo has no ${method} ${pathname}` } }
 }
@@ -664,107 +717,48 @@ function canEdit(organization) {
   return role === 'owner' || role === 'editor'
 }
 
-function isPilot(state, operation) {
-  return state.tables.operators.some(
-    (row) => row.operation_id === operation && row.profile_id === USER_ID && row.role === 'pilot',
-  )
-}
-
-/** A refusal the database raises as insufficient_privilege (42501): a role the write needs. */
-function forbidden(message) {
-  return { status: 403, payload: { code: '42501', message, details: null, hint: null } }
+/** The answer to a refusal the database raises (operation-tables.mjs). Any other error is a bug. */
+function refusalOf(error) {
+  if (error instanceof DatabaseError) return { status: error.status, payload: error.payload }
+  throw error
 }
 
 /**
  * soc.request_transition: an editor asks an operation to move, and a pilot of it asks to simulate,
- * launch or stop. The client request id is the key: the same id answers the request it made first.
+ * launch or stop. The database writes the request and its log entry; the lifecycle decides it.
  */
-function requestTransition(state, body) {
-  const operation = state.tables.operations.find(({ id }) => id === body.operation)
-  if (operation === undefined || !canEdit(operation.organization_id)) {
-    return forbidden(
-      `operation ${String(body.operation)}: an editor of its organization asks it to move`,
-    )
+function requestTransition(app, body) {
+  try {
+    const { row, created } = app.db.requestTransition({
+      operation: body.operation,
+      wanted: body.wanted,
+      clientRequest: body.client_request,
+      me: USER_ID,
+    })
+    if (created) app.lifecycle.transitionAsked(row.id)
+    return { status: 200, payload: row }
+  } catch (error) {
+    return refusalOf(error)
   }
-  if (PILOT_ONLY.has(body.wanted) && !isPilot(state, operation.id)) {
-    return forbidden(`operation ${operation.id}: only its pilots ${String(body.wanted)}`)
-  }
-  const asked = state.tables.transition_requests.find(
-    (row) =>
-      row.organization_id === operation.organization_id &&
-      row.client_request_id === body.client_request,
-  )
-  if (asked !== undefined) return { status: 200, payload: asked }
-  const request = {
-    id: randomUUID(),
-    client_request_id: body.client_request,
-    organization_id: operation.organization_id,
-    operation_id: operation.id,
-    transition: body.wanted,
-    requested_by: USER_ID,
-    requested_at: new Date().toISOString(),
-    status: 'pending',
-    reasons: null,
-    decided_at: null,
-  }
-  state.tables.transition_requests.push(request)
-  return { status: 200, payload: request }
 }
 
 /**
- * soc.request_command: a pilot of a flight's operation asks its aircraft a pilot's verb. A flight
- * that has ended refuses; the client request id answers the intent it made first. The demo flies
- * nothing, so no flight is found and every request is refused, as the database refuses a stranger.
+ * soc.request_command: a pilot of a flight's operation asks its aircraft a pilot's verb. The database
+ * writes the intent and logs it; the lifecycle sends it to the stack and settles it.
  */
-function requestCommand(state, body) {
-  if (!PILOT_VERBS.has(body.wanted)) {
-    return {
-      status: 400,
-      payload: {
-        code: '22023',
-        message: `a pilot asks pause, recovery, return_home or undo, not ${String(body.wanted)}`,
-        details: null,
-        hint: null,
-      },
-    }
+function requestCommand(app, body) {
+  try {
+    const { row, created } = app.db.requestCommand({
+      flight: body.flight,
+      wanted: body.wanted,
+      clientRequest: body.client_request,
+      me: USER_ID,
+    })
+    if (created) app.lifecycle.commandAsked(row.id)
+    return { status: 200, payload: row }
+  } catch (error) {
+    return refusalOf(error)
   }
-  const flight = state.tables.flights.find(({ id }) => id === body.flight)
-  if (flight === undefined || !isPilot(state, flight.operation_id)) {
-    return forbidden(`flight ${String(body.flight)}: only a pilot of its operation commands it`)
-  }
-  if (flight.ended_at) {
-    return {
-      status: 400,
-      payload: {
-        code: '23514',
-        message: `flight ${flight.id}: it has ended`,
-        details: null,
-        hint: null,
-      },
-    }
-  }
-  const asked = state.tables.command_intents.find(
-    (row) =>
-      row.organization_id === flight.organization_id &&
-      row.client_request_id === body.client_request,
-  )
-  if (asked !== undefined) return { status: 200, payload: asked }
-  const intent = {
-    id: randomUUID(),
-    client_request_id: body.client_request,
-    organization_id: flight.organization_id,
-    operation_id: flight.operation_id,
-    flight_id: flight.id,
-    verb: body.wanted,
-    status: 'pending',
-    result: null,
-    requested_by: USER_ID,
-    requested_at: new Date().toISOString(),
-    sent_at: null,
-    replied_at: null,
-  }
-  state.tables.command_intents.push(intent)
-  return { status: 200, payload: intent }
 }
 
 /** The operations' tables the console writes through PostgREST (migration 0010's grants). */
@@ -773,9 +767,11 @@ const WRITABLE = new Set(['operations', 'assignments', 'operators'])
 /**
  * One of the operations' tables: GET the rows its filters keep; for the writable ones, POST one
  * (201 with the row), PATCH or DELETE the rows its filters keep (the list of those, empty when none).
- * The demo stores what it is given: the database's own checks are not repeated here.
+ * The demo stores what it is given: the database's own checks are not repeated here. Each write is
+ * broadcast as the database broadcasts it (operation-tables.mjs).
  */
-function operationTable(state, name, method, searchParams, body) {
+function operationTable(app, name, method, searchParams, body) {
+  const { state, db } = app
   if (method === 'GET') return { status: 200, payload: filtered(state, name, searchParams) }
   if (!WRITABLE.has(name)) {
     return { status: 405, payload: { message: `the demo does not write ${name}` } }
@@ -783,8 +779,7 @@ function operationTable(state, name, method, searchParams, body) {
   const rows = state.tables[name]
   const now = new Date().toISOString()
   if (method === 'POST') {
-    const row = { ...defaultsOf(name, now), ...body }
-    rows.push(row)
+    const row = db.insertRow(name, { ...defaultsOf(name, now), ...body })
     return { status: 201, payload: row }
   }
   if (method !== 'PATCH' && method !== 'DELETE') {
@@ -793,11 +788,11 @@ function operationTable(state, name, method, searchParams, body) {
   const matched = filtered(state, name, searchParams)
   if (method === 'DELETE') {
     state.tables[name] = rows.filter((row) => !matched.includes(row))
+    for (const row of matched) db.changed(name, row)
     return { status: 200, payload: matched }
   }
   for (const row of matched) {
-    Object.assign(row, body)
-    if (Object.hasOwn(row, 'updated_at')) row.updated_at = now
+    db.updateRow(name, row, Object.hasOwn(row, 'updated_at') ? { ...body, updated_at: now } : body)
   }
   return { status: 200, payload: matched }
 }
