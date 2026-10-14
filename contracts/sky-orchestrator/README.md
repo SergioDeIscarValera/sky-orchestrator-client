@@ -15,15 +15,16 @@ repository at one commit, and held there:
 | `vendored.json` | Where the files came from: the repository, the commit, its `git describe` and date |
 | `vendored.sha256` | The SHA-256 of every file, in `sha256sum`'s format: `sha256sum -c vendored.sha256` checks them |
 
-Pinned at Sky Orchestrator's **v0.4.2** (2026-10-11). Like v0.4.1 it publishes
-what SOC builds on: `simulate_mission` (`DEP-02`), the stack's status, envelope
-and validations (`DEP-01`, `DEP-03`, `DEP-04`), the break reason (`DEP-05`), the
-fake bridge image (`DEP-06`). It adds real flight behind two keys and a cleared
-build (SO's ADR-0040), deadlines on start and resume with `319999` as an unknown
-outcome (`DEP-27`), `media_count` (`DEP-13`) and `simulator_in_real_mode`. From
-v0.4.1 only `/v1/status`'s `link.changed_at_ms` gained a description: when the
-link became what it is, up or down. The wayline API stays 1.3.0 and no DJI wire
-shape changed.
+Pinned at Sky Orchestrator's **v0.4.3** (2026-10-14, `3477c38`). Like v0.4.2 it
+publishes what SOC builds on: `simulate_mission` (`DEP-02`), the stack's status,
+envelope and validations (`DEP-01`, `DEP-03`, `DEP-04`), the break reason
+(`DEP-05`), the fake bridge image (`DEP-06`), real flight behind two keys and a
+cleared build (SO's ADR-0040), deadlines on start and resume (`DEP-27`) and
+`media_count` (`DEP-13`). It adds the prepare's `rth_altitude` as the task's
+return height (`DEP-29`, SO's ADR-0042: `flighttask_prepare` 1.2.0 says so, and
+the mission plan 1.1.0 carries `return_height_m`), and the fake bridge's
+`FAKE_BRIDGE_REAL`, a phone ready for real flight in a client's CI (`DEP-28`,
+the compose file passes it). No DJI wire shape changed.
 
 ## Rules
 

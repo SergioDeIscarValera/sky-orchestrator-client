@@ -100,14 +100,11 @@ so-wayline's container fetches them.
 
 | Test | What it holds |
 | --- | --- |
-| `test_so_stack_against_docker.py` | The stack comes up ready to fly in simulator mode, turns to real mode and back, lets SOC's `cloud-client` hear its dock announce the aircraft, and reaches a server on its network's gateway |
-| `test_operation_against_so.py`, the simulated path | A pilot plans and prepares an operation. The sixteen checks, judged on what soc-cloud reads, all pass, Sky Orchestrator's dry run included. The pilot simulates, then pauses and resumes the flight 50 times while it flies. The flight ends ok. Each of the 100 commands is measured: **6.5 ms p95 to the wire, 33 ms p95 to the reply** (`NFR-PERF-02` asks 300 ms and 1 s, on 2026-10-14). The stack is then turned to real mode: PF-MODE passes, PF-SIMULATOR fails while the fake bridge's simulator runs, and the launch is refused before anything reaches the wire. |
-| `test_operation_against_so.py`, the restarts | soc-cloud and then soc-operations are each stopped for 3 s and started again while the simulated flight flies (`NFR-REL-01`). The flight ends ok and completed, its track is kept, and its prepare and its execute each went out once. |
+| `test_so_stack_against_docker.py` | The stack comes up ready to fly in simulator mode, turns to real mode and back, launches the fake bridge as a phone ready for real flight and back (`DEP-28`), lets SOC's `cloud-client` hear its dock announce the aircraft, and reaches a server on its network's gateway |
+| `test_operation_against_so.py`, the simulated path | A pilot plans and prepares an operation. The sixteen checks, judged on what soc-cloud reads, all pass, Sky Orchestrator's dry run included. The pilot simulates, then pauses and resumes the flight 50 times while it flies. The flight ends ok. Each of the 100 commands is measured: **4.1 ms p95 to the wire, 21.8 ms p95 to the reply** (`NFR-PERF-02` asks 300 ms and 1 s, on 2026-10-14). |
+| `test_operation_against_so.py`, the real path | The stack is turned to real mode with the phone's simulator still on: PF-MODE passes, PF-SIMULATOR fails, and the launch is refused before anything reaches the wire. The fake bridge is then launched as a phone ready for real flight: the operation is ready, launches, is paused and resumed three times on its route, and completes once the aircraft has landed. Every move is in the log, from draft to completed. The return home climbs no higher than the route's highest waypoint (35 m), under an envelope of 100 m: the prepare's return height holds (`DEP-29`). |
+| `test_operation_against_so.py`, the restarts | soc-cloud and then soc-operations are each stopped for 3 s and started again while the simulated flight flies, and again while the real one does (`NFR-REL-01`). Each flight ends ok and completed, its track is kept, and its prepare and its execute each went out once. |
 
-The real launch, pause, resume and finish wait for two of Sky Orchestrator's
-items, both agreed for its v0.5.0:
-
-- `DEP-28`: a fake bridge that can fly real.
-- `DEP-29`: the return home flown at the prepare's `rth_altitude`. Until then the
-  phone returns at its envelope's height, so the operation's geofence ceiling here
-  equals the stack's envelope height, 60 m.
+A pause is sent once the telemetry says the aircraft flies its wayline (mode 5):
+during the take-off the application refuses it, `319046`, as Sky Orchestrator's
+own `infra/fly.py` waits for the route.
