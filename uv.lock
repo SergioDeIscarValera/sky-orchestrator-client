@@ -878,6 +878,7 @@ dependencies = [
     { name = "soc-config" },
     { name = "soc-database" },
     { name = "soc-geo" },
+    { name = "soc-operations" },
     { name = "soc-realtime" },
 ]
 
@@ -890,6 +891,7 @@ requires-dist = [
     { name = "soc-config", editable = "libs/soc-config" },
     { name = "soc-database", editable = "database" },
     { name = "soc-geo", editable = "libs/soc-geo" },
+    { name = "soc-operations", editable = "services/soc-operations" },
     { name = "soc-realtime", editable = "libs/soc-realtime" },
 ]
 
