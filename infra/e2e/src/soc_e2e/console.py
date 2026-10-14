@@ -25,6 +25,7 @@ from soc_check import ROOT, Image
 
 WEB = ROOT / "apps" / "soc-web"
 DRIVER = WEB / "scripts" / "e2e" / "console.mjs"
+OPERATION_DRIVER = WEB / "scripts" / "e2e" / "operation.mjs"
 IN_THE_CONTAINER = "/etc/soc/soc-web.json"
 SETTINGS = {
     "telemetry_stale_after_ms": 3000,
@@ -111,13 +112,13 @@ class Browser:
 
 
 @asynccontextmanager
-async def browsing(environment: Mapping[str, str]) -> AsyncIterator[Browser]:
+async def browsing(environment: Mapping[str, str], driver: Path = DRIVER) -> AsyncIterator[Browser]:
     """Starts the driver with its SOC_E2E_* settings; stops it on the way out."""
     node = shutil.which("node")
     if node is None:
         raise RuntimeError("the console end to end needs Node, with apps/soc-web installed")
     process = await asyncio.create_subprocess_exec(
-        node, str(DRIVER), cwd=WEB,
+        node, str(driver), cwd=WEB,
         env={**os.environ, **environment},
         stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
     )  # fmt: skip
