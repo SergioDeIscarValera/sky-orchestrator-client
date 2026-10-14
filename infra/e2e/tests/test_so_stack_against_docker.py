@@ -19,7 +19,7 @@ from aiohttp import web
 
 from soc_e2e.so_stack import PROJECT_PREFIX, Site, SoStack
 
-pytestmark = pytest.mark.lane
+pytestmark = [pytest.mark.lane, pytest.mark.sky_orchestrator]
 
 FARM = Site(latitude_deg=41.6523, longitude_deg=-4.7245)
 

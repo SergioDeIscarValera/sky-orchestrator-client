@@ -44,7 +44,7 @@ from soc_operations.judging import judged
 from soc_operations.runner import Runner
 from soc_operations.testing import FLIGHT, ROUTE, SQUARE
 
-pytestmark = pytest.mark.lane
+pytestmark = [pytest.mark.lane, pytest.mark.sky_orchestrator]
 
 #: Finca Norte: the route's takeoff, where the fake bridge's aircraft stands at the start. The
 #: phone returns home at its envelope's max_height_m, not at the prepare's rth_altitude
