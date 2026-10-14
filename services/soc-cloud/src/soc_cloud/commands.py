@@ -11,6 +11,12 @@ times runs once (NFR-REL-02).
 An intent for a dock no connected stack has announced waits: it runs when a link
 announces that dock (Sky Orchestrator announces as soon as a cloud connects), or,
 once `command_intent_ttl_s` has passed, its claim expires it.
+
+A prepare goes out only once its flight's file is kept to be served (`on_prepare`); a
+reply is reported to `on_settled` once recorded. soc-cloud's own return home on a
+geofence breach (FR-SAF-01) is put on the wire by `send_now` before any record, within
+the breach's 100 ms: its reply waits until `recorded` says the intent is in the database,
+then settles it as any other's.
 """
 
 from __future__ import annotations
@@ -19,7 +25,7 @@ import asyncio
 import json
 import time
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -56,6 +62,14 @@ class Intent(msgspec.Struct, frozen=True):
     status: str
     requested_at: datetime
     sent_at: datetime | None
+
+
+async def any_prepare(_intent: Intent) -> bool:
+    return True
+
+
+def no_settlement(_intent: Intent, _result: int) -> None:
+    pass
 
 
 class CommandStore(Protocol):
@@ -127,6 +141,8 @@ class Commands:
         clock: Callable[[], float] = time.time,
         monotonic: Callable[[], float] = time.monotonic,
         latencies: Latencies | None = None,
+        on_prepare: Callable[[Intent], Awaitable[bool]] = any_prepare,
+        on_settled: Callable[[Intent, int], None] = no_settlement,
     ) -> None:
         self._store = store
         self._links = links
@@ -140,6 +156,10 @@ class Commands:
         self._deadlines: dict[uuid.UUID, asyncio.TimerHandle] = {}
         self._waiting: dict[str, set[uuid.UUID]] = {}
         self._tasks: set[asyncio.Task[None]] = set()
+        self._on_prepare = on_prepare
+        self._on_settled = on_settled
+        # Sent by send_now and not recorded yet: the reply already heard, if any.
+        self._unrecorded: dict[uuid.UUID, int | None] = {}
 
     async def announced(self, payload: str) -> None:
         try:
@@ -180,7 +200,64 @@ class Commands:
             intent = uuid.UUID(tid)
         except ValueError:
             return
+        if intent in self._unrecorded:
+            if self._unrecorded[intent] is None:
+                self._unrecorded[intent] = result
+            return
         self._spawn(self._record(intent, result))
+
+    async def send_now(self, gateway: str, flight: uuid.UUID, verb: str) -> uuid.UUID | None:
+        """Puts a command soc-cloud decided itself on the wire at once; its intent, or None.
+
+        Nothing is read or written first: the caller records the intent, then calls
+        `recorded`. None when no connected stack serves the dock, the schema refuses the
+        message or the publish fails, each logged.
+        """
+        intent = uuid.uuid4()
+        method = SERVICE_METHODS[verb]
+        message: dict[str, Any] = {
+            "tid": str(intent),
+            "bid": str(flight),
+            "timestamp": int(self._clock() * 1000),
+            "method": method,
+            "data": {},
+        }
+        with soc_log.correlated(flight=flight, command=intent, tid=intent, bid=flight):
+            link = next((link for link in self._links if link.serves(gateway)), None)
+            if link is None:
+                log.error("command_not_published", verb=verb, error=f"no stack serves {gateway}")
+                return None
+            try:
+                self._wire.check(f"services/{method}", message)
+            except WireRefusedError as refusal:
+                log.error("command_refused_by_schema", verb=verb, problems=refusal.problems)
+                return None
+            self._unrecorded[intent] = None
+            self._published[intent] = self._monotonic()
+            try:
+                await link.send_service(gateway, message)
+            except (aiomqtt.MqttError, LinkDownError, WireRefusedError) as error:
+                self._unrecorded.pop(intent, None)
+                self._published.pop(intent, None)
+                log.error("command_not_published", verb=verb, error=str(error))
+                return None
+            log.info("command_sent", verb=verb, stack=link.stack.name, by="soc-cloud")
+        return intent
+
+    def recorded(self, intent: uuid.UUID, *, kept: bool) -> None:
+        """The intent `send_now` sent is in the database (kept), or never will be."""
+        if intent not in self._unrecorded:
+            return
+        heard = self._unrecorded.pop(intent)
+        if not kept:
+            self._published.pop(intent, None)
+            return
+        if heard is not None:
+            self._spawn(self._record(intent, heard))
+            return
+        published = self._published.get(intent, self._monotonic())
+        waited_s = self._monotonic() - published
+        self._await_reply(intent, max(0.0, self._reply_timeout_s - waited_s))
 
     async def _execute(self, intent: Intent) -> None:
         method = SERVICE_METHODS[intent.verb]
@@ -199,6 +276,10 @@ class Commands:
             self._wire.check(f"services/{method}", message)
         except WireRefusedError as refusal:
             log.error("command_refused_by_schema", verb=intent.verb, problems=refusal.problems)
+            await self._store.fail(intent.id)
+            return
+        if intent.verb == "prepare" and not await self._on_prepare(intent):
+            log.error("command_without_its_flight_file", verb=intent.verb)
             await self._store.fail(intent.id)
             return
         claimed = await self._store.claim(intent.id, self._ttl_s)
@@ -235,6 +316,7 @@ class Commands:
         settled = await self._store.record_reply(intent, result)
         if settled is not None:
             log.info("command_replied", command=intent, verb=settled.verb, result=result)
+            self._on_settled(settled, result)
 
     async def _time_out(self, intent: uuid.UUID) -> None:
         self._deadlines.pop(intent, None)

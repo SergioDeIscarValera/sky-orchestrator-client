@@ -229,6 +229,26 @@ async def test_a_session_on_a_connection_just_lost_is_refused(
                 pass
 
 
+async def test_a_sweep_that_loses_its_connection_is_run_again_on_a_new_one(
+    running: Running, until: Until
+) -> None:
+    server = FakeServer()
+    sweeps: list[int] = []
+
+    async def sweep() -> None:
+        sweeps.append(len(server.connections))
+        if len(sweeps) == 1:
+            server.connections[0].closed = True
+            async with database.session():
+                pass
+
+    database = database_on(server, on_connected=sweep)
+    async with running(database):
+        await until(lambda: sweeps == [1, 2])
+        await until(lambda: database.health.up)
+    assert server.connections[0].closed
+
+
 async def test_a_bug_in_the_sweep_stops_the_service() -> None:
     async def broken_sweep() -> None:
         raise ValueError("sweep bug")

@@ -8,6 +8,9 @@ waits for it. Every reply leaves only after passing its vendored schema
 The socket sends at once (TCP_NODELAY): with Nagle's algorithm, a command
 published while replies arrive waited up to 80 ms for a delayed ACK.
 
+A flight's progress (`flighttask_progress` on `events`) is decoded as sent and handed
+on; the dock asks no reply for it. Other events are not read yet.
+
 Mosquitto 2.0.22, Sky Orchestrator's broker, ends a taken-over session with a
 server DISCONNECT whose reason is "normal"; MQTT 5 names reason 142 for it. A
 lost broker sends neither. Both are read as a takeover; everything else is a
@@ -42,6 +45,7 @@ from soc_cloud.link.messages import (
     StateData,
     UpdateTopo,
 )
+from soc_cloud.link.progress import PROGRESS, FlightProgress, decode_progress
 from soc_cloud.link.telemetry import Sample, sample
 from soc_cloud.link.topology import Topology
 from soc_cloud.presence import LinkState, NoPresence, Presence
@@ -88,6 +92,18 @@ def no_announcements(_gateway: str) -> None:
     pass
 
 
+def no_progress(_progress: FlightProgress) -> None:
+    pass
+
+
+def no_presence(_aircraft: str, _online: bool) -> None:
+    pass
+
+
+class _Event(msgspec.Struct, frozen=True):
+    method: str | None = None
+
+
 def displaced(error: BaseException) -> bool:
     cause = error.__cause__
     if cause is None:
@@ -106,6 +122,8 @@ class StackLink:
         files: Callable[[str], FileOffer | None] = no_files,
         on_reply: Callable[[str, int], None] = no_replies,
         on_announced: Callable[[str], None] = no_announcements,
+        on_progress: Callable[[FlightProgress], None] = no_progress,
+        on_presence: Callable[[str, bool], None] = no_presence,
         presence: Presence | None = None,
         client_factory: ClientFactory = aiomqtt.Client,
         backoff: Backoff | None = None,
@@ -120,6 +138,8 @@ class StackLink:
         self._files = files
         self._on_reply = on_reply
         self._on_announced = on_announced
+        self._on_progress = on_progress
+        self._on_presence = on_presence
         self._presence = presence or NoPresence()
         self._link = LinkState.CONNECTING
         self._client: aiomqtt.Client | None = None
@@ -211,6 +231,8 @@ class StackLink:
                 self._osd(parsed.sn, body)
             elif parsed.kind is topics.Inbound.STATE:
                 self._state(parsed.sn, body)
+            elif parsed.kind is topics.Inbound.EVENTS:
+                self._event(topic, body)
             elif parsed.kind is topics.Inbound.REQUESTS:
                 await self._request(client, parsed.sn, body)
             elif parsed.kind is topics.Inbound.SERVICES_REPLY:
@@ -262,6 +284,16 @@ class StackLink:
         if serial != envelope.gateway and state.firmware_version is not None:
             self._presence.firmware(envelope.gateway, serial, state.firmware_version)
 
+    def _event(self, topic: str, payload: bytes) -> None:
+        if msgspec.json.decode(payload, type=_Event).method != PROGRESS:
+            return
+        try:
+            progress = decode_progress(payload)
+        except ValueError as error:
+            log.warning("message_unreadable", stack=self.stack.name, topic=topic, error=str(error))
+            return
+        self._on_progress(progress)
+
     def _report_link(self, state: LinkState) -> None:
         self._link = state
         for gateway in sorted(self.topology.gateways()):
@@ -305,3 +337,4 @@ class StackLink:
     def _log_presence(self, aircraft: str, online: bool) -> None:
         event = "aircraft_online" if online else "aircraft_offline"
         log.info(event, stack=self.stack.name, device=aircraft)
+        self._on_presence(aircraft, online)
