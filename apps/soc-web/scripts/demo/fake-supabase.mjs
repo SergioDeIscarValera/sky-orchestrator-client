@@ -12,6 +12,8 @@ const HOST = '127.0.0.1'
 const CATALOGUE = new URL('../../../../contracts/catalogue/aircraft-models.json', import.meta.url)
 const API_VERSION = '2024-01-01'
 const LIFETIME_S = 3600
+/** Supabase's default row cap: a PostgREST answer holds at most this many rows (the console pages). */
+const ROW_CAP = 1000
 const DEFAULT_ALLOWED_HEADERS =
   'authorization, apikey, content-type, prefer, accept-profile, content-profile, x-client-info'
 const INVALID_CREDENTIALS = {
@@ -329,11 +331,13 @@ export function unsignedJwt(payload) {
  * Starts the fake on 127.0.0.1 at `port`, 0 taking a free one. `url` is the address the
  * console is given as its Supabase URL; `close` stops the server and drops its connections.
  */
-export function startFakeSupabase({ port = 0 } = {}) {
+export function startFakeSupabase({ port = 0, telemetry = [] } = {}) {
   const state = {
     fleets: seedFleets(),
     geofences: [],
     waylines: seedWaylines(),
+    /** soc.telemetry_samples, as given: each flight's stored samples, read back as its track. */
+    telemetry: [...telemetry],
     refreshTokens: new Map(),
     /** The operations' tables, by name: what the console reads and writes through PostgREST. */
     tables: {
@@ -507,6 +511,9 @@ function route(state, method, url, body) {
   }
   if (pathname === '/rest/v1/rpc/request_command' && method === 'POST') {
     return requestCommand(state, body)
+  }
+  if (pathname === '/rest/v1/telemetry_samples' && method === 'GET') {
+    return telemetrySamples(state, searchParams)
   }
   const name = pathname.slice('/rest/v1/'.length)
   if (pathname.startsWith('/rest/v1/') && Object.hasOwn(state.tables, name)) {
@@ -800,6 +807,27 @@ function operationTable(state, name, method, searchParams, body) {
     if (Object.hasOwn(row, 'updated_at')) row.updated_at = now
   }
   return { status: 200, payload: matched }
+}
+
+/**
+ * soc.telemetry_samples as PostgREST answers the console's track read: the flight's rows in
+ * sampled_at order, the columns `select` names, the window `offset` and `limit` name, and never
+ * more than ROW_CAP rows, as Supabase caps a response.
+ */
+function telemetrySamples(state, searchParams) {
+  const flight = equals(searchParams.get('flight_id'))
+  const select = searchParams.get('select')
+  const columns = select === null ? null : select.split(',').map((column) => column.trim())
+  const offset = Number(searchParams.get('offset') ?? 0)
+  const limit = Number(searchParams.get('limit') ?? ROW_CAP)
+  const page = state.telemetry
+    .filter((row) => row.flight_id === flight)
+    .sort((a, b) => Date.parse(a.sampled_at) - Date.parse(b.sampled_at))
+    .slice(offset, offset + Math.min(limit, ROW_CAP))
+  const payload = page.map((row) =>
+    columns === null ? row : Object.fromEntries(columns.map((column) => [column, row[column]])),
+  )
+  return { status: 200, payload }
 }
 
 /** The columns a row gets from the database when it is inserted: its id, its state and its stamps. */

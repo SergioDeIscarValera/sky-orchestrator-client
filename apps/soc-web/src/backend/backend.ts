@@ -375,6 +375,18 @@ export interface Flight {
   readonly breachedAt: string | null
 }
 
+/**
+ * One stored sample of a flight's track (IR-TEL, FR-TEL-05): where the aircraft was, and how high
+ * above the takeoff point. A flight's track is its samples in time order.
+ */
+export interface TrackPoint {
+  /** When the aircraft took the sample, as the database sends it: ISO 8601 with its offset. */
+  readonly sampledAt: string
+  readonly position: Geodetic
+  /** Metres above the takeoff point (ADR-0014). */
+  readonly heightM: number
+}
+
 /** The latest progress of a flight, as soc-cloud reports it (IR-FST). */
 export interface FlightState {
   readonly flightId: string
@@ -497,6 +509,8 @@ export interface Backend {
   ): Promise<TransitionRequest>
   flights(operationId: string): Promise<Flight[]>
   flightStates(operationId: string): Promise<FlightState[]>
+  /** A flight's stored samples in time order: its track, during and after the flight (FR-TEL-05). */
+  track(flightId: string): Promise<TrackPoint[]>
   commands(operationId: string): Promise<CommandIntent[]>
   /** Asks the flight's aircraft to do a verb; the same client request id gives back the same intent. */
   requestCommand(

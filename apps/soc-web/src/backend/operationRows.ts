@@ -10,8 +10,10 @@ import type {
   OperationEvent,
   Operator,
   StackView,
+  TrackPoint,
   TransitionRequest,
 } from './backend'
+import { positionFromStorage } from './positions'
 
 // The operations' rows as the database sends them: on a read, and on a broadcast that carries
 // the whole row (operation_check, operation_event). A row that does not parse is refused.
@@ -181,6 +183,14 @@ export const FLIGHT_STATE_ROW = z.object({
   updated_at: z.string(),
 })
 
+/** One sample of a flight's track: the columns the console reads from soc.telemetry_samples. */
+export const TRACK_ROW = z.object({
+  sampled_at: z.iso.datetime({ offset: true }),
+  latitude: z.number(),
+  longitude: z.number(),
+  height_m: z.number(),
+})
+
 export const COMMAND_ROW = z.object({
   id: z.uuid(),
   operation_id: z.uuid(),
@@ -317,6 +327,15 @@ export function flightStateOf(row: z.infer<typeof FLIGHT_STATE_ROW>): FlightStat
     currentWaypointIndex: row.current_waypoint_index,
     endReason: row.end_reason,
     updatedAt: row.updated_at,
+  }
+}
+
+/** A track sample as the console holds it: the position through positions.ts, refused when out of range. */
+export function trackOf(row: z.infer<typeof TRACK_ROW>): TrackPoint {
+  return {
+    sampledAt: row.sampled_at,
+    position: positionFromStorage([row.longitude, row.latitude]),
+    heightM: row.height_m,
   }
 }
 

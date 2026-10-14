@@ -742,6 +742,24 @@ describe('the operations held in memory (IR-OPS, IR-ASG, IR-OPR, IR-TRQ, IR-CMD)
       expect.arrayContaining([PILOT.userId, NEIGHBOUR.userId]),
     )
   })
+
+  it("keeps a flight's track in time order, and holds none for a flight it does not know", async () => {
+    const { backend, operation, fleet } = await prepared()
+    const flight = flightOf(operation.id, fleet.id)
+    backend.addFlight(flight)
+    const point = (second: number) => ({
+      sampledAt: `2026-10-11T10:10:0${String(second)}Z`,
+      position: { latitudeDeg: 41.6523, longitudeDeg: -4.7245 },
+      heightM: second,
+    })
+    backend.addTrackPoints(flight.id, [point(2), point(0)])
+    backend.addTrackPoints(flight.id, [point(1)])
+    expect((await backend.track(flight.id)).map(({ heightM }) => heightM)).toEqual([0, 1, 2])
+    expect(await backend.track('no-such-flight')).toEqual([])
+    expect(() => {
+      backend.addTrackPoints('no-such-flight', [point(0)])
+    }).toThrow(BackendError)
+  })
 })
 
 describe("a fleet's wire identity while its aircraft flies (migration 0010, FR-FLE-05)", () => {

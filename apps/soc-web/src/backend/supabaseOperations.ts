@@ -22,6 +22,7 @@ import {
   type StackView,
   type Transition,
   type TransitionRequest,
+  type TrackPoint,
 } from './backend'
 import {
   ASSIGNMENT_ROW,
@@ -34,6 +35,7 @@ import {
   OPERATION_ROW,
   OPERATOR_ROW,
   STACK_ROW,
+  TRACK_ROW,
   TRANSITION_REQUEST_ROW,
   assignmentOf,
   checkOf,
@@ -46,6 +48,7 @@ import {
   operatorOf,
   requestOf,
   stackOf,
+  trackOf,
 } from './operationRows'
 import { rows } from './rows'
 
@@ -157,6 +160,9 @@ export const ROLE_SAID: ReadonlyArray<readonly [RegExp, string]> = [
 
 const CHECK_VIOLATION = '23514'
 const NOT_ALLOWED = '42501'
+
+/** The rows a track page asks for: Supabase's default row cap, so a full page is the cap's own. */
+const TRACK_PAGE = 1000
 
 function isOperationConstraint(name: string): name is OperationConstraint {
   return Object.hasOwn(REFUSALS, name)
@@ -475,6 +481,27 @@ export function operationOperations(client: SupabaseClient) {
         .order('updated_at', { ascending: false })
       if (error !== null) throw new BackendError(error.message, error.code)
       return rows(FLIGHT_STATE_ROW, data, 'flight_states').map((row) => flightStateOf(row))
+    },
+
+    /**
+     * A flight's stored samples in time order (FR-TEL-05). PostgREST answers at most its row cap
+     * (Supabase's default is 1,000), so the track is read a page at a time, from where the last
+     * page ended, until a page comes back empty: a long flight is whole, not cut at the cap.
+     */
+    async track(flightId: string): Promise<TrackPoint[]> {
+      const points: TrackPoint[] = []
+      for (;;) {
+        const { data, error } = await soc()
+          .from('telemetry_samples')
+          .select('sampled_at, latitude, longitude, height_m')
+          .eq('flight_id', flightId)
+          .order('sampled_at', { ascending: true })
+          .range(points.length, points.length + TRACK_PAGE - 1)
+        if (error !== null) throw new BackendError(error.message, error.code)
+        const page = rows(TRACK_ROW, data, 'telemetry_samples').map((row) => trackOf(row))
+        if (page.length === 0) return points
+        points.push(...page)
+      }
     },
 
     /** The operation's command intents, newest first (IR-CMD). */
