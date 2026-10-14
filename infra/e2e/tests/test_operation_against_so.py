@@ -8,9 +8,11 @@ pilot asks every move through the database's RPCs, as the console does:
   every blocking one passes, Sky Orchestrator's dry run included;
 - simulate: the flight file served to the stack, the simulated flight flown, paused and
   resumed 50 times while it flies (NFR-PERF-02's 100 commands), and ended ok;
-- the stack turned to real mode: PF-MODE passes, but the fake bridge's simulator stays on,
-  so PF-SIMULATOR fails and the launch is refused before anything reaches the wire. Flying
-  the real launch waits for a fake bridge that can (SO's DEP-28).
+- the stack turned to real mode with the phone's simulator still on: PF-MODE passes,
+  PF-SIMULATOR fails, and the launch is refused before anything reaches the wire;
+- the phone launched ready for real flight (SO's DEP-28): the operation is ready, launches,
+  is paused and resumed in the air, and completes once the aircraft has landed, its return
+  home no higher than the prepare's return height asked (SO's DEP-29).
 
 Every move is in the operation's log, and each command's latency is measured: to the wire
 and to its reply.
@@ -46,13 +48,20 @@ from soc_operations.testing import FLIGHT, ROUTE, SQUARE
 
 pytestmark = [pytest.mark.lane, pytest.mark.sky_orchestrator]
 
-#: Finca Norte: the route's takeoff, where the fake bridge's aircraft stands at the start. The
-#: phone returns home at its envelope's max_height_m, not at the prepare's rth_altitude
-#: (SO's HomePoint.kt, DEP-29): the envelope's height is the geofence's ceiling, 60 m, so a
-#: return home stays inside it.
-FARM = Site(latitude_deg=41.6523, longitude_deg=-4.7245, max_height_m=60)
+#: Finca Norte: the route's takeoff, where the fake bridge's aircraft stands at the start. Its
+#: envelope allows 100 m, above the geofence's 60 m ceiling: the phone returns home at the
+#: prepare's rth_altitude (SO's DEP-29), not at its envelope's max_height_m.
+FARM = Site(latitude_deg=41.6523, longitude_deg=-4.7245)
 STACK = "lab"
 CYCLES = 50
+#: Pauses and resumes in the real flight: the command latency is measured on the simulated one.
+REAL_CYCLES = 3
+#: The route's highest waypoint, and the operation's takeoff security height, which the prepare
+#: asks as its return height (soc-operations' lifecycle, at least DJI's 20 m; seed's 20 m).
+HIGHEST_WAYPOINT_M = max(float(waypoint["height_m"]) for waypoint in FLIGHT["waypoints"])
+RETURN_HEIGHT_M = 20
+#: DJI's mode code while the aircraft flies a wayline.
+WAYLINE_MODE = 5
 
 
 @pytest.fixture(scope="module")
@@ -382,7 +391,7 @@ def p95(values: list[float]) -> float:
     return statistics.quantiles(values, n=20)[-1]
 
 
-async def test_an_operation_is_simulated_paused_resumed_and_held_from_a_real_launch(
+async def test_an_operation_is_simulated_then_flown_real_paused_resumed_and_completed(
     platform: Platform,
     passwords: dict[str, str],
     so_stack: SoStack,
@@ -435,8 +444,8 @@ async def test_an_operation_is_simulated_paused_resumed_and_held_from_a_real_lau
         assert p95(reply) <= 1000
         await reach(admin, operation, "simulated", 180)
 
-        # The stack turned to real mode. The fake bridge's simulator stays on (SO's DEP-28), so
-        # the operation is not ready: PF-SIMULATOR names it, and nothing goes to the wire.
+        # The stack turned to real mode with the phone's simulator still on: the operation is
+        # not ready, PF-SIMULATOR names why, and nothing goes to the wire.
         try:
             await asyncio.to_thread(so_stack.set_simulator_mode, False)
 
@@ -473,8 +482,51 @@ async def test_an_operation_is_simulated_paused_resumed_and_held_from_a_real_lau
                 operation,
             )
             assert launched == 0
+
+            # The phone launched ready for real flight: so-fleet still holds the simulation of
+            # this file, so the operation is ready, and the same file flies real.
+            await asyncio.to_thread(so_stack.set_real_launch, True)
+            await reach(admin, operation, "ready", 90)
+            await ask(admin, pilot, operation, "launch")
+            await reach(admin, operation, "in_flight", 60)
+            real = await until(lambda: latest_flight(admin, operation), 5, "the real flight")
+            assert real["mode"] == "real"
+
+            # A pause is taken once the mission drives the aircraft: during the take-off the
+            # application refuses it (319046), as SO's own fly.py waits for the route.
+            async def on_the_route() -> bool:
+                mode = await admin.fetchval(
+                    "select mode_code from soc.telemetry_samples where flight_id = $1"
+                    " order by sampled_at desc limit 1",
+                    real["id"],
+                )
+                return bool(mode == WAYLINE_MODE)
+
+            await until(on_the_route, 60, "the real flight on its route")
+            for _ in range(REAL_CYCLES):
+                paused = await settled(admin, await command(admin, pilot, real["id"], "pause"))
+                assert paused["status"] == "accepted", paused["result"]
+                await reach(admin, operation, "paused", 15)
+                resumed = await settled(admin, await command(admin, pilot, real["id"], "recovery"))
+                assert resumed["status"] == "accepted", resumed["result"]
+                await reach(admin, operation, "in_flight", 15)
+            await reach(admin, operation, "completed", 240)
         finally:
-            await asyncio.to_thread(so_stack.set_simulator_mode, True)
+            await asyncio.to_thread(so_stack.set_real_launch, False)
+
+        flown = await admin.fetchrow(
+            "select f.end_reason::text as reason, f.breached_at, s.status::text as status,"
+            " (select max(t.height_m) from soc.telemetry_samples t where t.flight_id = f.id)"
+            " as highest from soc.flights f join soc.flight_states s on s.flight_id = f.id"
+            " where f.id = $1",
+            real["id"],
+        )
+        assert flown is not None
+        assert (flown["status"], flown["reason"], flown["breached_at"]) == ("ok", "completed", None)
+        # The return home climbs no higher than the route's highest waypoint or the return height
+        # asked, never to the envelope's 100 m (DEP-29): a sample's height is above the takeoff.
+        print(f"the real flight's highest sample: {flown['highest']} m")
+        assert flown["highest"] <= max(HIGHEST_WAYPOINT_M, RETURN_HEIGHT_M) + 0.5
 
         moves = [
             (row["from"], row["to"])
@@ -490,6 +542,12 @@ async def test_an_operation_is_simulated_paused_resumed_and_held_from_a_real_lau
             ("planned", "preparing"),
             ("preparing", "simulating"),
             ("simulating", "simulated"),
+            ("simulated", "ready"),
+            ("ready", "launching"),
+            ("launching", "in_flight"),
+            *[("in_flight", "paused"), ("paused", "in_flight")] * REAL_CYCLES,
+            ("in_flight", "returning"),
+            ("returning", "completed"),
         ]
         kinds = {
             row["kind"]
@@ -499,6 +557,7 @@ async def test_an_operation_is_simulated_paused_resumed_and_held_from_a_real_lau
         }
         assert {
             "checks_at_simulation",
+            "checks_at_launch",
             "flight_prepared",
             "flight_status_changed",
             "took_off",
@@ -511,55 +570,30 @@ async def test_an_operation_is_simulated_paused_resumed_and_held_from_a_real_lau
         } <= kinds
 
 
-async def test_a_restart_of_either_service_mid_flight_loses_nothing_and_sends_nothing_twice(
+async def restart_both(
     platform: Platform,
     passwords: dict[str, str],
-    so_stack: SoStack,
-    admin: asyncpg.Connection,
-    farm: Farm,
-    tmp_path: Path,
+    so: SoStack,
+    organization: uuid.UUID,
+    directory: Path,
+    services: list[Any],
 ) -> None:
-    """NFR-REL-01: soc-cloud and soc-operations each stopped and started again while the
-    simulated flight flies; the flight ends as it would have, and every command went out once."""
-    organization, pilot = farm.organization, farm.pilot
-    cloud = running_cloud(platform, passwords, so_stack, organization, tmp_path)
-    operations = running_operations(platform, passwords, organization, tmp_path)
-    await cloud.__aenter__()
-    await operations.__aenter__()
-    try:
-        await until(lambda: stack_recorded(admin, so_stack), 60, "the stack read by soc-cloud")
-        operation = await seed(admin, organization, pilot, so_stack)
-        for transition, wanted in (("plan", "planned"), ("prepare", "preparing")):
-            await ask(admin, pilot, operation, transition)
-            await reach(admin, operation, wanted, 15)
-        await until(
-            lambda: blocking_checks_pass(admin, operation), 90, "every blocking check passing"
-        )
-        await ask(admin, pilot, operation, "simulate")
+    """soc-cloud away for 3 s, then soc-operations: each started again on its own state."""
+    cloud, operations = services
+    # soc-cloud away for 3 s mid-flight: its persistent session keeps what the dock says.
+    await cloud.__aexit__(None, None, None)
+    await asyncio.sleep(3)
+    services[0] = running_cloud(platform, passwords, so, organization, directory)
+    await services[0].__aenter__()
+    # soc-operations away too, then back: its sweep finds what it missed.
+    await operations.__aexit__(None, None, None)
+    await asyncio.sleep(3)
+    services[1] = running_operations(platform, passwords, organization, directory)
+    await services[1].__aenter__()
 
-        async def flying() -> bool:
-            latest = await latest_flight(admin, operation)
-            return latest is not None and latest["status"] == "in_progress"
 
-        await until(flying, 90, "the simulated flight in progress")
-        flight = (await until(lambda: latest_flight(admin, operation), 5, "the flight"))["id"]
-
-        # soc-cloud away for 3 s mid-flight: its persistent session keeps what the dock says.
-        await cloud.__aexit__(None, None, None)
-        await asyncio.sleep(3)
-        cloud = running_cloud(platform, passwords, so_stack, organization, tmp_path)
-        await cloud.__aenter__()
-        # soc-operations away too, then back: its sweep finds what it missed.
-        await operations.__aexit__(None, None, None)
-        await asyncio.sleep(3)
-        operations = running_operations(platform, passwords, organization, tmp_path)
-        await operations.__aenter__()
-
-        await reach(admin, operation, "simulated", 180)
-    finally:
-        await operations.__aexit__(None, None, None)
-        await cloud.__aexit__(None, None, None)
-
+async def flown_once(admin: asyncpg.Connection, flight: uuid.UUID) -> None:
+    """The flight went out once, ended ok and completed, and kept its track."""
     verbs = [
         row["verb"]
         for row in await admin.fetch(
@@ -579,3 +613,60 @@ async def test_a_restart_of_either_service_mid_flight_loses_nothing_and_sends_no
         "select count(*) from soc.telemetry_samples where flight_id = $1", flight
     )
     assert kept > 0
+
+
+async def test_a_restart_of_either_service_mid_flight_loses_nothing_and_sends_nothing_twice(
+    platform: Platform,
+    passwords: dict[str, str],
+    so_stack: SoStack,
+    admin: asyncpg.Connection,
+    farm: Farm,
+    tmp_path: Path,
+) -> None:
+    """NFR-REL-01: soc-cloud and soc-operations each stopped and started again while the
+    simulated flight flies, and again while the real one does; each flight ends as it would
+    have, and every command went out once."""
+    organization, pilot = farm.organization, farm.pilot
+    services: list[Any] = [
+        running_cloud(platform, passwords, so_stack, organization, tmp_path),
+        running_operations(platform, passwords, organization, tmp_path),
+    ]
+    await services[0].__aenter__()
+    await services[1].__aenter__()
+    try:
+        await until(lambda: stack_recorded(admin, so_stack), 60, "the stack read by soc-cloud")
+        operation = await seed(admin, organization, pilot, so_stack)
+        for transition, wanted in (("plan", "planned"), ("prepare", "preparing")):
+            await ask(admin, pilot, operation, transition)
+            await reach(admin, operation, wanted, 15)
+        await until(
+            lambda: blocking_checks_pass(admin, operation), 90, "every blocking check passing"
+        )
+        await ask(admin, pilot, operation, "simulate")
+
+        async def flying() -> bool:
+            latest = await latest_flight(admin, operation)
+            return latest is not None and latest["status"] == "in_progress"
+
+        await until(flying, 90, "the simulated flight in progress")
+        simulated = (await until(lambda: latest_flight(admin, operation), 5, "the flight"))["id"]
+        await restart_both(platform, passwords, so_stack, organization, tmp_path, services)
+        await reach(admin, operation, "simulated", 180)
+
+        try:
+            await asyncio.to_thread(so_stack.set_real_launch, True)
+            await reach(admin, operation, "ready", 90)
+            await ask(admin, pilot, operation, "launch")
+            await reach(admin, operation, "in_flight", 60)
+            real = (await until(lambda: latest_flight(admin, operation), 5, "the flight"))["id"]
+            await restart_both(platform, passwords, so_stack, organization, tmp_path, services)
+            await reach(admin, operation, "completed", 240)
+        finally:
+            await asyncio.to_thread(so_stack.set_real_launch, False)
+    finally:
+        await services[1].__aexit__(None, None, None)
+        await services[0].__aexit__(None, None, None)
+
+    assert real != simulated
+    await flown_once(admin, simulated)
+    await flown_once(admin, real)
