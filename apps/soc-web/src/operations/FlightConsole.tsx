@@ -20,6 +20,7 @@ import {
   offersOf,
   resultOf,
   stateOf,
+  waypointNumber,
 } from './flightConsole'
 import { Failure } from './Failure'
 import { HoldButton } from './HoldButton'
@@ -101,7 +102,7 @@ export function FlightConsole({
       <Progress
         status={status}
         percent={state?.percent ?? null}
-        index={state?.currentWaypointIndex ?? null}
+        waypoint={waypointNumber(state?.currentWaypointIndex ?? null)}
         waypoints={waypoints}
       />
       {offers !== null && offered && (
@@ -198,12 +199,13 @@ function ModeBanner({ mode }: { readonly mode: FlightMode | null }) {
 function Progress({
   status,
   percent,
-  index,
+  waypoint,
   waypoints,
 }: {
   readonly status: FlightStatus | null
   readonly percent: number | null
-  readonly index: number | null
+  /** The waypoint it is at, counted from 1 (waypointNumber). */
+  readonly waypoint: number | null
   readonly waypoints: number | null
 }) {
   return (
@@ -221,7 +223,7 @@ function Progress({
         </dd>
         <dt className="text-muted">Waypoint</dt>
         <dd className="text-heading justify-self-end tabular-nums">
-          <Figure value={index} /> / <Figure value={waypoints} />
+          <Figure value={waypoint} /> / <Figure value={waypoints} />
         </dd>
       </dl>
       <div className="flex items-center gap-3">

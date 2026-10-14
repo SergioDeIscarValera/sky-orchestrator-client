@@ -61,6 +61,14 @@ export function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value))
 }
 
+/**
+ * The waypoint a flight is at, counted from 1 as the console shows it: DJI's current_waypoint_index
+ * counts from 0, so the last of five waypoints reads 5 / 5, not 4 / 5. Null while the stack has not said.
+ */
+export function waypointNumber(index: number | null): number | null {
+  return index === null ? null : index + 1
+}
+
 /** The commands newest first, by when each was asked. Commands asked at the same time keep their order. */
 export function newestFirst(commands: readonly CommandIntent[]): CommandIntent[] {
   return [...commands].sort((a, b) => Date.parse(b.requestedAt) - Date.parse(a.requestedAt))

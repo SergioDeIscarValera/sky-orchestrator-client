@@ -338,7 +338,7 @@ describe("a flight's progress, unavailable when the stack has not said (FR-SAF-0
     expect(bar).toHaveAttribute('aria-valuemax', '100')
     expect(within(consoleElement).getByText('42%')).toBeVisible()
     expect(within(consoleElement).getByText('Waypoint').nextElementSibling).toHaveTextContent(
-      `3 / ${String(waypoints)}`,
+      `4 / ${String(waypoints)}`,
     )
   })
 

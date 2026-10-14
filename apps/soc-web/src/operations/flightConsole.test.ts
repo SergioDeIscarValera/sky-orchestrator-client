@@ -14,6 +14,7 @@ import {
   offersOf,
   resultOf,
   stateOf,
+  waypointNumber,
 } from './flightConsole'
 import { RESULT_DEFAULT } from './results'
 
@@ -148,6 +149,17 @@ describe("the progress bar's span (FR-SAF-03)", () => {
     expect(clampPercent(42)).toBe(42)
     expect(clampPercent(-5)).toBe(0)
     expect(clampPercent(140)).toBe(100)
+  })
+})
+
+describe('the waypoint a flight is at (FR-SAF-03)', () => {
+  it("counts DJI's index from 1, so the first waypoint is 1 and the last is the count", () => {
+    expect(waypointNumber(0)).toBe(1)
+    expect(waypointNumber(4)).toBe(5)
+  })
+
+  it('stays unavailable while the stack has not said', () => {
+    expect(waypointNumber(null)).toBeNull()
   })
 })
 
