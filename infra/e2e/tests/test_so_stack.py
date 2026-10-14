@@ -123,6 +123,14 @@ def test_the_credentials_are_what_sky_orchestrators_secrets_accept(stack: SoStac
     assert len(set(stack.credentials.values())) == len(stack.credentials)
 
 
+def test_the_fake_bridge_launches_in_its_simulator_unless_asked_for_real(
+    stack: SoStack,
+) -> None:
+    assert stack.environment()["FAKE_BRIDGE_REAL"] == "0"
+    stack.real_launch = True
+    assert stack.environment()["FAKE_BRIDGE_REAL"] == "1"
+
+
 def test_the_simulator_mode_is_the_stacks_own(stack: SoStack) -> None:
     assert stack.configurations()["so-bridge.json"]["simulator_mode"] is True
     stack.simulator_mode = False

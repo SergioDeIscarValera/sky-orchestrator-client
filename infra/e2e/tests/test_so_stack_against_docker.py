@@ -55,10 +55,22 @@ def test_the_stack_is_its_own_and_ready_to_fly_in_simulator_mode(so_stack: SoSta
 def test_the_stack_turns_to_real_mode_and_back(so_stack: SoStack) -> None:
     real = so_stack.set_simulator_mode(False)
     assert real["simulator_mode"] is False
-    # The fake bridge's simulator stays on: a real start is refused until SO's DEP-28.
+    # The fake bridge launched in its simulator keeps it on: PF-SIMULATOR names it.
     assert real["simulator_active"] is True
     simulated = so_stack.set_simulator_mode(True)
     assert simulated["simulator_mode"] is True
+
+
+def test_the_fake_bridge_launches_as_a_phone_ready_for_real_flight_and_back(
+    so_stack: SoStack,
+) -> None:
+    try:
+        real = so_stack.set_real_launch(True)
+        assert (real["simulator_mode"], real["simulator_active"]) == (False, False)
+        assert (real["armed"], real["aircraft_online"]) == (True, True)
+    finally:
+        simulated = so_stack.set_real_launch(False)
+    assert (simulated["simulator_mode"], simulated["simulator_active"]) == (True, True)
 
 
 async def test_the_cloud_client_hears_the_dock_announce_its_aircraft(so_stack: SoStack) -> None:

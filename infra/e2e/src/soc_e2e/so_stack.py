@@ -136,6 +136,9 @@ class SoStack:
     pace: int = 10
     osd_hz: float = 5
     simulator_mode: bool = True
+    #: The fake bridge launched as a phone ready for real flight: its simulator off and real
+    #: flight confirmed (SO's FAKE_BRIDGE_REAL, DEP-28).
+    real_launch: bool = False
     version: str = field(default_factory=release)
     project: str = field(default_factory=lambda: PROJECT_PREFIX + secrets.token_hex(4))
     mqtt_port: int = field(default_factory=free_port)
@@ -191,6 +194,7 @@ class SoStack:
             "FAKE_BRIDGE_CONFIG": str(work / "fake-bridge.json"),
             "FAKE_BRIDGE_ARM": "1",
             "FAKE_BRIDGE_PACE": str(self.pace),
+            "FAKE_BRIDGE_REAL": "1" if self.real_launch else "0",
             # Named, though the fake cloud does not run: compose reads every service's paths.
             "FAKE_CLOUD_DIR": str(work / "cloud"),
         }
@@ -340,6 +344,26 @@ class SoStack:
         self.write()
         self.compose("up", "--detach", "--no-deps", "--force-recreate", "--no-build", "so-bridge")
         deadline = time.monotonic() + within_s
+        self.wait_healthy(deadline)
+        return self.wait_flyable(deadline)
+
+    def set_real_launch(self, real: bool, within_s: float = 120) -> dict[str, Any]:
+        """Launches the fake bridge as a phone ready for real flight, or back in its simulator,
+        and turns so-bridge's simulator_mode to match, as SO's own real_launch does (DEP-28).
+
+        so-fleet keeps running: it holds the simulation that clears a file for a real prepare
+        (SO's NFR-SAF-07). The fake bridge goes first, so so-bridge links up to the application
+        it will gate.
+        """
+        self.real_launch = real
+        self.simulator_mode = not real
+        self.write()
+        deadline = time.monotonic() + within_s
+        self.compose(
+            "up", "--detach", "--no-deps", "--force-recreate", "--no-build", "fake-bridge"
+        )  # fmt: skip
+        self.wait_healthy(deadline)
+        self.compose("up", "--detach", "--no-deps", "--force-recreate", "--no-build", "so-bridge")
         self.wait_healthy(deadline)
         return self.wait_flyable(deadline)
 
