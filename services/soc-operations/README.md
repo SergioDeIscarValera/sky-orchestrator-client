@@ -114,7 +114,7 @@ PF-ONLINE does not age them; PF-LINK, which needs a current status, keeps the ga
 | `PF-TAKEOFF` | yes | Within `takeoff_tolerance_m` of the wayline's takeoff point | Beyond it, or the takeoff point is not a position | The takeoff or the position is not known |
 | `PF-WAYLINE` | yes | SOC's validation of the flight finds no problem | Any problem, each named | The wayline has not been judged |
 | `PF-SO-DRYRUN` | yes | Sky Orchestrator's dry run is `valid` | `rejected`: each of its problems named, with its waypoint | `pending`, `failed`, or never asked |
-| `PF-ENVELOPE` | yes | Every vertex lies within the envelope's circle (exactly on it passes), and the ceiling within its `max_height_m` | A vertex beyond the circle, or a ceiling above the limit | No unknown state: an unknown or stale envelope fails it (FR-OPS-08) |
+| `PF-ENVELOPE` | yes | Every vertex lies within the envelope's circle (exactly on it passes), and the ceiling within its `max_height_m` | A vertex beyond the circle, or a ceiling above the limit | No unknown state: an unknown envelope, or one older than twice `stack_envelope_poll_s` (one read missed), fails it (FR-OPS-08) |
 | `PF-MODE` | yes | The stack's simulator mode is known | The mode is neither a boolean nor null | It is null, or the status is not current |
 | `PF-SIMULATOR` | yes | The phone's simulator is on in simulator mode and off in real mode | They disagree; the detail says what to turn | Either is null |
 | `PF-ARMED` | yes | The phone is armed, with at least `min_arming_left_s` left | Not armed, or under the minimum | Armed, or the seconds left, is null |
@@ -296,7 +296,7 @@ starts; the gate deselects it with `-m "not lane"`.
 | `soc-operations` stops while deciding a request | Nothing of the decision is kept; the next sweep closes the request `failed` |
 | A member asks while `soc-operations` is down | The request waits `pending`; the sweep on start decides it, or it expires when older than `command_intent_ttl_s` (the database's claim) |
 | SIGTERM or SIGINT | The database link closes and the process exits with status 0 |
-| A check's input missing, or older than `telemetry_stale_after_ms` | That check is unknown, never pass, and the gate it is part of stays closed; PF-FRESH fails on a stale sample, and PF-ENVELOPE fails on an unknown or stale envelope (FR-SAF-02, FR-SAF-03) |
+| A check's input missing, or older than `telemetry_stale_after_ms` (the envelope: twice `stack_envelope_poll_s`, since soc-cloud reads it only that often) | That check is unknown, never pass, and the gate it is part of stays closed; PF-FRESH fails on a stale sample, and PF-ENVELOPE fails on an unknown or stale envelope (FR-SAF-02, FR-SAF-03) |
 | A stack's status or envelope that does not match its contract (a mode that is not a boolean) | Every check that reads it fails, naming the field; nothing is prepared or made ready |
 | The stack's mode unknown | No prepare: `simulate` is refused naming it; `launch` is refused, the stack not being in real mode (FR-SAF-04) |
 | A blocking check fails while an operation is `preparing` | `simulate` is refused naming the check, and no prepare is made (FR-OPS-06) |

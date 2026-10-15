@@ -29,6 +29,7 @@ from soc_operations.checks import (
     Inputs,
     StackView,
     blocking_pass,
+    envelope_stale_after_ms,
     judge,
 )
 from soc_operations.settings import SERVICE, Tunables
@@ -58,6 +59,7 @@ NOW = datetime(2026, 10, 13, 10, 0, 0, tzinfo=UTC)
 FARM = (41.6523, -4.7245)  # latitude, longitude: the farm
 CENTRE = Geodetic(latitude_deg=FARM[0], longitude_deg=FARM[1])
 STALE_AFTER_MS = 3000  # telemetry_stale_after_ms in the contract's defaults
+ENVELOPE_POLL_S = 30  # stack_envelope_poll_s in the contract's defaults
 
 CONTRACT = soc_config.Contract.read()
 TUNABLES = msgspec.convert(
@@ -291,6 +293,7 @@ ONE_METRE_OUTSIDE: list[list[float]] = [
 
 def test_the_thresholds_are_the_contract_defaults() -> None:
     assert TUNABLES.telemetry_stale_after_ms == STALE_AFTER_MS
+    assert TUNABLES.stack_envelope_poll_s == ENVELOPE_POLL_S
     assert TUNABLES.min_satellites == 12
     assert TUNABLES.min_gps_quality == 4
     assert TUNABLES.min_battery_start_pct == 50
@@ -425,7 +428,7 @@ CASES = [
     pytest.param(
         "PF-ENVELOPE",
         FAIL,
-        stack_with(envelope_read_at=NOW - timedelta(seconds=4)),
+        stack_with(envelope_read_at=NOW - timedelta(seconds=2 * ENVELOPE_POLL_S + 1)),
         id="envelope-stale-fails",
     ),
     # PF-MODE: the stack's simulator mode is known.
@@ -665,8 +668,29 @@ def test_a_status_read_too_long_ago_never_passes_what_it_reports() -> None:
 
 
 def test_an_envelope_read_too_long_ago_fails_the_envelope() -> None:
-    stale = stack_with(envelope_read_at=NOW - timedelta(seconds=10))(baseline())
+    stale = stack_with(envelope_read_at=NOW - timedelta(seconds=10 * ENVELOPE_POLL_S))(baseline())
     assert judged(stale)["PF-ENVELOPE"].state == "fail"
+
+
+def test_an_envelope_is_current_for_two_of_its_read_intervals_and_not_a_millisecond_more() -> None:
+    # soc-cloud reads the envelope every stack_envelope_poll_s: an envelope as old as the samples'
+    # bound is the normal case between two reads, and must pass, or PF-ENVELOPE would pass only
+    # in the few seconds after each read. One read missed is tolerated; two are not.
+    bound = timedelta(seconds=2 * ENVELOPE_POLL_S)
+    between_reads = stack_with(envelope_read_at=NOW - timedelta(seconds=ENVELOPE_POLL_S - 1))
+    assert judged(between_reads(baseline()))["PF-ENVELOPE"].state == "pass"
+    at_the_bound = stack_with(envelope_read_at=NOW - bound)(baseline())
+    assert judged(at_the_bound)["PF-ENVELOPE"].state == "pass"
+    past = stack_with(envelope_read_at=NOW - bound - timedelta(milliseconds=1))(baseline())
+    check = judged(past)["PF-ENVELOPE"]
+    assert check.state == "fail"
+    assert check.detail is not None
+    assert f"past twice stack_envelope_poll_s {ENVELOPE_POLL_S}" in check.detail
+
+
+def test_the_envelope_bound_follows_the_read_interval() -> None:
+    slower = msgspec.structs.replace(TUNABLES, stack_envelope_poll_s=120)
+    assert envelope_stale_after_ms(slower) == 240_000
 
 
 def test_a_status_with_no_read_time_is_not_current() -> None:
