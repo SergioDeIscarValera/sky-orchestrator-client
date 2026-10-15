@@ -7,12 +7,17 @@ import {
   DataTexture,
   Group,
   InstancedMesh,
+  InterleavedBuffer,
+  InterleavedBufferAttribute,
   LinearFilter,
   Mesh,
   MeshBasicMaterial,
   ShaderMaterial,
   Texture,
 } from 'three'
+import { Line2 } from 'three/addons/lines/Line2.js'
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 
 import { geometryBytes, gpuMemory, GPU_BUDGET_BYTES, textureBytes } from './gpuMemory'
 
@@ -34,6 +39,28 @@ describe("the scene's memory on the GPU (NFR-RES-03, NFR-OBS-05)", () => {
     geometry.setAttribute('uv', new BufferAttribute(new Float32Array(6), 2))
     geometry.setIndex(new BufferAttribute(new Uint16Array(3), 1))
     expect(geometryBytes(geometry)).toBe(36 + 24 + 6)
+  })
+
+  it('counts an interleaved buffer that two attributes share once, as the GPU holds it', () => {
+    const shared = new InterleavedBuffer(new Float32Array(12), 6)
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('instanceStart', new InterleavedBufferAttribute(shared, 3, 0))
+    geometry.setAttribute('instanceEnd', new InterleavedBufferAttribute(shared, 3, 3))
+    expect(geometryBytes(geometry)).toBe(12 * 4)
+  })
+
+  it("counts a line's geometry as it uploads: its instanced template, and six floats a segment once", () => {
+    // Three points make two segments. The template every line draws is 36 bytes of index (18 × uint16),
+    // 96 of position and 64 of uv; the segments are 2 × 6 floats, the two ends sharing one buffer.
+    const geometry = new LineGeometry()
+    geometry.setPositions([0, 0, 0, 1, 0, 0, 1, 1, 0])
+    const scene = new Group()
+    scene.add(new Line2(geometry, new LineMaterial()))
+    expect(gpuMemory(scene)).toEqual({
+      geometries: 1,
+      textures: 0,
+      bytes: 36 + 96 + 64 + 2 * 6 * 4,
+    })
   })
 
   it('counts an image as RGBA, its mipmaps a third more, and data as it is', () => {

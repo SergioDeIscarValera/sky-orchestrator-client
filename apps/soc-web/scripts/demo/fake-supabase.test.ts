@@ -513,3 +513,70 @@ describe("the demo's operations, read and written through the console backend (m
     expect(response.headers.get('access-control-allow-methods')).toContain('DELETE')
   })
 })
+
+describe("the demo's flown tracks, read through the console backend (FR-TEL-05)", () => {
+  const FLOWN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const OTHER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+  const UNFLOWN = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  const START = Date.parse('2026-10-11T10:00:00Z')
+  const FLEET = '33333333-3333-4333-8333-333333333333'
+
+  /** One stored sample of a flight, as soc.telemetry_samples holds it: `second` after the start. */
+  function sample(flightId: string, second: number, heightM: number) {
+    return {
+      flight_id: flightId,
+      sampled_at: new Date(START + second * 1000).toISOString(),
+      received_at: new Date(START + second * 1000 + 40).toISOString(),
+      organization_id: NORTH,
+      fleet_id: FLEET,
+      longitude: -4.7245,
+      latitude: 41.6523,
+      height_m: heightM,
+      battery_pct: 80,
+    }
+  }
+
+  // 1,200 samples of FLOWN, stored newest first (the answer must still be in time order), and two of OTHER.
+  const telemetry = [
+    ...Array.from({ length: 1200 }, (_, index) => sample(FLOWN, 1199 - index, 1199 - index)),
+    sample(OTHER, 0, 5),
+    sample(OTHER, 1, 6),
+  ]
+  let seeded: FakeSupabase
+  let flown: Backend
+
+  beforeAll(async () => {
+    seeded = await startFakeSupabase({ port: 0, telemetry })
+    flown = connect(seeded.url)
+  })
+
+  afterAll(async () => {
+    await seeded.close()
+  })
+
+  it("answers a flight's track in time order, and only the samples of that flight", async () => {
+    expect((await flown.track(OTHER)).map(({ heightM }) => heightM)).toEqual([5, 6])
+    expect(await flown.track(UNFLOWN)).toEqual([])
+  })
+
+  it("pages a track past the demo's row cap, so the console reads every sample of a long flight", async () => {
+    const track = await flown.track(FLOWN)
+    expect(track.map(({ heightM }) => heightM)).toEqual(Array.from({ length: 1200 }, (_, i) => i))
+    expect(track[0]).toEqual({
+      sampledAt: new Date(START).toISOString(),
+      position: { latitudeDeg: 41.6523, longitudeDeg: -4.7245 },
+      heightM: 0,
+    })
+  })
+
+  it('answers only the columns a track read selects, as PostgREST does', async () => {
+    const url = new URL('/rest/v1/telemetry_samples', seeded.url)
+    url.searchParams.set('flight_id', `eq.${OTHER}`)
+    url.searchParams.set('select', 'sampled_at,height_m')
+    const answer = (await (await fetch(url)).json()) as Record<string, unknown>[]
+    expect(answer.map((row) => Object.keys(row).sort())).toEqual([
+      ['height_m', 'sampled_at'],
+      ['height_m', 'sampled_at'],
+    ])
+  })
+})

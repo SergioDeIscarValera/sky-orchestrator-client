@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import type {
   AssignmentChanges,
   AssignmentDraft,
+  Backend,
   OperationChanges,
   OperationCheck,
   OperationDraft,
@@ -27,6 +28,7 @@ import {
   OPERATORS,
   REQUESTS,
   STACKS,
+  TRACK,
   organizationKey,
 } from '../organizations/scope'
 
@@ -61,13 +63,21 @@ export function useAssignments(operationId: string) {
   })
 }
 
+/**
+ * An operation's operators, under the organization's key. Also read by the safety controls for each
+ * operation they command, so the flight console and the bar share one copy (useQueries takes it).
+ */
+export function operatorsQuery(backend: Backend, organizationId: string, operationId: string) {
+  return {
+    queryKey: organizationKey(organizationId, OPERATORS, operationId),
+    queryFn: () => backend.operators(operationId),
+  }
+}
+
 export function useOperators(operationId: string) {
   const backend = useBackend()
   const { organization } = useOrganization()
-  return useQuery({
-    queryKey: organizationKey(organization.id, OPERATORS, operationId),
-    queryFn: () => backend.operators(operationId),
-  })
+  return useQuery(operatorsQuery(backend, organization.id, operationId))
 }
 
 /** The members to name as operators: no broadcast carries a membership, so a join reads them again. */
@@ -107,13 +117,21 @@ export function useRequests(operationId: string) {
   })
 }
 
+/**
+ * An operation's flights, under the organization's key. The safety controls read each airborne
+ * operation's flights through it too, so the flight console and the bar share one copy.
+ */
+export function flightsQuery(backend: Backend, organizationId: string, operationId: string) {
+  return {
+    queryKey: organizationKey(organizationId, FLIGHTS, operationId),
+    queryFn: () => backend.flights(operationId),
+  }
+}
+
 export function useFlights(operationId: string) {
   const backend = useBackend()
   const { organization } = useOrganization()
-  return useQuery({
-    queryKey: organizationKey(organization.id, FLIGHTS, operationId),
-    queryFn: () => backend.flights(operationId),
-  })
+  return useQuery(flightsQuery(backend, organization.id, operationId))
 }
 
 export function useFlightStates(operationId: string) {
@@ -122,6 +140,26 @@ export function useFlightStates(operationId: string) {
   return useQuery({
     queryKey: organizationKey(organization.id, FLIGHT_STATES, operationId),
     queryFn: () => backend.flightStates(operationId),
+  })
+}
+
+/**
+ * How often a live flight's track is read again. soc-cloud writes its samples in batches every
+ * `telemetry_batch_s` (ADR-0007), a setting the console does not know, so it reads every 5 s.
+ */
+export const TRACK_REFRESH_MS = 5_000
+
+/**
+ * A flight's stored track (FR-TEL-05), read again every TRACK_REFRESH_MS while the flight has not
+ * ended, and never after: what was stored by then is what the track keeps.
+ */
+export function useFlightTrack(flightId: string, ended: boolean) {
+  const backend = useBackend()
+  const { organization } = useOrganization()
+  return useQuery({
+    queryKey: organizationKey(organization.id, TRACK, flightId),
+    queryFn: () => backend.track(flightId),
+    refetchInterval: ended ? false : TRACK_REFRESH_MS,
   })
 }
 
@@ -271,6 +309,15 @@ function invalidate(queryClient: QueryClient, queryKey: readonly unknown[], exac
 }
 
 /**
+ * Cancels the read of `queryKey` still in flight before a broadcast is written into its cache. Such
+ * a read answers the state from before the broadcast, and it would land over the write once it
+ * arrives: a judgement that had just been written would show as it was before (FR-OPS-04).
+ */
+function cancelReadsOf(queryClient: QueryClient, queryKey: readonly unknown[]) {
+  return queryClient.cancelQueries({ queryKey, exact: true })
+}
+
+/**
  * Writes a log entry or a check the state topic carries whole into its cache, as it came, so the
  * log streams (FR-LOG-03) and a check shows within one sample (FR-OPS-04). A payload it cannot
  * read, or a cache not read yet, is read again instead: nothing is guessed into the cache.
@@ -287,6 +334,7 @@ export async function placeRow(
       return
     }
     const key = organizationKey(organizationId, CHECKS, placed.operationId)
+    await cancelReadsOf(queryClient, key)
     const cached = queryClient.getQueryData<OperationCheck[]>(key)
     if (cached === undefined) {
       await invalidate(queryClient, key, true)
@@ -301,6 +349,7 @@ export async function placeRow(
     return
   }
   const key = organizationKey(organizationId, EVENTS, entry.operationId)
+  await cancelReadsOf(queryClient, key)
   const cached = queryClient.getQueryData<OperationEvent[]>(key)
   if (cached === undefined) {
     await invalidate(queryClient, key, true)

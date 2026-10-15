@@ -144,6 +144,17 @@ const FLIGHT_ROW = {
   breached_at: null,
 }
 
+const LATER = '2026-10-11T10:10:01+00:00'
+const FINCA_POSITION = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
+
+/** One sample of a flight's track as soc.telemetry_samples holds it, the columns the console selects. */
+const TRACK_ROW = {
+  sampled_at: STAMP,
+  latitude: 41.6523,
+  longitude: -4.7245,
+  height_m: 0,
+}
+
 const COMMAND_ROW = {
   id: COMMAND_ID,
   operation_id: OPERATION_ID,
@@ -455,6 +466,96 @@ describe('the operations through PostgREST (IR-OPS, IR-ASG, IR-OPR)', () => {
     await expect(backend.flights(OPERATION_ID)).rejects.toThrow(
       'soc.flights answered rows SOC cannot read',
     )
+  })
+
+  it("reads a flight's track in time order: its columns, its window, the position longitude first", async () => {
+    const { backend, supabase } = await signedIn()
+    supabase.answers.set('GET /rest/v1/telemetry_samples', {
+      status: 200,
+      body: [TRACK_ROW, { ...TRACK_ROW, sampled_at: LATER, height_m: 12.5 }],
+    })
+    expect(await backend.track(FLIGHT_ID)).toEqual([
+      { sampledAt: STAMP, position: FINCA_POSITION, heightM: 0 },
+      { sampledAt: LATER, position: FINCA_POSITION, heightM: 12.5 },
+    ])
+    const [request] = supabase.requests.filter(({ url }) =>
+      url.pathname.endsWith('/telemetry_samples'),
+    )
+    expect(request?.url.searchParams.get('flight_id')).toBe(`eq.${FLIGHT_ID}`)
+    expect(request?.url.searchParams.get('order')).toBe('sampled_at.asc')
+    expect(request?.url.searchParams.get('select')).toBe('sampled_at,latitude,longitude,height_m')
+    expect(request?.url.searchParams.get('offset')).toBe('0')
+    expect(request?.url.searchParams.get('limit')).toBe('1000')
+    expect(request?.headers.get('accept-profile')).toBe('soc')
+  })
+
+  it('pages a track past the row cap the database answers, so no sample is lost', async () => {
+    const { backend, supabase } = await signedIn()
+    supabase.maxRows = 2
+    const rows = [0, 1, 2, 3, 4].map((second) => ({
+      ...TRACK_ROW,
+      sampled_at: `2026-10-11T10:10:0${String(second)}+00:00`,
+      height_m: second,
+    }))
+    supabase.answers.set('GET /rest/v1/telemetry_samples', { status: 200, body: rows })
+    const track = await backend.track(FLIGHT_ID)
+    expect(track.map(({ heightM }) => heightM)).toEqual([0, 1, 2, 3, 4])
+    const offsets = supabase.requests
+      .filter(({ url }) => url.pathname.endsWith('/telemetry_samples'))
+      .map(({ url }) => url.searchParams.get('offset'))
+    expect(offsets).toEqual(['0', '2', '4', '5'])
+  })
+
+  it('reads an empty track as no points, in one request', async () => {
+    const { backend, supabase } = await signedIn()
+    supabase.answers.set('GET /rest/v1/telemetry_samples', { status: 200, body: [] })
+    expect(await backend.track(FLIGHT_ID)).toEqual([])
+    expect(
+      supabase.requests.filter(({ url }) => url.pathname.endsWith('/telemetry_samples')),
+    ).toHaveLength(1)
+  })
+
+  it.each([
+    ['a latitude past 90', { latitude: 91 }],
+    ['a longitude below -180', { longitude: -180.5 }],
+  ])('refuses a track whose stored position has %s, never guessing it', async (_, change) => {
+    const { backend, supabase } = await signedIn()
+    supabase.answers.set('GET /rest/v1/telemetry_samples', {
+      status: 200,
+      body: [{ ...TRACK_ROW, ...change }],
+    })
+    await expect(backend.track(FLIGHT_ID)).rejects.toThrow(BackendError)
+    await expect(backend.track(FLIGHT_ID)).rejects.toThrow(/cannot read a stored position/)
+  })
+
+  it.each([
+    ['a height that is text', { height_m: '12.5' }],
+    ['a time that is no time', { sampled_at: 'yesterday' }],
+    ['a missing latitude', { latitude: undefined }],
+  ])(
+    'refuses a track row with %s, as the neighbours refuse a row they cannot read',
+    async (_, change) => {
+      const { backend, supabase } = await signedIn()
+      supabase.answers.set('GET /rest/v1/telemetry_samples', {
+        status: 200,
+        body: [{ ...TRACK_ROW, ...change }],
+      })
+      await expect(backend.track(FLIGHT_ID)).rejects.toThrow(
+        'soc.telemetry_samples answered rows SOC cannot read',
+      )
+    },
+  )
+
+  it("passes on a track read's failure as a plain error, its code kept", async () => {
+    const { backend, supabase } = await signedIn()
+    supabase.answers.set('GET /rest/v1/telemetry_samples', {
+      status: 500,
+      body: { code: 'XX000', message: 'the database is busy', details: null, hint: null },
+    })
+    const failure = await backend.track(FLIGHT_ID).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(BackendError)
+    expect(failure).not.toBeInstanceOf(FieldRefusedError)
+    expect(failure).toMatchObject({ message: 'the database is busy', code: 'XX000' })
   })
 
   it('asks a transition through the RPC, its client request id the key the database keeps', async () => {

@@ -18,16 +18,19 @@ BOUNDED = [
     for key, spec in CONTRACT.document["properties"].items()
     if "minimum" in spec and "maximum" in spec
 ]
+PROPERTIES = CONTRACT.document["properties"]
 RELATED_AT_ITS_LOOSEST = {
     "telemetry_stale_after_ms": {
-        "telemetry_lost_after_ms": CONTRACT.document["properties"]["telemetry_lost_after_ms"][
-            "maximum"
-        ]
+        "telemetry_lost_after_ms": PROPERTIES["telemetry_lost_after_ms"]["maximum"],
+        "stack_status_poll_ms": PROPERTIES["stack_status_poll_ms"]["minimum"],
     },
     "telemetry_lost_after_ms": {
-        "telemetry_stale_after_ms": CONTRACT.document["properties"]["telemetry_stale_after_ms"][
-            "minimum"
-        ]
+        "telemetry_stale_after_ms": PROPERTIES["telemetry_stale_after_ms"]["minimum"],
+        "stack_status_poll_ms": PROPERTIES["stack_status_poll_ms"]["minimum"],
+    },
+    "stack_status_poll_ms": {
+        "telemetry_stale_after_ms": PROPERTIES["telemetry_stale_after_ms"]["maximum"],
+        "telemetry_lost_after_ms": PROPERTIES["telemetry_lost_after_ms"]["maximum"],
     },
 }
 
@@ -143,6 +146,15 @@ def test_stale_must_come_before_lost(complete: Complete) -> None:
     values = complete("soc-web", telemetry_stale_after_ms=5000, telemetry_lost_after_ms=5000)
     assert refused(values, "soc-web") == [
         "telemetry_stale_after_ms < telemetry_lost_after_ms does not hold"
+    ]
+
+
+def test_a_status_is_read_more_often_than_it_goes_stale(complete: Complete) -> None:
+    # soc-operations trusts a status for telemetry_stale_after_ms: one read less often would leave
+    # the checks that read it unknown between reads.
+    values = complete("soc-cloud", stack_status_poll_ms=3000, telemetry_stale_after_ms=3000)
+    assert refused(values, "soc-cloud") == [
+        "stack_status_poll_ms < telemetry_stale_after_ms does not hold"
     ]
 
 

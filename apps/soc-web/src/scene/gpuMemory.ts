@@ -29,12 +29,20 @@ const MIPMAPPED = new Set<number>([
   LinearMipmapLinearFilter,
 ])
 
-/** The bytes of a geometry's attributes and index, as uploaded. */
+/**
+ * The bytes of a geometry's attributes and index, as uploaded. Attributes that share one array, as a
+ * line's two ends do over one interleaved buffer, upload it once, so it is counted once.
+ */
 export function geometryBytes(geometry: BufferGeometry): number {
-  let bytes = geometry.index?.array.byteLength ?? 0
-  for (const attribute of Object.values(geometry.attributes)) {
-    bytes += attribute.array.byteLength
+  const uploaded = new Set<ArrayLike<number>>()
+  let bytes = 0
+  const upload = (array: ArrayLike<number> & { readonly byteLength: number }) => {
+    if (uploaded.has(array)) return
+    uploaded.add(array)
+    bytes += array.byteLength
   }
+  if (geometry.index !== null) upload(geometry.index.array)
+  for (const attribute of Object.values(geometry.attributes)) upload(attribute.array)
   return bytes
 }
 

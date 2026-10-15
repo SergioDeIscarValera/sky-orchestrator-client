@@ -3,6 +3,7 @@ import { useStore } from 'zustand'
 
 import { aircraftKey } from '../backend/backend'
 import { useBackend } from '../backend/context'
+import { openLive } from '../backend/live'
 import { useOrganization } from '../organizations/context'
 import type { TelemetryStore, Track } from './store'
 
@@ -27,9 +28,11 @@ export function useLiveTelemetry(store: TelemetryStore): void {
 
   useEffect(() => {
     store.getState().clear()
-    const stop = backend.onTelemetry(organization.id, (sample) => {
-      store.getState().receive(sample, performance.now())
-    })
+    const stop = openLive('telemetry', () =>
+      backend.onTelemetry(organization.id, (sample) => {
+        store.getState().receive(sample, performance.now())
+      }),
+    )
     return () => {
       stop()
       store.getState().clear()

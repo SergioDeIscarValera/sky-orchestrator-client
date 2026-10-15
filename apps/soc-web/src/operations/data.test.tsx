@@ -11,15 +11,18 @@ import {
 import { BackendContext } from '../backend/context'
 import { useLiveState } from '../fleets/data'
 import { OrganizationContext } from '../organizations/context'
-import { organizationKey } from '../organizations/scope'
+import { CHECKS, EVENTS, organizationKey } from '../organizations/scope'
 import { FakeBackend, NORTH, PILOT } from '../test/FakeBackend'
 import { quietQueryClient } from '../test/render'
 import {
+  TRACK_REFRESH_MS,
   useChecks,
   useChangeOperation,
+  useCommands,
   useCreateOperation,
   useEvents,
   useFlightStates,
+  useFlightTrack,
   useOperation,
   useFlights,
   useOperations,
@@ -136,6 +139,105 @@ describe("the operation's log and checks, kept current from the state topic (FR-
     expect(reads).toHaveBeenCalledOnce()
   })
 
+  it('keeps a judgement that lands while an older read of the checks is still in flight', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await backend.createOperation(NORTH.id, DRAFT)
+    const waiting: OperationCheck = {
+      ...CHECK,
+      checkId: 'PF-SO-DRYRUN',
+      state: 'unknown',
+      detail: "Sky Orchestrator's dry run is still pending.",
+    }
+    const accepted: OperationCheck = { ...waiting, state: 'pass', detail: 'Accepts the file.' }
+    backend.addCheck(operation.id, waiting)
+    const { wrapper, queryClient } = opened(backend)
+    const { result } = renderHook(
+      () => {
+        useLiveState()
+        return useChecks(operation.id)
+      },
+      { wrapper },
+    )
+    await soon(() => {
+      expect(result.current.data).toEqual([waiting])
+    })
+    // A read asked before the judgement, which answers with the older judgement only after it lands.
+    let answer: () => void = () => undefined
+    vi.spyOn(backend, 'checks').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = () => {
+            resolve([waiting])
+          }
+        }),
+    )
+    act(() => {
+      void queryClient.invalidateQueries({
+        queryKey: organizationKey(NORTH.id, CHECKS, operation.id),
+      })
+    })
+    act(() => {
+      backend.addCheck(operation.id, accepted)
+    })
+    await soon(() => {
+      expect(result.current.data).toEqual([accepted])
+    })
+    await act(async () => {
+      answer()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(result.current.data).toEqual([accepted])
+  })
+
+  it('keeps a log entry that lands while an older read of the log is still in flight', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await backend.createOperation(NORTH.id, DRAFT)
+    const { wrapper, queryClient } = opened(backend)
+    const { result } = renderHook(
+      () => {
+        useLiveState()
+        return useEvents(operation.id)
+      },
+      { wrapper },
+    )
+    await soon(() => {
+      expect(result.current.data).toHaveLength(1)
+    })
+    // A read of the log asked before the entry, which answers without it only after the entry lands.
+    const older = result.current.data ?? []
+    let answer: () => void = () => undefined
+    vi.spyOn(backend, 'events').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = () => {
+            resolve(older)
+          }
+        }),
+    )
+    act(() => {
+      void queryClient.invalidateQueries({
+        queryKey: organizationKey(NORTH.id, EVENTS, operation.id),
+      })
+    })
+    act(() => {
+      backend.addEvent(
+        operation.id,
+        'transition_refused',
+        'soc-operations',
+        { transition: 'plan' },
+        'warning',
+      )
+    })
+    await soon(() => {
+      expect(result.current.data).toHaveLength(2)
+    })
+    await act(async () => {
+      answer()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(result.current.data).toHaveLength(2)
+  })
+
   it('appends each log entry to the log in the cache, without reading the log again', async () => {
     const backend = new FakeBackend(PILOT)
     const operation = await backend.createOperation(NORTH.id, DRAFT)
@@ -188,6 +290,32 @@ describe("the operation's log and checks, kept current from the state topic (FR-
       backend.emit(NORTH.id, {
         kind: 'flight_state',
         payload: { flight_id: '88888888-8888-4888-8888-888888888888', status: 'ok' },
+      })
+    })
+    await soon(() => {
+      expect(reads).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it("reads the commands again when one changes, so a second console sees each one's outcome (FR-CMD-06)", async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await backend.createOperation(NORTH.id, DRAFT)
+    const reads = vi.spyOn(backend, 'commands')
+    const { wrapper } = opened(backend)
+    renderHook(
+      () => {
+        useLiveState()
+        return useCommands(operation.id)
+      },
+      { wrapper },
+    )
+    await soon(() => {
+      expect(reads).toHaveBeenCalledOnce()
+    })
+    act(() => {
+      backend.emit(NORTH.id, {
+        kind: 'command_intent',
+        payload: { operation_id: operation.id, status: 'accepted' },
       })
     })
     await soon(() => {
@@ -272,5 +400,49 @@ describe("the operation's log and checks, kept current from the state topic (FR-
     await soon(() => {
       expect(reads).toHaveBeenCalledTimes(2)
     })
+  })
+})
+
+describe("a flight's stored track, read again while the flight is live (FR-TEL-05)", () => {
+  const FLIGHT_ID = '88888888-8888-4888-8888-888888888888'
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('reads the track every 5 s while the flight has not ended, and never after it has', async () => {
+    const backend = new FakeBackend(PILOT)
+    const reads = vi.spyOn(backend, 'track')
+    const { wrapper } = opened(backend)
+    const { rerender } = renderHook(
+      ({ ended }: { readonly ended: boolean }) => useFlightTrack(FLIGHT_ID, ended),
+      { wrapper, initialProps: { ended: false } },
+    )
+    const passes = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
+
+    await passes(0)
+    expect(reads).toHaveBeenCalledTimes(1)
+    await passes(TRACK_REFRESH_MS - 1)
+    expect(reads).toHaveBeenCalledTimes(1)
+    await passes(1)
+    expect(reads).toHaveBeenCalledTimes(2)
+    await passes(TRACK_REFRESH_MS)
+    expect(reads).toHaveBeenCalledTimes(3)
+
+    rerender({ ended: true })
+    await passes(10 * 60_000)
+    expect(reads).toHaveBeenCalledTimes(3)
+  })
+
+  it('reads a track once when the flight has already ended, and not on an interval', async () => {
+    const backend = new FakeBackend(PILOT)
+    const reads = vi.spyOn(backend, 'track')
+    const { wrapper } = opened(backend)
+    renderHook(() => useFlightTrack(FLIGHT_ID, true), { wrapper })
+    await act(() => vi.advanceTimersByTimeAsync(10 * 60_000))
+    expect(reads).toHaveBeenCalledOnce()
   })
 })
