@@ -12,9 +12,10 @@
 //                                               reply shown, timed from its send, in milliseconds
 //   ← {"real": true}                            the stack turned to a real launch
 //   ← {"on_route": true}                        the real flight flies its wayline (mode 5)
-//   → {"event": "completed", "state_changes", "shown_at"}
+//   → {"event": "completed", "state_changes", "shown_at", "delivered_at_ms"}
 //                                               completed, and the log's State changed entries,
-//                                               each with when it first showed (epoch ms)
+//                                               each with when it first showed, and when the
+//                                               state channel's first broadcast arrived (epoch ms)
 //   → {"event": "failed", "message"}            on the first error, then exit 1
 //
 // A hold is by pointer on odd cycles and by Space on the focused button on even ones, as the
@@ -385,6 +386,8 @@ function watchStateChannel(page) {
   const joined = new Promise((resolve) => {
     resolveJoined = resolve
   })
+  // When the first broadcast after the join arrived, on the wall clock: Realtime delivers from then.
+  const delivery = { at_ms: null }
   page.on('websocket', (socket) => {
     socket.on('framesent', ({ payload }) => {
       const frame = stateFrame(payload)
@@ -404,10 +407,12 @@ function watchStateChannel(page) {
       if (frame.event === 'phx_reply' && !replied) {
         replied = true
         resolveJoined(frame.payload)
+      } else if (frame.event === 'broadcast' && replied && delivery.at_ms === null) {
+        delivery.at_ms = Date.now()
       }
     })
   })
-  return { joined }
+  return { joined, delivery }
 }
 
 async function main() {
@@ -510,7 +515,12 @@ async function main() {
     await page.waitForFunction(completionLogged, STATE_CHANGED, { timeout: WAIT_MS })
     const changes = await page.evaluate(shownStateChanges, STATE_CHANGED)
     const shownAt = await page.evaluate(() => globalThis.__socStateChanges)
-    emit({ event: 'completed', state_changes: changes, shown_at: shownAt })
+    emit({
+      event: 'completed',
+      state_changes: changes,
+      shown_at: shownAt,
+      delivered_at_ms: stateChannel.delivery.at_ms,
+    })
   } catch (error) {
     if (page !== null) {
       if (shots !== null) {
