@@ -63,6 +63,12 @@ STACK = {
     PurePosixPath("contracts/config/so-config.schema.json"): PurePosixPath(
         "config/so-config.schema.json"
     ),
+    # The recorded flights the compose file mounts into the fake bridge, where its relative
+    # path finds them: a mount whose source is missing would make Docker create it, owned by
+    # root, inside this checkout.
+    PurePosixPath("infra/tests/fixtures/replay/square-flight.jsonl"): PurePosixPath(
+        "stack/tests/fixtures/replay/square-flight.jsonl"
+    ),
 }
 EXECUTABLE = frozenset({PurePosixPath("stack/mosquitto/entrypoint.sh")})
 SOURCE_PREFIX = PurePosixPath("contracts")
