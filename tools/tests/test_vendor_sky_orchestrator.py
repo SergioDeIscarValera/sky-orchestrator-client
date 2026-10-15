@@ -29,6 +29,7 @@ SOURCE_FILES = {
     "infra/mosquitto/acl": "user cloud-client\n",
     "infra/mosquitto/entrypoint.sh": '#!/bin/sh\nexec "$@"\n',
     "infra/mosquitto/mosquitto.conf": "allow_anonymous false\n",
+    "infra/tests/fixtures/replay/square-flight.jsonl": '{"kind": "mission_started"}\n',
 }
 EXECUTABLES = ("infra/mosquitto/entrypoint.sh",)
 CONTRACTS = [
@@ -44,6 +45,9 @@ STACK = {
     "stack/mosquitto/acl": "infra/mosquitto/acl",
     "stack/mosquitto/entrypoint.sh": "infra/mosquitto/entrypoint.sh",
     "stack/mosquitto/mosquitto.conf": "infra/mosquitto/mosquitto.conf",
+    "stack/tests/fixtures/replay/square-flight.jsonl": (
+        "infra/tests/fixtures/replay/square-flight.jsonl"
+    ),
 }
 VENDORED = sorted([*CONTRACTS, *STACK])
 
@@ -172,11 +176,18 @@ class Vendoring(unittest.TestCase):
                 self.assertEqual(files[here], vso.sha256(original))
         entrypoint = self.workspace.destination / "stack" / "mosquitto" / "entrypoint.sh"
         self.assertTrue(entrypoint.stat().st_mode & 0o111)
-        # The compose file reaches the broker's files as ../mosquitto, as upstream.
+        # The compose file reaches the broker's files as ../mosquitto, as upstream, and the
+        # recorded flights it mounts as ../tests/fixtures/replay, so Docker creates neither.
         self.assertEqual(
             (self.workspace.destination / "stack" / "compose").parent / "mosquitto",
             entrypoint.parent,
         )
+        replay = self.workspace.destination / "stack" / "tests" / "fixtures" / "replay"
+        self.assertEqual(
+            (self.workspace.destination / "stack" / "compose").parent / "tests" / "fixtures",
+            replay.parent,
+        )
+        self.assertTrue((replay / "square-flight.jsonl").is_file())
 
     def test_nothing_else_of_the_infrastructure_is_taken(self) -> None:
         self.workspace.vendor()
