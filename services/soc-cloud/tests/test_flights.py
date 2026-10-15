@@ -13,7 +13,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import math
 import random
+import time
 import uuid
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
@@ -35,6 +37,7 @@ from soc_cloud.flights import (
     FlightWatch,
     TrackRow,
 )
+from soc_cloud.latency import Latencies
 from soc_cloud.link.progress import BreakPoint, FlightProgress, FlightStatus
 from soc_cloud.link.telemetry import Sample
 from soc_db import DatabaseUnavailableError
@@ -253,11 +256,16 @@ class Clock:
 
 
 class Watch:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        monotonic: Callable[[], float] | None = None,
+        latencies: Latencies | None = None,
+    ) -> None:
         self.store = FakeStore()
         self.returner = FakeReturner()
         self.files = FlightFiles({"lab": FILES}, grace_s=0.0)
         self.monotonic = Clock()
+        self.latencies = latencies or Latencies()
         self.watch = FlightWatch(
             self.store,
             self.files,
@@ -265,10 +273,11 @@ class Watch:
             stale_after_ms=STALE_AFTER_MS,
             warning_band_m=BAND_M,
             batch_s=3600,
+            latencies=self.latencies,
             retry_s=0.001,
             reconcile_s=3600,
             stale_tick_s=3600,
-            monotonic=self.monotonic,
+            monotonic=monotonic or self.monotonic,
         )
 
     async def executing(self, **changes: Any) -> Flight:
@@ -290,8 +299,10 @@ async def until(condition: Callable[[], bool], within_s: float = 2.0) -> None:
 
 
 @asynccontextmanager
-async def watching() -> AsyncIterator[Watch]:
-    watch = Watch()
+async def watching(
+    monotonic: Callable[[], float] | None = None, latencies: Latencies | None = None
+) -> AsyncIterator[Watch]:
+    watch = Watch(monotonic, latencies)
     task = asyncio.create_task(watch.watch.run())
     try:
         yield watch
@@ -420,6 +431,111 @@ async def test_a_sample_above_the_ceiling_is_a_breach() -> None:
     assert len(cloud.returner.sent) == 1
     ((_, outside, _),) = cloud.store.logged("geofence_breach")
     assert outside["above_ceiling_m"] == pytest.approx(0.5)
+
+
+# The square's sides, in degrees, and the metres a degree spans at the farm: a track is planned
+# in metres from the farm's centre and sampled in degrees.
+WEST, EAST, SOUTH, NORTH = -4.7255, -4.7235, 41.6515, 41.6531
+CEILING_M = 120.0
+METRES_PER_DEGREE_LAT = 111_132.0
+METRES_PER_DEGREE_LON = METRES_PER_DEGREE_LAT * math.cos(math.radians(INSIDE[0]))
+#: NFR-PERF-04's tracks: flown at 12 m/s, sampled at 10 Hz, as the OSD comes at full rate.
+STEP_M, SAMPLE_MS, TRACKS = 1.2, 100, 200
+
+
+def outside(where: tuple[float, float], height_m: float) -> bool:
+    """The square's own test, apart from soc_geo: beyond a side, or above the ceiling."""
+    latitude, longitude = where
+    return not (WEST < longitude < EAST and SOUTH < latitude < NORTH) or height_m > CEILING_M
+
+
+def clearance_m(where: tuple[float, float], height_m: float) -> float:
+    """How far a sample lies from the nearest side or the ceiling, in metres, either way."""
+    latitude, longitude = where
+    return min(
+        abs(longitude - WEST) * METRES_PER_DEGREE_LON,
+        abs(longitude - EAST) * METRES_PER_DEGREE_LON,
+        abs(latitude - SOUTH) * METRES_PER_DEGREE_LAT,
+        abs(latitude - NORTH) * METRES_PER_DEGREE_LAT,
+        abs(height_m - CEILING_M),
+    )
+
+
+def crossing(seed: int) -> list[tuple[tuple[float, float], float]]:
+    """One boundary-crossing track: from near the centre, out through a side at a heading drawn
+    from the seed, or straight up through the ceiling; it ends two samples past the boundary.
+
+    No sample lies within 0.3 m of the boundary: there the square's own test and soc_geo's may
+    round apart, and the test would hold the rounding, not the reaction. A draw that would put one
+    there is drawn again.
+    """
+    draw = random.Random(seed)  # noqa: S311 - a track, not a secret
+    while True:
+        east, north = draw.uniform(-30, 30), draw.uniform(-30, 30)
+        if seed % 5 == 0:
+            height, climb, heading = 110.0 + draw.uniform(0, 5), 1.0, None
+        else:
+            height, climb, heading = 30.0, 0.0, draw.uniform(0, 2 * math.pi)
+        track: list[tuple[tuple[float, float], float]] = []
+        beyond = 0
+        while beyond < 3:
+            where = (
+                INSIDE[0] + north / METRES_PER_DEGREE_LAT,
+                INSIDE[1] + east / METRES_PER_DEGREE_LON,
+            )
+            track.append((where, height))
+            beyond += outside(where, height)
+            if heading is not None:
+                east += STEP_M * math.sin(heading)
+                north += STEP_M * math.cos(heading)
+            height += climb
+        if all(clearance_m(where, height) > 0.3 for where, height in track):
+            return track
+
+
+def test_every_track_starts_inside_crosses_and_keeps_clear_of_the_boundary() -> None:
+    for seed in range(TRACKS):
+        track = crossing(seed)
+        assert not outside(*track[0]), seed
+        assert outside(*track[-1]), seed
+        assert min(clearance_m(where, height) for where, height in track) > 0.3, seed
+
+
+async def test_replayed_crossings_return_each_aircraft_once_within_100_ms_at_p99() -> None:
+    # NFR-PERF-04 in the gate: each track replayed sample by sample into the watch, with the
+    # service's own clock and latency record. The return is sent through a returner that answers
+    # at once: the wire's share is the container lane's (test_against_platform).
+    latencies = Latencies()
+    async with watching(time.monotonic, latencies) as cloud:
+        first_outside: dict[uuid.UUID, int] = {}
+        for seed in range(TRACKS):
+            aircraft = f"SOUAV{seed:04d}"
+            made = await cloud.executing(aircraft=aircraft)
+            for index, (where, height) in enumerate(crossing(seed)):
+                at_ms = T0_MS + index * SAMPLE_MS
+                if outside(where, height):
+                    first_outside.setdefault(made.id, at_ms)
+                cloud.watch.sampled(sample(at_ms, where, height_m=height, aircraft=aircraft))
+                await asyncio.sleep(0)
+            await cloud.settle()
+    returned = [flight_id for _, flight_id, verb, _ in cloud.returner.sent if verb == "return_home"]
+    assert sorted(returned) == sorted(first_outside)
+    breached_at = {
+        flight_id: round(sampled_at.timestamp() * 1000)
+        for flight_id, (_, _, sampled_at) in zip(
+            [flight_id for _, flight_id, _, _ in cloud.returner.sent],
+            cloud.store.logged("geofence_breach"),
+            strict=True,
+        )
+    }
+    assert breached_at == first_outside
+    reaction = latencies.summary()["geofence_return_ms"]
+    print(
+        f"{reaction['count']:.0f} crossings: geofence return p50 {reaction['p50']} ms,"
+        f" p99 {reaction['p99']} ms"
+    )
+    assert reaction["count"] == TRACKS
+    assert reaction["p99"] <= 100
 
 
 async def test_the_return_goes_out_before_anything_is_written() -> None:
