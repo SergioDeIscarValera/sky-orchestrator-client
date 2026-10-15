@@ -133,19 +133,29 @@ async def test_an_operation_is_simulated_then_flown_real_paused_resumed_and_comp
 
         await until(flying, 90, "the simulated flight in progress")
         flight = (await until(lambda: latest_flight(admin, operation), 5, "the flight"))["id"]
-        wire, reply = [], []
+        wire, reply, waypoints = [], [], []
         for _ in range(CYCLES):
             for verb in ("pause", "recovery"):
                 answered = await settled(admin, await command(admin, pilot, flight, verb))
                 assert answered["status"] == "accepted", (verb, answered["result"])
                 wire.append(float(answered["wire_ms"]))
                 reply.append(float(answered["reply_ms"]))
+                waypoints.append(
+                    await admin.fetchval(
+                        "select current_waypoint_index from soc.flight_states where flight_id = $1",
+                        flight,
+                    )
+                )
         print(
             f"{len(wire)} commands: to the wire p95 {p95(wire):.1f} ms,"
             f" to the reply p95 {p95(reply):.1f} ms"
         )
         assert p95(wire) <= 300
         assert p95(reply) <= 1000
+        # FR-CMD-02: a resume continues from the breakpoint, the waypoint index never going back.
+        known = [index for index in waypoints if index is not None]
+        print(f"waypoint index across the cycles: {known[0]} to {known[-1]}")
+        assert known == sorted(known)
         await reach(admin, operation, "simulated", 180)
 
         # The stack turned to real mode with the phone's simulator still on: the operation is

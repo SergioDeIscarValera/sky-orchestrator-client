@@ -3,8 +3,8 @@
 The flight test_operation_against_so.py flies through the database's RPCs, worked here as a pilot
 works it in the web console: operation.mjs drives Chrome against the console's own image. The
 pilot plans and prepares the operation, the checks are judged until every blocking one passes,
-and the pilot simulates. While the simulated flight flies, the pilot pauses and resumes it 25
-times: 50 commands, each reply shown timed in the page from its send (NFR-PERF-02). The harness
+and the pilot simulates. While the simulated flight flies, the pilot pauses and resumes it 50
+times: 100 commands, each reply shown timed in the page from its send (NFR-PERF-02). The harness
 then turns the stack to a real launch, the phone ready for real flight, and the pilot launches,
 pauses and resumes the aircraft in the air until it completes. The log, as the console shows it,
 and the database's moves both read draft to completed, in order.
@@ -44,13 +44,13 @@ from soc_e2e.so_stack import SoStack
 pytestmark = [pytest.mark.lane, pytest.mark.sky_orchestrator]
 
 #: The simulated flight runs at real time, so the route lasts as long on the wall clock. Each cycle
-#: takes about four seconds of it, the holds and their replies (run 4: 25 cycles in 99 s).
+#: takes about four seconds of it, the holds and their replies (25 cycles took 99 s).
 PACE = 1
 #: The route is flown at 1 m/s, not the golden flight's 5 m/s: at 5 m/s the route is 23 s of flight,
 #: too short for the cycles. At 1 m/s it is over two minutes, and the flight is still in the air
 #: after the last cycle.
 FLIGHT_SPEED_MS = 1.0
-CYCLES = 25
+CYCLES = 50
 #: NFR-PERF-02: the reply to a command is shown within one second, at p95.
 REPLY_P95_MS = 1000
 #: FR-CMD-07: a command goes out once its button has been held for 1.5 s.
