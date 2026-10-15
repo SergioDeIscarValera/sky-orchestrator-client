@@ -178,6 +178,22 @@ async def running_cloud(
                         if response.status == 200:
                             break
                 await asyncio.sleep(0.2)
+        # The stack's row may still name an earlier soc-cloud's files: a prepare asked before
+        # this one records its own would send the dock to a server that has gone (314013).
+        url = f"http://{so.gateway}:{files}"
+        connection = await platform.stack.postgres.connect("supabase_admin")
+        try:
+            async with asyncio.timeout(60):
+                while True:
+                    named = await connection.fetchval(
+                        "select flight_files_url from soc.stacks where gateway_sn = $1",
+                        so.dock_sn,
+                    )
+                    if named == url:
+                        break
+                    await asyncio.sleep(0.2)
+        finally:
+            await connection.close()
         yield service
     finally:
         task.cancel()
