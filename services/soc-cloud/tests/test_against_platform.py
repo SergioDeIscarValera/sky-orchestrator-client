@@ -23,7 +23,7 @@ from soc_cloud.service import CloudService
 from soc_cloud.testing import CLOUD_CLIENT, EphemeralMosquitto
 from soc_cloud.wire import MQTT
 from soc_config import Contract
-from soc_database.harness import Operations, Tenancy
+from soc_database.harness import Flown, Operations, Tenancy
 from soc_database.realtime import RealtimeStack
 from soc_realtime import Endpoint
 from soc_realtime.socket import Connector
@@ -572,3 +572,73 @@ async def test_a_breach_returns_the_aircraft_within_100_ms_once_across_a_restart
         assert json.loads(latest)["latitude_deg"] == INSIDE[0]
     finally:
         await admin.close()
+
+
+#: NFR-PERF-04's crossings through the broker: one flight each, leaving the harness's square by
+#: its west, east, south and north sides in turn.
+EXITS = [(41.6523, -4.7262), (41.6523, -4.7228), (41.6508, -4.7245), (41.6538, -4.7245)]
+CROSSINGS = 20
+
+
+async def crossed(
+    service: CloudService, broker: EphemeralMosquitto, flown: Flown, index: int
+) -> float:
+    """One crossing replayed by the flight's own dock: the milliseconds from its outside sample
+    leaving the dock to the return reaching it."""
+    gateway, aircraft, flight = flown.gateway_sn, flown.aircraft_sn, flown.flight_id
+    topic, events = f"thing/product/{aircraft}/osd", f"thing/product/{gateway}/events"
+    at = 1_791_000_000_000
+    async with broker.dock(identifier=f"crossing-dock-{index}") as client:
+        returns = Returns(client, gateway, aircraft)
+        answering = asyncio.create_task(returns.serve())
+        try:
+            await until(lambda: service.links[0].serves(gateway), 10)
+            await until(lambda: service.flights.watched(flight) is not None, 10)
+            await client.publish(events, flight_progress(gateway, flight, "in_progress"), qos=1)
+            await until(lambda: getattr(service.flights.watched(flight), "executing", False), 10)
+            for step, mode in enumerate([0, 4, 5]):
+                await client.publish(topic, osd(gateway, at + step * 400, INSIDE, mode), qos=1)
+                await asyncio.sleep(0.05)
+            sent = time.monotonic()
+            exit_point = EXITS[index % len(EXITS)]
+            await client.publish(topic, osd(gateway, at + 1200, exit_point, 5), qos=1)
+            await until(lambda: len(returns.arrived) == 1, 5)
+        finally:
+            answering.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await answering
+    ((method, arrived),) = returns.arrived
+    assert method == "return_home"
+    return (arrived - sent) * 1000
+
+
+async def test_replayed_crossings_reach_their_docks_as_returns_within_100_ms_at_p99(
+    platform: RealtimeStack,
+    broker: EphemeralMosquitto,
+    passwords: dict[str, str],
+    connector: Connector,
+    tmp_path: Path,
+    unused_tcp_port_factory: Callable[[], int],
+) -> None:
+    """NFR-PERF-04 on the wire: twenty crossing tracks replayed, each by its own dock for a flight
+    of its own, timed from the outside sample leaving the dock to the return reaching it."""
+    admin = await platform.postgres.connect("supabase_admin")
+    try:
+        organization = (await Tenancy(admin).member()).organization_id
+        flights = [await Operations(admin).flown(organization) for _ in range(CROSSINGS)]
+    finally:
+        await admin.close()
+    ports = [unused_tcp_port_factory(), unused_tcp_port_factory()]
+    async with running_service(
+        platform, broker, passwords, connector, tmp_path, ports, {"telemetry_batch_s": 1}
+    ) as (service, _):
+        reactions = [
+            await crossed(service, broker, flown, index) for index, flown in enumerate(flights)
+        ]
+    ordered = sorted(reactions)
+    p99 = ordered[max(0, -(-len(ordered) * 99 // 100) - 1)]
+    print(
+        f"{len(ordered)} crossings on the wire: return p50 {statistics.median(ordered):.1f} ms,"
+        f" p99 {p99:.1f} ms"
+    )
+    assert p99 < 100, f"the slowest return reached its dock {p99:.1f} ms after the sample"
