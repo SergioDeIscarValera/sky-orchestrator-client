@@ -55,12 +55,15 @@ from soc_e2e.operations import (
 )
 from soc_e2e.platform import Platform
 from soc_e2e.so_stack import SoStack
+from soc_operations.testing import FLIGHT
 
 pytestmark = [pytest.mark.lane, pytest.mark.sky_orchestrator]
 
 CYCLES = 50
 #: Pauses and resumes in the real flight: the command latency is measured on the simulated one.
 REAL_CYCLES = 3
+#: The index of the golden flight's last waypoint, which its route ends at.
+LAST_WAYPOINT = len(FLIGHT["waypoints"]) - 1
 
 
 @pytest.fixture(scope="module")
@@ -179,11 +182,13 @@ async def test_an_operation_is_simulated_then_flown_real_paused_resumed_and_comp
             with contextlib.suppress(asyncio.CancelledError):
                 await following
         print(f"status and waypoint index through the flight: {followed}")
-        # On its route, in progress or paused: what the task reports once it has ended is not
+        # On its route, in progress or paused, until it reaches the last waypoint: past it, the
+        # finish action's return home reports index 0 (asked of Sky Orchestrator), and it is not
         # a breakpoint to resume from.
-        waypoints = [index for status, index in followed if status in ("in_progress", "paused")]
-        assert waypoints == sorted(waypoints)
-        assert waypoints[-1] > waypoints[0], "the flight did not move on along its route"
+        indices = [index for status, index in followed if status in ("in_progress", "paused")]
+        route = indices[: indices.index(LAST_WAYPOINT) + 1] if LAST_WAYPOINT in indices else indices
+        assert route == sorted(route)
+        assert route[-1] == LAST_WAYPOINT, "the flight did not reach its last waypoint"
 
         # The stack turned to real mode with the phone's simulator still on: the operation is
         # not ready, PF-SIMULATOR names why, and nothing goes to the wire.

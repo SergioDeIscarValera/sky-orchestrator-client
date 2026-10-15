@@ -484,9 +484,22 @@ async function main() {
     const changes = await page.evaluate(shownStateChanges, STATE_CHANGED)
     emit({ event: 'completed', state_changes: changes })
   } catch (error) {
-    if (shots !== null && page !== null) {
-      mkdirSync(shots, { recursive: true })
-      await page.screenshot({ path: join(shots, 'failed.png') }).catch(() => {})
+    if (page !== null) {
+      if (shots !== null) {
+        mkdirSync(shots, { recursive: true })
+        await page.screenshot({ path: join(shots, 'failed.png') }).catch(() => {})
+      }
+      // What the page showed when it failed, where a run in CI leaves no screenshot.
+      const shown = await page
+        .locator('body')
+        .innerText({ timeout: 2_000 })
+        .catch(() => '(the page could not be read)')
+      throw new Error(
+        `${error.message}\nthe page at ${page.url()} showed: ${shown.slice(0, 600)}`,
+        {
+          cause: error,
+        },
+      )
     }
     throw error
   } finally {
