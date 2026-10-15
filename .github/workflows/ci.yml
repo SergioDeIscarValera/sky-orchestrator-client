@@ -286,7 +286,7 @@ jobs:
       # standing in for the phone. An operation flown in the simulator, paused and resumed
       # 50 times (NFR-PERF-02), held from a real launch while the simulator runs, and flown
       # again through a restart of each service (NFR-REL-01). The same flight worked in
-      # Chrome through the console: 25 pauses and resumes, each reply shown within 1 s at p95.
+      # Chrome through the console: 50 pauses and resumes, each reply shown within 1 s at p95.
       # Node runs whenever the lane's changes do (the node step), so it is there for this one.
       - name: End to end against Sky Orchestrator
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' && steps.lane-changes.outputs.changed == 'true' }}

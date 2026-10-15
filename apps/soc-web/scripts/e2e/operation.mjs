@@ -12,7 +12,9 @@
 //                                               reply shown, timed from its send, in milliseconds
 //   ← {"real": true}                            the stack turned to a real launch
 //   ← {"on_route": true}                        the real flight flies its wayline (mode 5)
-//   → {"event": "completed", "state_changes"}   completed, and the log's State changed entries
+//   → {"event": "completed", "state_changes", "shown_at"}
+//                                               completed, and the log's State changed entries,
+//                                               each with when it first showed (epoch ms)
 //   → {"event": "failed", "message"}            on the first error, then exit 1
 //
 // A hold is by pointer on odd cycles and by Space on the focused button on even ones, as the
@@ -188,6 +190,30 @@ function blockingFailures() {
 }
 
 /** Runs in the page: the State changed entries of the log as shown, oldest first. */
+/**
+ * Runs in the page before its scripts: when each State changed entry of the log first shows, on the
+ * wall clock (milliseconds since the epoch), so the harness can hold it against when the database
+ * recorded it (FR-LOG-03). The services record every move, never this page, so each entry reaches
+ * it as it would a second browser.
+ */
+function recordStateChanges(prefix) {
+  const shown = []
+  const seen = new WeakSet()
+  globalThis.__socStateChanges = shown
+  new globalThis.MutationObserver(() => {
+    for (const entry of globalThis.document.querySelectorAll('[aria-label="Log"] > li')) {
+      if (seen.has(entry)) continue
+      const text = entry.lastElementChild?.textContent ?? ''
+      if (!text.startsWith(prefix)) continue
+      seen.add(entry)
+      shown.push({
+        move: text.slice(prefix.length),
+        at_ms: globalThis.performance.timeOrigin + globalThis.performance.now(),
+      })
+    }
+  }).observe(globalThis.document, { childList: true, subtree: true, characterData: true })
+}
+
 function shownStateChanges(prefix) {
   return Array.from(globalThis.document.querySelectorAll('[aria-label="Log"] > li'))
     .map((entry) => entry.lastElementChild?.textContent ?? '')
@@ -401,6 +427,7 @@ async function main() {
   try {
     page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
     await page.addInitScript(recordPresses)
+    await page.addInitScript(recordStateChanges, STATE_CHANGED)
     page.on('pageerror', (error) => {
       process.stderr.write(`page error: ${error.message}\n`)
     })
@@ -482,7 +509,8 @@ async function main() {
     // The log arrives on its own stream: the move into Completed is read once the log shows it.
     await page.waitForFunction(completionLogged, STATE_CHANGED, { timeout: WAIT_MS })
     const changes = await page.evaluate(shownStateChanges, STATE_CHANGED)
-    emit({ event: 'completed', state_changes: changes })
+    const shownAt = await page.evaluate(() => globalThis.__socStateChanges)
+    emit({ event: 'completed', state_changes: changes, shown_at: shownAt })
   } catch (error) {
     if (page !== null) {
       if (shots !== null) {

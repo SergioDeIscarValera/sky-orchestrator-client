@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+import statistics
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -44,7 +45,7 @@ from soc_e2e.so_stack import SoStack
 pytestmark = [pytest.mark.lane, pytest.mark.sky_orchestrator]
 
 #: The simulated flight runs at real time, so the route lasts as long on the wall clock. Each cycle
-#: takes about four seconds of it, the holds and their replies (25 cycles took 99 s).
+#: takes about four seconds of it, the holds and their replies: 50 cycles take about 200 s.
 PACE = 1
 #: The route is flown at 1 m/s, not the golden flight's 5 m/s: at 5 m/s the route is 23 s of flight,
 #: too short for the cycles. At 1 m/s it is over two minutes, and the flight is still in the air
@@ -53,6 +54,8 @@ FLIGHT_SPEED_MS = 1.0
 CYCLES = 50
 #: NFR-PERF-02: the reply to a command is shown within one second, at p95.
 REPLY_P95_MS = 1000
+#: FR-LOG-03: an entry of the log shows in a browser within a second of being recorded.
+LOG_SHOWN_MS = 1000
 #: FR-CMD-07: a command goes out once its button has been held for 1.5 s.
 HOLD_MS = 1500
 SIMULATED_WITHIN_S = 900
@@ -160,16 +163,27 @@ async def test_an_operation_is_flown_from_the_console_against_sky_orchestrator(
     # The log as the console shows it holds every move, draft to completed, in order.
     assert completed["state_changes"] == SHOWN, completed["state_changes"]
     # The database holds the same moves, in the same order.
-    moves = [
-        (row["from"], row["to"])
-        for row in await admin.fetch(
-            "select payload ->> 'from' as from, payload ->> 'to' as to"
-            " from soc.operation_events where operation_id = $1"
-            " and kind = 'operation_state_changed' order by recorded_at",
-            operation,
-        )
-    ]
+    recorded = await admin.fetch(
+        "select payload ->> 'from' as from, payload ->> 'to' as to,"
+        " extract(epoch from recorded_at) * 1000 as at_ms"
+        " from soc.operation_events where operation_id = $1"
+        " and kind = 'operation_state_changed' order by recorded_at",
+        operation,
+    )
+    moves = [(row["from"], row["to"]) for row in recorded]
     assert moves == MOVES, moves
+    # FR-LOG-03: each move the services recorded showed in this browser within a second, as in
+    # a second browser: this page recorded none of them. Both clocks are this machine's.
+    shown_at = completed["shown_at"]
+    assert [entry["move"] for entry in shown_at] == SHOWN, shown_at
+    delays = [
+        entry["at_ms"] - float(row["at_ms"]) for entry, row in zip(shown_at, recorded, strict=True)
+    ]
+    print(
+        f"{len(delays)} moves in the log: shown {statistics.median(delays):.1f} ms after they"
+        f" were recorded at the median, the slowest {max(delays):.1f} ms"
+    )
+    assert max(delays) <= LOG_SHOWN_MS, delays
     # The real flight ended ok and completed, and its return home kept to the return height asked.
     flown = await admin.fetchrow(
         "select f.end_reason::text as reason, f.breached_at, s.status::text as status,"
