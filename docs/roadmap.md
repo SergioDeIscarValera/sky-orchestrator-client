@@ -157,10 +157,10 @@ requirements.
 **Exit criteria**
 
 - [x] From the web, against SO's fake bridge: prepare, simulate, turn SO to real, launch, pause, resume, finish, with every transition in the log (`FR-OPS-*`, `FR-CMD-*`, `FR-LOG-*`)
-- [ ] Command latency p95 ≤ 300 ms to the wire, ≤ 1 s to the reply shown, over 100 cycles (`NFR-PERF-02`)
-- [ ] A replayed track crossing the geofence returns the aircraft home within 100 ms of the sample (`FR-SAF-01`, `NFR-PERF-04`)
-- [ ] A restart of either service mid-flight loses nothing and sends nothing twice (`NFR-REL-01`)
-- [ ] A real prepare without a successful simulation of the same file is impossible, in SOC and in SO (`NFR-SAF-05`)
+- [x] Command latency p95 ≤ 300 ms to the wire, ≤ 1 s to the reply shown, over 100 cycles (`NFR-PERF-02`)
+- [x] A replayed track crossing the geofence returns the aircraft home within 100 ms of the sample (`FR-SAF-01`, `NFR-PERF-04`)
+- [x] A restart of either service mid-flight loses nothing and sends nothing twice (`NFR-REL-01`)
+- [x] A real prepare without a successful simulation of the same file is impossible, in SOC and in SO (`NFR-SAF-05`)
 
 ---
 
