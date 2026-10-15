@@ -353,8 +353,10 @@ class SoStack:
 
         so-fleet keeps running: it holds the simulation that clears a file for a real prepare
         (SO's NFR-SAF-07). The fake bridge goes first, so so-bridge links up to the application
-        it will gate.
+        it will gate. so-bridge is started again only when its mode changes: starting it drops
+        the link to the phone for a moment, which an operation ready to launch would see.
         """
+        mode_changes = self.simulator_mode is real
         self.real_launch = real
         self.simulator_mode = not real
         self.write()
@@ -363,8 +365,11 @@ class SoStack:
             "up", "--detach", "--no-deps", "--force-recreate", "--no-build", "fake-bridge"
         )  # fmt: skip
         self.wait_healthy(deadline)
-        self.compose("up", "--detach", "--no-deps", "--force-recreate", "--no-build", "so-bridge")
-        self.wait_healthy(deadline)
+        if mode_changes:
+            self.compose(
+                "up", "--detach", "--no-deps", "--force-recreate", "--no-build", "so-bridge"
+            )  # fmt: skip
+            self.wait_healthy(deadline)
         return self.wait_flyable(deadline)
 
     @property

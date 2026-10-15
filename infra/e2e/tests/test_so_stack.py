@@ -177,3 +177,34 @@ def test_an_image_it_cannot_pull_is_named_with_dockers_reason(
     monkeypatch.setattr(so_stack, "docker", refused)
     with pytest.raises(RuntimeError, match=f"cannot pull .*{release()}.*: .*denied$"):
         stack.start()
+
+
+def recreated_by(stack: SoStack, monkeypatch: pytest.MonkeyPatch, real: bool) -> list[str]:
+    """The services `set_real_launch(real)` starts again, the stack's waits stubbed."""
+    started: list[str] = []
+
+    def compose(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        if arguments[0] == "up":
+            started.append(arguments[-1])
+        return subprocess.CompletedProcess(list(arguments), 0, "", "")
+
+    monkeypatch.setattr(stack, "compose", compose)
+    monkeypatch.setattr(stack, "wait_healthy", lambda deadline: None)
+    monkeypatch.setattr(stack, "wait_flyable", lambda deadline: {})
+    stack.set_real_launch(real)
+    return started
+
+
+def test_a_real_launch_starts_so_bridge_again_only_when_its_mode_changes(
+    stack: SoStack, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # From simulator mode both go: the phone first, then so-bridge in real mode.
+    assert recreated_by(stack, monkeypatch, real=True) == ["fake-bridge", "so-bridge"]
+    assert stack.configurations()["so-bridge.json"]["simulator_mode"] is False
+    # Already in real mode, so-bridge keeps running: starting it again would drop the phone's
+    # link, and an operation ready to launch would fall back to simulated.
+    assert recreated_by(stack, monkeypatch, real=True) == ["fake-bridge"]
+    stack.simulator_mode = False
+    stack.real_launch = False
+    assert recreated_by(stack, monkeypatch, real=True) == ["fake-bridge"]
+    assert recreated_by(stack, monkeypatch, real=False) == ["fake-bridge", "so-bridge"]
