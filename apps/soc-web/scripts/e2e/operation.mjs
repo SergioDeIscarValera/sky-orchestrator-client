@@ -4,7 +4,7 @@
 // reads the database. They talk in JSON lines: this script writes what it saw on stdout and
 // reads the harness's lines on stdin.
 //
-//   → {"event": "ready"}                        signed in, state channel delivering, operation in draft
+//   → {"event": "ready"}                        signed in, state channel joined, operation in draft
 //   → {"event": "simulated", "latencies_ms", "holds_ms"}
 //                                               planned, prepared, every blocking check passing,
 //                                               simulated: SOC_E2E_CYCLES pauses and resumes flown
@@ -35,8 +35,6 @@ const WAIT_MS = 30_000
 const SLOW_MS = 300_000
 /** How long a command may take to show its reply before this driver gives up on it. */
 const REPLY_MS = 15_000
-/** How long the state channel may take to deliver its first broadcast after its join. */
-const DELIVERY_MS = 60_000
 /** How long every blocking check may take to pass: judged each second, a healthy run passes in seconds. */
 const CHECKS_MS = 120_000
 /** The start of a log entry that says the operation moved, as the console words it. */
@@ -349,21 +347,17 @@ function binaryStateFrame(frame) {
 }
 
 /**
- * Traces every frame the page sends and receives on the state channel. `joined` resolves with the
- * payload of the join's reply; `delivering` with the kind of the first broadcast after that reply.
- * A broadcast after the reply shows Realtime delivers the channel, and only then does a change
- * reach the page: a change sent before it is lost, and the console, which reads the state once on
- * its join, shows the state from before the change (runs 2, 3 and 6 of this test).
+ * Traces every frame the page sends and receives on the state channel; `joined` resolves with the
+ * payload of the join's reply. Realtime delivers to a join only a moment after it, so a change
+ * committed in between reaches no listener: the console reads its state again once delivery has
+ * begun (onState's JOIN_SETTLE_MS, runs 2, 3 and 6 of this test before it did). This driver moves
+ * as soon as the channel has joined, as a pilot would, so that catching up is the console's.
  */
 function watchStateChannel(page) {
   let replied = false
   let resolveJoined
-  let resolveDelivering
   const joined = new Promise((resolve) => {
     resolveJoined = resolve
-  })
-  const delivering = new Promise((resolve) => {
-    resolveDelivering = resolve
   })
   page.on('websocket', (socket) => {
     socket.on('framesent', ({ payload }) => {
@@ -384,12 +378,10 @@ function watchStateChannel(page) {
       if (frame.event === 'phx_reply' && !replied) {
         replied = true
         resolveJoined(frame.payload)
-      } else if (frame.event === 'broadcast' && replied) {
-        resolveDelivering(kind)
       }
     })
   })
-  return { joined, delivering }
+  return { joined }
 }
 
 async function main() {
@@ -419,8 +411,7 @@ async function main() {
     await page.getByLabel('Password').fill(required('SOC_E2E_PASSWORD'))
     await page.getByRole('button', { name: 'Sign in' }).click()
     await stateShown(page, 'Draft')
-    // The first move waits until the state channel delivers (see watchStateChannel): a change made
-    // before that is not sent to the console, and the console would never show it.
+    // The first move waits only for the state channel's join (see watchStateChannel).
     const join = await Promise.race([stateChannel.joined, timeout(WAIT_MS)])
     if (join === null) {
       throw new Error(`the console did not join its state channel within ${WAIT_MS} ms`)
@@ -428,11 +419,7 @@ async function main() {
     if (join.status !== 'ok') {
       throw new Error(`the console's state channel refused to join: ${JSON.stringify(join)}`)
     }
-    const delivered = await Promise.race([stateChannel.delivering, timeout(DELIVERY_MS)])
-    if (delivered === null) {
-      throw new Error(`the state channel delivered nothing within ${DELIVERY_MS} ms of its join`)
-    }
-    trace(`signed in: the state channel delivers (${delivered}), the operation in draft`)
+    trace('signed in: the state channel joined, the operation in draft')
     emit({ event: 'ready' })
 
     // The preparation: plan, prepare, every blocking check passing, then simulate.
