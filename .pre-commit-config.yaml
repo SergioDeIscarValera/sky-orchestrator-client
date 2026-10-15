@@ -170,7 +170,7 @@ repos:
         entry: bash -c 'uv run --frozen mypy infra/e2e && uv run --frozen pytest infra/e2e/tests -m "not lane"'
         language: system
         pass_filenames: false
-        files: ^(infra/(e2e|check|migrate)/|libs/|services/soc-cloud/|database/|contracts/sky-orchestrator/|pyproject\.toml$|uv\.lock$)
+        files: ^(infra/(e2e|check|migrate)/|libs/|services/(soc-cloud|soc-operations)/|database/|contracts/sky-orchestrator/|pyproject\.toml$|uv\.lock$)
 
       - id: soc-web-gate
         name: soc-web gate

@@ -18,6 +18,14 @@ REPOSITORY = WORKFLOWS.parents[1]
 RUNNER = "ubuntu-24.04"
 LANE_STEP = "- name: Container lane against Postgres, Realtime and Mosquitto"
 LANE_ONLY_UNITS = ("database",)
+#: A unit whose lane tests run in more than one step: the selections, which together are its
+#: whole lane (each one the other's complement), each run in a step of its own.
+LANE_SPLITS = {
+    "infra/e2e": (
+        ' -m "lane and not sky_orchestrator"',
+        ' -m "lane and sky_orchestrator"',
+    ),
+}
 SPLIT_BY_MARKER_UNITS = (
     "libs/soc-db",
     "libs/soc-realtime",
@@ -564,9 +572,12 @@ class PythonUnits(unittest.TestCase):
         self.assertEqual(marked, set(SPLIT_BY_MARKER_UNITS))
         lane = self.ci[self.ci.index(LANE_STEP) :]
         for unit in (*LANE_ONLY_UNITS, *SPLIT_BY_MARKER_UNITS):
-            selection = "" if unit in LANE_ONLY_UNITS else " -m lane"
+            selections = LANE_SPLITS.get(unit) or (
+                ("",) if unit in LANE_ONLY_UNITS else (" -m lane",)
+            )
             with self.subTest(unit=unit):
-                self.assertIn(f"uv run --frozen pytest {unit}/tests{selection}\n", lane)
+                for selection in selections:
+                    self.assertIn(f"uv run --frozen pytest {unit}/tests{selection}\n", lane)
 
 
 class DockerfileCopies(unittest.TestCase):

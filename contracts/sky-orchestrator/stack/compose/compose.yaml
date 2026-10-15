@@ -1,0 +1,324 @@
+# The Sky Orchestrator stack on one host (CON-01, FR-OPS-01).
+#
+#   cd infra/compose
+#   cp .env.example .env     # then replace every placeholder
+#   docker compose up -d
+#
+# Every image is pinned by digest (NFR-PORT-02). Every published port is bound
+# to SO_BIND, loopback unless set otherwise (NFR-SEC-01). Every credential comes
+# from .env, which git ignores; a missing one stops `docker compose` before
+# anything starts (NFR-SEC-04). tools/tests/test_infra.py holds this file to
+# those rules, and infra/check.sh runs the stack from nothing and tests it.
+
+name: sky-orchestrator
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.22@sha256:199ea8ef2e35ec2b1b37e59cfd1dbae538ed4dfa4a2251a121a52215a6248a21
+    entrypoint: ["/so/entrypoint.sh"]
+    command: ["/usr/sbin/mosquitto", "-c", "/so/mosquitto.conf"]
+    environment:
+      SO_MQTT_PASSWORD_SO_GATEWAY: ${SO_MQTT_PASSWORD_SO_GATEWAY:?set it in .env}
+      SO_MQTT_PASSWORD_SO_FLEET: ${SO_MQTT_PASSWORD_SO_FLEET:?set it in .env}
+      SO_MQTT_PASSWORD_SO_WAYLINE: ${SO_MQTT_PASSWORD_SO_WAYLINE:?set it in .env}
+      SO_MQTT_PASSWORD_SO_BRIDGE: ${SO_MQTT_PASSWORD_SO_BRIDGE:?set it in .env}
+      # Empty on purpose under cloud_role: builtin: the username is then refused.
+      SO_MQTT_PASSWORD_CLOUD_CLIENT: ${SO_MQTT_PASSWORD_CLOUD_CLIENT:-}
+    volumes:
+      - ../mosquitto:/so:ro
+      - mosquitto-data:/mosquitto/data
+    tmpfs:
+      - /run/mosquitto:mode=0700
+    ports:
+      - "${SO_BIND:-127.0.0.1}:${SO_MQTT_PORT:-1883}:1883"
+    healthcheck:
+      test: ["CMD-SHELL", "XDG_CONFIG_HOME=/run/mosquitto/healthcheck mosquitto_sub -h 127.0.0.1 -t '$$SYS/broker/uptime' -C 1 -W 3 > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 1s
+    restart: unless-stopped
+
+  # The cloud role's store (ADR-0010, ADR-0022). Under cloud_role: external,
+  # leave builtin-cloud out of COMPOSE_PROFILES and the stack starts without it.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    profiles: [builtin-cloud]
+    init: true
+    entrypoint: ["/so/entrypoint.sh"]
+    # Compose interpolates a service even when its profile is off, so a demand
+    # here would ask an external cloud's stack for a store it does not run
+    # (ADR-0029). The entrypoint demands them instead, refusing to start without
+    # each; the credentials pass through by name alone, as the services' do.
+    environment:
+      SO_S3_ACCESS_KEY_SO_WAYLINE:
+      SO_S3_SECRET_KEY_SO_WAYLINE:
+      SO_S3_BUCKET: ${SO_S3_BUCKET:-}
+    volumes:
+      - ../seaweedfs:/so:ro
+      - seaweedfs-data:/data
+    tmpfs:
+      - /run/seaweedfs:mode=0700
+    ports:
+      - "${SO_BIND:-127.0.0.1}:${SO_S3_PORT:-8333}:8333"
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /run/seaweedfs/ready && wget -q -O /dev/null http://127.0.0.1:8333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 1s
+    restart: unless-stopped
+
+  # Built here, from a base pinned by digest in its Dockerfile. Not in a profile:
+  # the dock judges the files it is named whichever cloud role (ADR-0027). Under
+  # builtin it keeps them in the store and waits for it; under external there is
+  # no store, and it keeps them on its own volume (ADR-0029). The store's settings
+  # are then not needed, so compose does not demand them: the service does, under
+  # builtin, naming each one missing (settings.py).
+  so-wayline:
+    build:
+      context: ../../services/so-wayline
+      additional_contexts:
+        contracts: ../../contracts
+        libs: ../../libs
+    image: sky-orchestrator/so-wayline:local
+    depends_on:
+      mosquitto: {condition: service_healthy}
+      seaweedfs: {condition: service_healthy, required: false}
+    environment:
+      # Inside the stack: fixed, and not secrets.
+      SO_WAYLINE_CONFIG_FILE: /etc/so-wayline/config.json
+      SO_WAYLINE_DATABASE: /data/waylines.sqlite3
+      SO_S3_ENDPOINT: http://seaweedfs:8333
+      SO_MQTT_HOST: mosquitto
+      SO_MQTT_PORT: "1883"
+      # From .env.
+      SO_S3_PUBLIC_ENDPOINT: ${SO_S3_PUBLIC_ENDPOINT:-}
+      SO_S3_BUCKET: ${SO_S3_BUCKET:-}
+      # Secrets pass through from .env by name alone, so no value, not even a
+      # reference to one, sits next to a credential's name here. The service
+      # refuses to start without each, naming it (settings.py).
+      SO_WAYLINE_API_TOKEN:
+      SO_S3_ACCESS_KEY_SO_WAYLINE:
+      SO_S3_SECRET_KEY_SO_WAYLINE:
+      SO_MQTT_PASSWORD_SO_WAYLINE:
+    volumes:
+      - ${SO_WAYLINE_CONFIG:?set it in .env}:/etc/so-wayline/config.json:ro
+      - so-wayline-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "${SO_BIND:-127.0.0.1}:${SO_WAYLINE_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ code _ <&3 && [ \"$$code\" = 200 ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 1s
+    restart: unless-stopped
+
+  # The link to the application (ADR-0024). Not in a profile: whichever cloud
+  # role, the dock needs its aircraft. It publishes nothing to the host; its
+  # health endpoint is on the container's loopback.
+  so-bridge:
+    build:
+      context: ../../services/so-bridge
+      additional_contexts:
+        contracts: ../../contracts
+        libs: ../../libs
+    image: sky-orchestrator/so-bridge:local
+    depends_on:
+      mosquitto: {condition: service_healthy}
+    environment:
+      # Inside the stack: fixed, and not secrets.
+      SO_BRIDGE_CONFIG_FILE: /etc/so-bridge/config.json
+      SO_MQTT_HOST: mosquitto
+      SO_MQTT_PORT: "1883"
+      # From .env: the application, http://fake-bridge:8765 with the fake bridge.
+      SO_BRIDGE_URL: ${SO_BRIDGE_URL:?set it in .env}
+      # Secrets by name alone; the service refuses to start without each (settings.py).
+      SO_BRIDGE_SECRET:
+      SO_MQTT_PASSWORD_SO_BRIDGE:
+    volumes:
+      - ${SO_BRIDGE_CONFIG:?set it in .env}:/etc/so-bridge/config.json:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8082 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ code _ <&3 && [ \"$$code\" = 200 ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+      start_interval: 1s
+    restart: unless-stopped
+
+  # Devices and flight tasks (ADR-0025). Not in a profile: whichever cloud role,
+  # the dock runs its own tasks. It publishes nothing to the host; its health
+  # endpoint is on the container's loopback, its record on its own volume.
+  so-fleet:
+    build:
+      context: ../../services/so-fleet
+      additional_contexts:
+        contracts: ../../contracts
+        libs: ../../libs
+    image: sky-orchestrator/so-fleet:local
+    depends_on:
+      mosquitto: {condition: service_healthy}
+    environment:
+      # Inside the stack: fixed, and not secrets.
+      SO_FLEET_CONFIG_FILE: /etc/so-fleet/config.json
+      SO_FLEET_DATABASE: /data/fleet.sqlite3
+      SO_MQTT_HOST: mosquitto
+      SO_MQTT_PORT: "1883"
+      # Secrets by name alone; the service refuses to start without each (settings.py).
+      SO_MQTT_PASSWORD_SO_FLEET:
+    volumes:
+      - ${SO_FLEET_CONFIG:?set it in .env}:/etc/so-fleet/config.json:ro
+      - so-fleet-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8083 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ code _ <&3 && [ \"$$code\" = 200 ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+      start_interval: 1s
+    restart: unless-stopped
+
+  # The DJI wire surface (ADR-0026): the only service on thing/ and sys/. Not in a
+  # profile: the dock role is the product, whichever cloud role. It publishes
+  # nothing to the host; the Cloud API client reaches it through the broker. Its
+  # wire capture lives on its own volume.
+  so-gateway:
+    build:
+      context: ../../services/so-gateway
+      additional_contexts:
+        contracts: ../../contracts
+        libs: ../../libs
+    image: sky-orchestrator/so-gateway:local
+    depends_on:
+      mosquitto: {condition: service_healthy}
+    environment:
+      # Inside the stack: fixed, and not secrets.
+      SO_GATEWAY_CONFIG_FILE: /etc/so-gateway/config.json
+      SO_GATEWAY_CAPTURE_DIR: /data/capture
+      SO_MQTT_HOST: mosquitto
+      SO_MQTT_PORT: "1883"
+      # Secrets by name alone; the service refuses to start without each (settings.py).
+      SO_MQTT_PASSWORD_SO_GATEWAY:
+    volumes:
+      - ${SO_GATEWAY_CONFIG:?set it in .env}:/etc/so-gateway/config.json:ro
+      - so-gateway-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8084 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ code _ <&3 && [ \"$$code\" = 200 ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+      start_interval: 1s
+    restart: unless-stopped
+
+  # The application without a phone (ADR-0021): its own runtime and server over a
+  # simulated aircraft. For the hardware-free suites only, in a profile of its
+  # own, never in a deployment. Built from the distribution Gradle writes; see
+  # its Dockerfile. It serves the stack's network only, nothing is published.
+  fake-bridge:
+    build:
+      context: ../../apps/so-msdk-v4/fake-bridge
+    image: sky-orchestrator/fake-bridge:local
+    profiles: [fake-bridge]
+    environment:
+      SO_BRIDGE_SECRET:
+      FAKE_BRIDGE_ARM: ${FAKE_BRIDGE_ARM:-0}
+      FAKE_BRIDGE_PACE: ${FAKE_BRIDGE_PACE:-1}
+      FAKE_BRIDGE_REPLAY: ${FAKE_BRIDGE_REPLAY:-}
+      FAKE_BRIDGE_REAL: ${FAKE_BRIDGE_REAL:-0}
+    volumes:
+      - ${FAKE_BRIDGE_CONFIG:-../config/fake-bridge.json}:/etc/fake-bridge/config.json:ro
+      # Recorded flights to play back (ADR-0034, NFR-TEST-05): synthetic, at the test site.
+      - ../tests/fixtures/replay:/etc/fake-bridge/replay:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/$$(hostname -i | cut -d' ' -f1)/8765"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 1s
+    restart: unless-stopped
+
+  # The fake cloud (ADR-0030): the file server of a cloud that is not Sky
+  # Orchestrator, for the end-to-end suite under cloud_role: external. It serves
+  # FAKE_CLOUD_DIR read-only to the stack's network, never to the host.
+  fake-cloud:
+    build:
+      context: ../fake-cloud
+    image: sky-orchestrator/fake-cloud:local
+    profiles: [fake-cloud]
+    volumes:
+      - ${FAKE_CLOUD_DIR:-../config/fake-cloud}:/srv:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET / HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ code _ <&3 && [ \"$$code\" = 200 ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+      start_interval: 1s
+    restart: unless-stopped
+
+  # The way to the phone (ADR-0033), in a deployment with the phone, in place of
+  # the fake bridge: adb's wireless-debugging connection, its forward on this
+  # container's loopback, and a forwarder on its own address, so so-bridge
+  # reaches the phone at http://phone-link:8765. Nothing is published, and
+  # nothing listens on the host or the LAN. Its settings default to empty
+  # because compose reads every service, in a profile or not; the entrypoint
+  # refuses to start without each, naming it.
+  phone-link:
+    build:
+      context: ../phone-link
+    image: sky-orchestrator/phone-link:local
+    profiles: [phone]
+    # The adb key is its owner's alone (mode 600): run as that owner.
+    user: ${SO_PHONE_ADB_USER:-65534:65534}
+    environment:
+      SO_PHONE_ADB_TARGET: ${SO_PHONE_ADB_TARGET:-}
+    volumes:
+      - type: bind
+        source: ${SO_PHONE_ADB_KEY_DIR:-./no-adb-key}
+        target: /run/so/adb
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "bash", "-c", "[ \"$$(adb -s \"$$SO_PHONE_ADB_TARGET\" get-state 2>/dev/null)\" = device ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+      start_interval: 1s
+    restart: unless-stopped
+
+volumes:
+  mosquitto-data:
+  seaweedfs-data:
+  so-wayline-data:
+  so-fleet-data:
+  so-gateway-data:

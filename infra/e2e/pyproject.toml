@@ -11,6 +11,7 @@ dependencies = [
   "soc-config",
   "soc-database",
   "soc-geo",
+  "soc-operations",
   "soc-realtime",
 ]
 
@@ -24,4 +25,5 @@ soc-cloud = { workspace = true }
 soc-config = { workspace = true }
 soc-database = { workspace = true }
 soc-geo = { workspace = true }
+soc-operations = { workspace = true }
 soc-realtime = { workspace = true }

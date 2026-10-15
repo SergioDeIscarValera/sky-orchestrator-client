@@ -53,4 +53,5 @@ asyncio_default_test_loop_scope = "session"
 addopts = "-q --strict-markers --import-mode=importlib"
 markers = [
   "lane: needs Docker, containers from the production images (the container lane, NFR-TEST-02)",
+  "sky_orchestrator: runs Sky Orchestrator's released stack, whose images are read from GHCR",
 ]

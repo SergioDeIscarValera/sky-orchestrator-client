@@ -21,7 +21,11 @@ jobs:
     # The rulesets require this exact name; renaming it drops the requirement.
     name: Gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
+    # Read Sky Orchestrator's released images for the end to end against them.
+    permissions:
+      contents: read
+      packages: read
     steps:
       - id: checkout
         uses: actions/checkout@v7
@@ -275,7 +279,21 @@ jobs:
           set -euo pipefail
           corepack enable
           (cd apps/soc-web && pnpm install --frozen-lockfile)
-          uv run --frozen pytest infra/e2e/tests -m lane
+          uv run --frozen pytest infra/e2e/tests -m "lane and not sky_orchestrator"
+
+      # M4's end to end against Sky Orchestrator's released stack (infra/e2e): its images,
+      # pinned by the vendored release, read from GHCR with this run's token, the fake bridge
+      # standing in for the phone. An operation flown in the simulator, paused and resumed
+      # 50 times (NFR-PERF-02), held from a real launch while the simulator runs, and flown
+      # again through a restart of each service (NFR-REL-01).
+      - name: End to end against Sky Orchestrator
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' && steps.lane-changes.outputs.changed == 'true' }}
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          uv run --frozen pytest infra/e2e/tests -m "lane and sky_orchestrator"
 
       # The binary, not the action: the action needs a licence on organization
       # accounts, and a scan that stops the day the repository moves is no gate.

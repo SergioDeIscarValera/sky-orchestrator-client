@@ -74,3 +74,38 @@ user created through its admin API, with a profile, and owns Finca Norte.
 
 Both latencies come from this machine's one clock: the dock stamps each OSD with
 it, and the driver reads it as Chrome hands it each frame.
+
+## Against Sky Orchestrator's released stack (M4)
+
+```bash
+uv run --frozen pytest infra/e2e/tests -m "lane and sky_orchestrator" -s
+```
+
+`soc_e2e.so_stack.SoStack` brings up Sky Orchestrator's stack as SO's own
+`infra/check.sh` does for its external cloud role:
+
+- The compose files and the broker's configuration come vendored at
+  `contracts/sky-orchestrator/stack`, and the images are those SO published at the
+  vendored release, read from GHCR.
+- The fake bridge stands in for the phone, and each service's file is written from
+  the vendored configuration contract. The phone's envelope is set equal to
+  so-wayline's, as the real phone is set by hand (`DEP-03`).
+- Everything is its own: the compose project (`soc-e2e-so-*`), the loopback ports
+  and the credentials, all removed with it. It never touches another stack on the
+  machine.
+
+soc-cloud and soc-operations run in this process on the platform. soc-cloud
+serves the flight files on the stack network's gateway address, where
+so-wayline's container fetches them.
+
+| Test | What it holds |
+| --- | --- |
+| `test_so_stack_against_docker.py` | The stack comes up ready to fly in simulator mode, turns to real mode and back, launches the fake bridge as a phone ready for real flight and back (`DEP-28`), lets SOC's `cloud-client` hear its dock announce the aircraft, and reaches a server on its network's gateway |
+| `test_operation_against_so.py`, the simulated path | A pilot plans and prepares an operation. The sixteen checks, judged on what soc-cloud reads, all pass, Sky Orchestrator's dry run included. The pilot simulates, then pauses and resumes the flight 50 times while it flies. The flight ends ok. Each of the 100 commands is measured: **4.1 ms p95 to the wire, 21.8 ms p95 to the reply** (`NFR-PERF-02` asks 300 ms and 1 s, on 2026-10-14). |
+| `test_operation_against_so.py`, the real path | The stack is turned to real mode with the phone's simulator still on: PF-MODE passes, PF-SIMULATOR fails, and the launch is refused before anything reaches the wire. The fake bridge is then launched as a phone ready for real flight: the operation is ready, launches, is paused and resumed three times on its route, and completes once the aircraft has landed. Every move is in the log, from draft to completed. The return home climbs no higher than the route's highest waypoint (35 m), under an envelope of 100 m: the prepare's return height holds (`DEP-29`). |
+| `test_operation_against_so.py`, the restarts | soc-cloud and then soc-operations are each stopped for 3 s and started again while the simulated flight flies, and again while the real one does (`NFR-REL-01`). Each flight ends ok and completed, its track is kept, and its prepare and its execute each went out once. |
+| `test_simulation_gate_against_so.py` | Sky Orchestrator's own gate behind SOC's (`NFR-SAF-05`, SO's NFR-SAF-07): with the stack in real mode and the phone ready for real flight, a real prepare of a valid flight file never simulated there, published straight onto the dock's services topic, is answered `314010`, and so-fleet logs `not_flown_in_simulation` with the file's MD5. SOC itself never sends one. |
+
+A pause is sent once the telemetry says the aircraft flies its wayline (mode 5):
+during the take-off the application refuses it, `319046`, as Sky Orchestrator's
+own `infra/fly.py` waits for the route.
