@@ -99,7 +99,9 @@ SHOWN = [f"{WORDS[before]} to {WORDS[after]}" for before, after in MOVES]
 
 @pytest.fixture(scope="module")
 def so_stack() -> Iterator[SoStack]:
-    stack = SoStack(site=FARM, pace=PACE)
+    # A dock and an aircraft of its own: the platform, and so its fleets, outlive the module, and
+    # the database test's organization flies SOCE2EUAV001.
+    stack = SoStack(site=FARM, pace=PACE, dock_sn="SOCE2EDOCK02", aircraft_sn="SOCE2EUAV002")
     try:
         stack.start()
         yield stack

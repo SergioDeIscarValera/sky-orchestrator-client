@@ -213,8 +213,10 @@ async def seed(
     """The stack's aircraft registered as a fleet, a geofence round the route, and a draft
     assigning them at `speed_ms`, its flight the console's for the route (FR-OPS-01)."""
     fleet = await admin.fetchval(
-        "select id from soc.fleets where aircraft_sn = $1 and deleted_at is null", so.aircraft_sn
-    )
+        "select id from soc.fleets where aircraft_sn = $1 and organization_id = $2"
+        " and deleted_at is null",
+        so.aircraft_sn, organization,
+    )  # fmt: skip
     if fleet is None:
         model = await admin.fetchval("select model from soc.aircraft_models order by model limit 1")
         fleet = await admin.fetchval(
