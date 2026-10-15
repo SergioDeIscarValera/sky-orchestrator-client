@@ -21,6 +21,7 @@ and to its reply. The same flight worked in Chrome is test_console_operation_aga
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import uuid
 from collections.abc import Iterator
@@ -95,6 +96,27 @@ async def farm(platform: Platform) -> Farm:
     return Farm(member.organization_id, member.user_id)
 
 
+async def follow_waypoints(
+    platform: Platform, flight: uuid.UUID, seen: list[tuple[str, int]]
+) -> None:
+    """Appends each new status and waypoint index the flight's state records, until cancelled."""
+    connection = await platform.stack.postgres.connect("supabase_admin")
+    try:
+        while True:
+            row = await connection.fetchrow(
+                "select status::text as status, current_waypoint_index as index"
+                " from soc.flight_states where flight_id = $1",
+                flight,
+            )
+            if row is not None and row["index"] is not None:
+                state = (str(row["status"]), int(row["index"]))
+                if not seen or seen[-1] != state:
+                    seen.append(state)
+            await asyncio.sleep(0.1)
+    finally:
+        await connection.close()
+
+
 async def test_an_operation_is_simulated_then_flown_real_paused_resumed_and_completed(
     platform: Platform,
     passwords: dict[str, str],
@@ -133,30 +155,35 @@ async def test_an_operation_is_simulated_then_flown_real_paused_resumed_and_comp
 
         await until(flying, 90, "the simulated flight in progress")
         flight = (await until(lambda: latest_flight(admin, operation), 5, "the flight"))["id"]
-        wire, reply, waypoints = [], [], []
-        for _ in range(CYCLES):
-            for verb in ("pause", "recovery"):
-                answered = await settled(admin, await command(admin, pilot, flight, verb))
-                assert answered["status"] == "accepted", (verb, answered["result"])
-                wire.append(float(answered["wire_ms"]))
-                reply.append(float(answered["reply_ms"]))
-                waypoints.append(
-                    await admin.fetchval(
-                        "select current_waypoint_index from soc.flight_states where flight_id = $1",
-                        flight,
-                    )
-                )
-        print(
-            f"{len(wire)} commands: to the wire p95 {p95(wire):.1f} ms,"
-            f" to the reply p95 {p95(reply):.1f} ms"
-        )
-        assert p95(wire) <= 300
-        assert p95(reply) <= 1000
-        # FR-CMD-02: a resume continues from the breakpoint, the waypoint index never going back.
-        known = [index for index in waypoints if index is not None]
-        print(f"waypoint index across the cycles: {known[0]} to {known[-1]}")
-        assert known == sorted(known)
-        await reach(admin, operation, "simulated", 180)
+        # FR-CMD-02: the waypoint index, followed through the whole flight on a connection of
+        # its own, from the first pause to the end, never goes back.
+        followed: list[tuple[str, int]] = []
+        following = asyncio.create_task(follow_waypoints(platform, flight, followed))
+        wire, reply = [], []
+        try:
+            for _ in range(CYCLES):
+                for verb in ("pause", "recovery"):
+                    answered = await settled(admin, await command(admin, pilot, flight, verb))
+                    assert answered["status"] == "accepted", (verb, answered["result"])
+                    wire.append(float(answered["wire_ms"]))
+                    reply.append(float(answered["reply_ms"]))
+            print(
+                f"{len(wire)} commands: to the wire p95 {p95(wire):.1f} ms,"
+                f" to the reply p95 {p95(reply):.1f} ms"
+            )
+            assert p95(wire) <= 300
+            assert p95(reply) <= 1000
+            await reach(admin, operation, "simulated", 180)
+        finally:
+            following.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await following
+        print(f"status and waypoint index through the flight: {followed}")
+        # On its route, in progress or paused: what the task reports once it has ended is not
+        # a breakpoint to resume from.
+        waypoints = [index for status, index in followed if status in ("in_progress", "paused")]
+        assert waypoints == sorted(waypoints)
+        assert waypoints[-1] > waypoints[0], "the flight did not move on along its route"
 
         # The stack turned to real mode with the phone's simulator still on: the operation is
         # not ready, PF-SIMULATOR names why, and nothing goes to the wire.
