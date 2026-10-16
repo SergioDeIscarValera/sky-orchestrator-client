@@ -235,7 +235,25 @@ describe("the demo's geofences and waylines, read through the console backend", 
     expect(baked.waypoints.length).toBe(corridor?.waypoints.length)
     expect(baked.distanceM).toBeCloseTo(corridor?.metrics.distanceM ?? 0, -1)
     expect(await backend.waylines(ALMENDRAL)).toEqual([])
-    expect(await backend.geofences(NORTH)).toEqual([])
+  })
+
+  it('answers the north field of Finca Norte, round the corridor, the seeded operation inside it', async () => {
+    const [field, ...others] = await backend.geofences(NORTH)
+    expect(others).toEqual([])
+    expect(field).toMatchObject({ name: 'North field', maxHeightM: 60, origin: 'drawn' })
+    expect(field?.polygon).toHaveLength(4)
+    const [corridor] = await backend.waylines(NORTH)
+    const latitudes = field?.polygon.map(({ latitudeDeg }) => latitudeDeg) ?? []
+    const longitudes = field?.polygon.map(({ longitudeDeg }) => longitudeDeg) ?? []
+    for (const { position } of corridor?.waypoints ?? []) {
+      expect(position.latitudeDeg).toBeGreaterThan(Math.min(...latitudes))
+      expect(position.latitudeDeg).toBeLessThan(Math.max(...latitudes))
+      expect(position.longitudeDeg).toBeGreaterThan(Math.min(...longitudes))
+      expect(position.longitudeDeg).toBeLessThan(Math.max(...longitudes))
+    }
+    const [operation] = await backend.operations(NORTH)
+    expect(operation?.geofenceId).toBe(field?.id)
+    expect(await backend.geofences(ALMENDRAL)).toEqual([])
   })
 
   it('saves, renames and retires a geofence, its ring read back as written', async () => {
@@ -253,7 +271,7 @@ describe("the demo's geofences and waylines, read through the console backend", 
       polygon: SQUARE,
     })
     await backend.retireGeofence(saved.id)
-    expect(await backend.geofences(NORTH)).toEqual([])
+    expect((await backend.geofences(NORTH)).map(({ name }) => name)).toEqual(['North field'])
     await expect(backend.changeGeofence(saved.id, { name: 'Back' })).rejects.toThrow(
       'Nothing changed',
     )

@@ -268,9 +268,34 @@ function seedWaylines() {
   ]
 }
 
+/** Finca Norte's north field: a geofence round the corridor, its ceiling over the corridor's 30 m. */
+const NORTH_FIELD = '44444444-4444-4444-8444-444444444444'
+
+function seedGeofences() {
+  return [
+    {
+      id: NORTH_FIELD,
+      organization_id: NORTH,
+      name: 'North field',
+      polygon: [
+        [-40, -40],
+        [220, -40],
+        [220, 180],
+        [-40, 180],
+      ].map(([east, north]) => nearNorth(east, north)),
+      max_height_m: 60,
+      origin: 'drawn',
+      margin_m: null,
+      created_at: '2026-10-11T08:15:00+00:00',
+      updated_at: '2026-10-11T08:15:00+00:00',
+      deleted_at: null,
+    },
+  ]
+}
+
 /**
  * Finca Norte's one operation, as the database holds a new one (migration 0010): a draft named for
- * its wayline, flown by its one fleet, with its one pilot and an empty log.
+ * its wayline, inside the north field, flown by its one fleet, with its one pilot and an empty log.
  */
 function seedOperations() {
   return [
@@ -278,7 +303,7 @@ function seedOperations() {
       id: OPERATION,
       organization_id: NORTH,
       name: 'North corridor',
-      geofence_id: null,
+      geofence_id: NORTH_FIELD,
       takeoff_security_height_m: null,
       state: 'draft',
       end_reason: null,
@@ -352,7 +377,7 @@ export function unsignedJwt(payload) {
 export function startFakeSupabase({ port = 0, telemetry = [], timings = {} } = {}) {
   const state = {
     fleets: seedFleets(),
-    geofences: [],
+    geofences: seedGeofences(),
     waylines: seedWaylines(),
     /** soc.telemetry_samples, as given: each flight's stored samples, read back as its track. */
     telemetry: [...telemetry],
