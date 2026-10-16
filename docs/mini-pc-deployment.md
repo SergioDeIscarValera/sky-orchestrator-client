@@ -139,10 +139,15 @@ To rotate a secret later on a running stack, edit `.env`, then run `dc up -d`. C
    adb -s <usb serial> tcpip 5555 && adb connect <phone IP>:5555
    ```
    A phone restart turns adb's TCP mode off: plug the phone in again and repeat.
-2. **The application.** Install the debug APK that SO builds on the laptop from the v0.4.4 tag. It must be a debug build, because session.sh and the clearance write through `run-as`:
+2. **The application.** Install the debug APK that SO built on the laptop from the v0.4.4 tag, on a clean tree. It must be a debug build, because session.sh and the clearance write through `run-as`. Its BuildConfig names `fe6b57fb0388`, which is the commit clearance.py lists.
+   - On the laptop: `/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.4.4-fe6b57fb0388-debug.apk`, with its `.sha256` beside it.
+   - Its SHA-256 is `d9c1760a67300ea6b402773abb427e10377c34cf90cdaa9ee38f44633e4ec8ec`.
    ```bash
-   adb -s <phone IP>:5555 install -r <apk>
+   scp <laptop>:/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.4.4-fe6b57fb0388-debug.apk* .
+   sha256sum -c so-msdk-v4-v0.4.4-fe6b57fb0388-debug.apk.sha256
+   adb -s <phone IP>:5555 install -r so-msdk-v4-v0.4.4-fe6b57fb0388-debug.apk
    ```
+   Alternatively, install it from the laptop while the phone is on the laptop's adb.
 3. **The site configuration**, from `/srv/sky-orchestrator`:
    ```bash
    python3 tools/device_config.py template > so-config.json    # then add "geofence_center" at the site
