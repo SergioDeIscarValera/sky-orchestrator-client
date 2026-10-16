@@ -24,6 +24,7 @@ The skeleton every later part plugs into:
 | Each aircraft OSD as one sample at its own time, a missing field unavailable (`FR-LNK-03`) | `link/telemetry.py` |
 | Live telemetry to the browsers: each sample as a `sample` event on its stack's organization's `org:<id>:soc:telemetry` (`contracts/broadcast/telemetry.schema.json`), at most `broadcast_max_rate_hz` per aircraft with the latest sample winning, on the socket or through Realtime's HTTP endpoint (`FR-TEL-01`, `NFR-RES-07`) | `fanout.py`, through `soc-realtime` |
 | The latencies it can see, logged every minute as one `latency` line with each one's count, p50, p95 and p99: `telemetry_hold_ms` (read to broadcast), `telemetry_age_ms` (the aircraft's timestamp to the read, with the remote controller's clock offset in it), `command_publish_ms` (request to publish), `command_reply_ms` (publish to DJI's reply) and `geofence_return_ms` (a breaching sample read to its return home published) (`NFR-OBS-04`) | `latency.py` |
+| Broadcast latency measured on the box (`DEP-23`): `soc-broadcast-probe` joins a member's telemetry topic as the console does and times each `sample` from its `sent_at_ms`, with p50, p95, p99 and max, the reconnects, the longest silence and whether a non-member is refused (`FR-TEL-01`, `NFR-PERF-01`); see [Measuring Broadcast latency](#measuring-broadcast-latency) | `probe.py` |
 | What each stack reports, recorded for the console: its link state per dock, the devices it announces with their presence, each aircraft's firmware from `state`; only the latest of each, stacks before their devices, everything again after the database comes back (`FR-FLE-02`, `FR-LNK-02`, `IR-STK`, `IR-DEV`) | `presence.py`, through `soc.record_stack`, `soc.record_topology`, `soc.record_firmware` |
 | `update_topo` acknowledged with `status_reply` (`FR-LNK-11`); `flighttask_resource_get` answered on `requests_reply` (`FR-LNK-04`) | `link/stack.py` |
 | Flight files kept as exact bytes in memory, offered with their MD5, served at `/files/<128-bit token>.kmz` on `SOC_FLIGHT_FILES_PORT`, retired `flight_file_grace_s` after the flight ends (`FR-LNK-05`, `NFR-SEC-06`, [ADR-0008](../../docs/architecture/decisions/0008-flight-files-served-on-sky-orchestrators-network.md)) | `files.py` |
@@ -57,6 +58,42 @@ Every variable it reads is declared in `contracts/config/soc-config.schema.json`
 start it logs `service_started` with the configuration's fingerprint and the
 contract version.
 
+## Measuring Broadcast latency
+
+`soc-broadcast-probe` runs in this image, beside soc-cloud, so both read the same
+clock. It signs in as a member through GoTrue, joins the organization's telemetry
+topic through Kong as a private channel, as the console does, and times every
+`sample` from its `sent_at_ms` to its arrival. A dropped socket is joined again
+under backoff. Before the run and after it, it asks Realtime whether a non-member's
+join is refused. From `infra/compose`, with the credentials in the shell and never
+in a file:
+
+```bash
+docker compose run --rm --no-deps -e SOC_PROBE_ANON_KEY -e SOC_PROBE_EMAIL -e SOC_PROBE_PASSWORD \
+  --entrypoint soc-broadcast-probe soc-cloud --supabase-url http://kong:8000 --organization <id>
+```
+
+Add `-e SOC_PROBE_OUTSIDER_EMAIL -e SOC_PROBE_OUTSIDER_PASSWORD` to check the refusal
+too: without them the refusal is not measured, and DEP-23 needs it. The options are
+`--seconds` (default 600) and `--max-p95-ms` (default 150). The secrets come only from
+the environment; the probe prints none of them.
+
+It prints one JSON object on stdout: `samples`, `p50_ms`, `p95_ms`, `p99_ms`,
+`max_ms`, `reconnects`, `longest_gap_ms` (the longest silence on the topic, counting
+the time before the first sample and after the last) and `outsider_refused` (`null`
+when no non-member was checked). Logs are JSON lines on stderr. The exit status is:
+
+- `0`: at least one sample arrived, p95 is within `--max-p95-ms`, the non-member was
+  refused when checked, and a sample arrived after the member's last rejoin;
+- `1`: one of those is not so; each reason is a `probe_failed` line on stderr;
+- `2`: an argument or a variable is missing or wrong, named on stderr.
+
+The probe measures soc-cloud to a client on the mini-PC, through Kong and Realtime:
+the server path a browser takes. It does not measure the LAN hop to a laptop, nor
+the browser's rendering (the console's own figure is `?stats`, `NFR-OBS-05`). Each
+latency is the probe's wall clock at arrival minus `sent_at_ms`, both read on the
+same host, so no clock offset is in it.
+
 ## Tests
 
 ```bash
@@ -67,6 +104,15 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
 
 - The settings read exactly the keys the contract gives `soc-cloud`, nested
   views included (`FR-DEP-03`); no secret shows in them.
+- The probe (`test_probe.py`): the percentiles, the silence, the verdict and each of
+  its reasons, the frame decoding, the redaction and the arguments; the GoTrue
+  password grant against a local server, its refusal naming no credential; the
+  member's join with its token and the private topic, its timed samples, a dropped
+  socket joined again and counted, a missing heartbeat replacing the socket, a
+  refused join named, a refused sign-in ending the run; and the non-member refused
+  or not, against `soc_realtime.testing.FakePhoenix`.
+- The probe on the container lane, against Virtual Origen's platform with GoTrue,
+  Kong and Realtime, is in `infra/e2e`, which holds that platform.
 - Never invented (`FR-SAF-03`): the OSD's structs, its mapping to a sample and
   the broadcast payload are searched through their syntax tree for any way to
   fill a missing value (`or`, a conditional falling back to a value, `.get`
@@ -192,3 +238,8 @@ uv run --frozen pytest services/soc-cloud/tests -m lane         # lane, needs Do
 | A track sample written twice (redelivered after a reconnection) | The second is ignored by the database, never refused with its batch |
 | A bug in a supervised part | The process ends with status 1 and a `service_failed` line, and the container restarts |
 | SIGTERM | Every link closes and the process exits with status 0 |
+| `soc-broadcast-probe`: the member's password refused | The run ends at once with status 1, naming the status and code (`sign-in refused: HTTP 400 invalid_credentials`), never the credential |
+| `soc-broadcast-probe`: Realtime restarted during the run | The socket is closed and joined again under backoff, at most 10 s between attempts; the silence shows in `longest_gap_ms`; status 0 only if a sample follows the rejoin |
+| `soc-broadcast-probe`: Realtime recreated while Kong still holds its old address | The rejoin fails until Kong resolves Realtime again; no sample follows the rejoin, so the run ends with status 1 and `did not rejoin` |
+| `soc-broadcast-probe`: a non-member's join goes through | Status 1: `the outsider joined the topic: its join was not refused` |
+| `soc-broadcast-probe`: a sample without a whole `sent_at_ms` | Counted and named; status 1, since the producer broke the contract |

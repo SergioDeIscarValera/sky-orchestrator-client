@@ -783,6 +783,7 @@ dependencies = [
     { name = "soc-log" },
     { name = "soc-realtime" },
     { name = "soc-supervision" },
+    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -803,6 +804,7 @@ requires-dist = [
     { name = "soc-log", editable = "libs/soc-log" },
     { name = "soc-realtime", editable = "libs/soc-realtime" },
     { name = "soc-supervision", editable = "libs/soc-supervision" },
+    { name = "websockets", specifier = "==17.2" },
 ]
 
 [package.metadata.requires-dev]

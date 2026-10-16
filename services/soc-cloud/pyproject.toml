@@ -14,6 +14,7 @@ dependencies = [
   "soc-log",
   "soc-realtime",
   "soc-supervision",
+  "websockets==17.2",
 ]
 
 [dependency-groups]
@@ -21,6 +22,7 @@ test = ["soc-database", "soc-migrate"]
 
 [project.scripts]
 soc-cloud = "soc_cloud.__main__:main"
+soc-broadcast-probe = "soc_cloud.probe:main"
 
 [build-system]
 requires = ["uv_build>=0.12.23,<0.13"]
