@@ -51,7 +51,10 @@ class Call:
 class Docker:
     """Records each command and answers from a script, so no docker command runs."""
 
-    def __init__(self, flights: str = "", *, query_status: int = 0, failing: str = "") -> None:
+    def __init__(
+        self, flights: str | list[str] = "", *, query_status: int = 0, failing: str = ""
+    ) -> None:
+        # A list answers each read of the flights in turn, its last answer from then on.
         self.flights = flights
         self.query_status = query_status
         self.failing = failing
@@ -61,7 +64,11 @@ class Docker:
         command = tuple(arguments)
         self.calls.append(Call(command, cwd))
         if command[1] == "exec":
-            return subprocess.CompletedProcess(command, self.query_status, self.flights, None)
+            if isinstance(self.flights, list):
+                answer = self.flights.pop(0) if len(self.flights) > 1 else self.flights[0]
+            else:
+                answer = self.flights
+            return subprocess.CompletedProcess(command, self.query_status, answer, None)
         status = 1 if command[2] == self.failing else 0
         return subprocess.CompletedProcess(command, status, "", None)
 
@@ -223,7 +230,8 @@ class Environment(DeployCase):
         status, _, errors = self.deploy(docker)
         self.assertEqual(status, 0, errors)
         self.assertEqual(
-            [call.arguments[1] for call in docker.calls], ["exec", "compose", "compose", "compose"]
+            [call.arguments[1] for call in docker.calls],
+            ["exec", "compose", "exec", "compose", "exec", "compose"],
         )
         self.assertEqual(docker.compose, [PULL, MIGRATE, UP])
         self.assertEqual({call.cwd for call in docker.calls}, {self.compose_dir})
@@ -316,6 +324,62 @@ class Steps(DeployCase):
 
 
 class DryRun(DeployCase):
+    def test_the_flights_are_read_again_before_the_migration_and_before_up(self) -> None:
+        docker = Docker()
+        status, _, _ = self.deploy(docker)
+        self.assertEqual(status, 0)
+        steps = [
+            call.arguments[1] if call.arguments[1] == "exec" else call.arguments
+            for call in docker.calls
+        ]
+        self.assertEqual(steps, ["exec", PULL, "exec", MIGRATE, "exec", UP])
+
+    def test_a_flight_that_starts_during_the_pull_stops_before_the_migration(self) -> None:
+        docker = Docker(["", row(FIRST)])
+        status, _, errors = self.deploy(docker)
+        self.assertEqual(status, 1)
+        self.assertEqual(docker.compose, [PULL])
+        self.assertIn("a flight started during the deploy", errors)
+        self.assertIn(FIRST, errors)
+        self.assertIn("Nothing was migrated or restarted", errors)
+
+    def test_a_flight_that_starts_during_the_migration_stops_before_up(self) -> None:
+        docker = Docker(["", "", row(FIRST)])
+        status, _, errors = self.deploy(docker)
+        self.assertEqual(status, 1)
+        self.assertEqual(docker.compose, [PULL, MIGRATE])
+        self.assertIn(FIRST, errors)
+
+    def test_a_named_flight_that_ends_during_the_deploy_does_not_stop_it(self) -> None:
+        docker = Docker([row(FIRST), ""])
+        status, _, _ = self.deploy(docker, *ignoring(FIRST))
+        self.assertEqual(status, 0)
+        self.assertEqual(docker.compose, [PULL, MIGRATE, UP])
+
+    def test_a_flight_read_that_fails_after_the_pull_stops_before_the_migration(self) -> None:
+        docker = Docker()
+        original = docker.__call__
+
+        reads = {"count": 0}
+
+        def failing_second_read(
+            arguments: Sequence[str], cwd: Path
+        ) -> subprocess.CompletedProcess[str]:
+            if tuple(arguments)[1] == "exec":
+                reads["count"] += 1
+                if reads["count"] == 2:
+                    return subprocess.CompletedProcess(tuple(arguments), 2, "", None)
+            return original(arguments, cwd)
+
+        output, errors = io.StringIO(), io.StringIO()
+        with redirect_stdout(output), redirect_stderr(errors):
+            status = deploy.main(
+                ["v0.5.0", "--compose-dir", str(self.compose_dir)], runner=failing_second_read
+            )
+        self.assertEqual(status, 1)
+        self.assertEqual(docker.compose, [PULL])
+        self.assertIn("nothing proves that no aircraft is flying", errors.getvalue())
+
     def test_a_dry_run_writes_nothing_and_runs_no_compose_command(self) -> None:
         self.env.chmod(0o640)
         docker = Docker()

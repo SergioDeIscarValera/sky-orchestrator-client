@@ -76,7 +76,7 @@ mini-PC and read access to Sky Orchestrator's packages, and close there.
 | Sky Orchestrator's contracts pinned to its v0.4.1 release | `feature/contracts/sky-orchestrator-v0.4.1`, merged (#28) |
 | `soc-operations` skeleton: configuration, health, the database link; its transition intents arrive with the operations in M4 | `feature/operations/skeleton`, merged (#29, fixed by #30) |
 | `soc-web` skeleton: tokens and the shell; sign-in, organization first and the runtime configuration; the persistent scene and panels | `feature/web/scaffold`, merged (#34); `feature/database/member-organizations`, merged (#35); `feature/web/sign-in`, merged (#38); `feature/web/image`, merged (#40); `feature/web/scene`, merged (#43) |
-| Compose stack for the mini-PC, the stack check in CI, the deploy command with its flight guard | `feature/infra/images`, merged (#32): the images and the compose project; `feature/repo/release-images`, merged (#33); `feature/infra/stack-and-check`, waiting for read access to Sky Orchestrator's packages on GHCR |
+| Compose stack for the mini-PC, the stack check in CI, the deploy command with its flight guard | `feature/infra/images`, merged (#32): the images and the compose project; `feature/repo/release-images`, merged (#33); `feature/infra/stack-and-check`, waiting for read access to Sky Orchestrator's packages on GHCR; the deploy command, `feature/infra/deploy-command` (M5) |
 | Viability session on the mini-PC, measured | `feature/infra/viability-session`, waiting for the box steps (`DEP-21`) |
 
 **Exit criteria**
@@ -168,7 +168,7 @@ requirements.
 
 | Step | Pull request |
 | --- | --- |
-| The three systems on the mini-PC: Virtual Origen, Sky Orchestrator v0.4.4 and SOC, deployed together by [one runbook](mini-pc-deployment.md) agreed with both projects; the shared migration lock, SO v0.4.4 re-vendored, the deploy command (`FR-DEP-06`) and the Broadcast measurement on the box (`DEP-23`) first | `feature/repo/mini-pc-runbook`, `feature/infra/shared-migration-lock` |
+| The three systems on the mini-PC: Virtual Origen, Sky Orchestrator v0.4.4 and SOC, deployed together by [one runbook](mini-pc-deployment.md) agreed with both projects; the shared migration lock, SO v0.4.4 re-vendored, the deploy command (`FR-DEP-06`) and the Broadcast measurement on the box (`DEP-23`) first | `feature/repo/mini-pc-runbook` (#133), `feature/infra/shared-migration-lock` (#132), `feature/contracts/so-v0.4.4` (#134), `feature/infra/deploy-command` |
 | The field session runbook, with the phone's envelope compared to so-wayline's | `feature/repo/first-flight-runbook` |
 | Session one: the phone in DJI's simulator through SO, commanded from SOC | `feature/repo/simulator-session` |
 | Session two: the real aircraft, the operator on the controller | `feature/repo/first-real-flight` |

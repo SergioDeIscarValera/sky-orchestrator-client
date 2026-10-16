@@ -18,6 +18,9 @@ stderr; exit status 0 means every step succeeded:
 5. docker compose run --rm soc-migrate;
 6. docker compose up -d --wait.
 
+The flights are read again before 5 and before 6: a pull can take minutes, and a flight that
+starts meanwhile stops the deploy before anything is migrated or restarted.
+
 --dry-run does steps 1 and 2, checks that .env exists, and prints what steps 3 to 6 would do.
 It writes nothing and runs no compose command.
 
@@ -163,6 +166,30 @@ def check_overrides(unfinished: Sequence[Flight], ignored: frozenset[str]) -> li
     return list(unfinished)
 
 
+def still_unstarted(
+    runner: Runner, container: str, compose_dir: Path, ignored: frozenset[str], state: str
+) -> None:
+    """Read the flights again before a step that touches what flies: any unfinished flight the
+    operator did not name has started since the deploy began, and stops it. A named flight that
+    has ended since is no reason to stop."""
+    started = [
+        flight
+        for flight in unfinished_flights(runner, container, compose_dir)
+        if flight.flight_id not in ignored
+    ]
+    if started:
+        raise DeployError(
+            "\n".join(
+                [
+                    "stopped: a flight started during the deploy:",
+                    *(f"  {flight.describe()}" for flight in started),
+                    f"Nothing was migrated or restarted. {state}. "
+                    "Run this command again once it has ended.",
+                ]
+            )
+        )
+
+
 def unfinished_refusal(flights: Sequence[Flight], *, partly_overridden: bool) -> str:
     if partly_overridden:
         head = "refused: nothing was changed. Unfinished flights not named by --ignore-flight:"
@@ -296,6 +323,7 @@ def deploy(arguments: argparse.Namespace, runner: Runner) -> None:
         PULL,
         f"Nothing was started. {state}. Fix the cause, then run this command again.",
     )
+    still_unstarted(runner, arguments.db_container, compose_dir, ignored, state)
     compose_step(
         runner,
         compose_dir,
@@ -303,6 +331,7 @@ def deploy(arguments: argparse.Namespace, runner: Runner) -> None:
         "Migrations that applied stay applied, and running this command again applies only "
         f"what is pending. Nothing was started. {state}.",
     )
+    still_unstarted(runner, arguments.db_container, compose_dir, ignored, state)
     compose_step(
         runner,
         compose_dir,
