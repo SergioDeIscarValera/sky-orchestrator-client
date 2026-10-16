@@ -102,7 +102,7 @@ Retention: while configured.
 | `organization_id` | uuid | The organization the stack serves: the stack's `organization` in the configuration (contract 2.0.0) |
 | `link_state` | enum | `connected`, `connecting`, `displaced`, `unreachable` |
 | `status` | jsonb | Sky Orchestrator's stack status (SO's FR-DEV-07), as last read |
-| `envelope` | jsonb | The active device envelope (SO's FR-WAY-11), with its fingerprint |
+| `envelope` | jsonb | The active device envelope (SO's FR-WAY-11) as `GET /v1/envelope` answers it: the limits under `envelope`, beside `envelope_fingerprint`, `config_fingerprint` and `application_in_force` |
 | `status_read_at`, `envelope_read_at` | timestamptz, nullable | When each was last read; a value that could not be read is null, never the previous one (`FR-LNK-08`) |
 | `updated_at` | timestamptz | |
 
@@ -549,3 +549,4 @@ this document updated first.
 | 2026-10-10 | IR-TRQ opened: the operation transition request ADR-0006 names had no entity. |
 | 2026-10-13 | M4's data model (migration 0010): IR-TRQ specified; IR-CHK, IR-SMP and IR-DRY added (ADR-0025); IR-ASG's `flight`, IR-FIL's `operation_id`, IR-FLT's `config_fingerprint` and IR-STK's read times. |
 | 2026-10-13 | IR-CFG: `stack_status_poll_ms` and `stack_envelope_poll_s`, the stacks' poll intervals (contract 2.2.0, `FR-LNK-08`, `FR-LNK-09`). |
+| 2026-10-16 | IR-STK's `envelope` named as what soc-cloud records and soc-operations reads: `GET /v1/envelope`'s whole answer, the limits under `envelope`. |

@@ -345,7 +345,13 @@ function seedStacks() {
       link_state: 'connected',
       // The phone starts in its simulator (lifecycle.mjs): a simulation runs before the real flight.
       status: stackStatus(true),
-      envelope: ENVELOPE,
+      // GET /v1/envelope's whole answer, as soc-cloud records it: the limits under `envelope`.
+      envelope: {
+        envelope: ENVELOPE,
+        envelope_fingerprint: 'e'.repeat(64),
+        config_fingerprint: 'c'.repeat(64),
+        application_in_force: null,
+      },
       envelope_read_at: '2026-10-11T12:40:00+00:00',
       updated_at: '2026-10-11T12:40:00+00:00',
     },

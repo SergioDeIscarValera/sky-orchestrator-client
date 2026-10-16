@@ -17,6 +17,7 @@ import {
   envelopeOf,
   fenceProblems,
   flightFor,
+  limitsFor,
   MAX_HEIGHT_M,
   NO_LIMITS,
   operatorsOpen,
@@ -92,11 +93,19 @@ const FLEET_RECORD: Fleet = {
   updatedAt: T,
 }
 
+/** What GET /v1/envelope answers, as soc-cloud records it on the stack: the limits under `envelope`. */
+const ENVELOPE_READ = {
+  envelope: ENVELOPE_JSON,
+  envelope_fingerprint: 'e'.repeat(64),
+  config_fingerprint: 'c'.repeat(64),
+  application_in_force: null,
+}
+
 const STACK: StackView = {
   gatewaySn: 'SOTESTDOCK01',
   name: 'lab',
   linkState: 'connected',
-  envelope: ENVELOPE_JSON,
+  envelope: ENVELOPE_READ,
   envelopeReadAt: T,
 }
 
@@ -400,8 +409,9 @@ describe('the envelope and the stored flight (FR-LNK-09, FR-WAY-11)', () => {
     expect(envelopeOf(STACK)).toEqual(envelopeFromSkyOrchestrator(ENVELOPE_JSON))
   })
 
-  it('refuses an envelope it cannot read', () => {
+  it('refuses an envelope it cannot read, and the limits alone, which a stack never records', () => {
     expect(() => envelopeOf({ ...STACK, envelope: { geofence_center: 'here' } })).toThrow()
+    expect(() => envelopeOf({ ...STACK, envelope: ENVELOPE_JSON })).toThrow(/envelope read/)
   })
 
   it('reads a stored flight, and none while it holds none', () => {
@@ -572,6 +582,32 @@ describe('what a save writes (FR-OPS-01, FR-OPS-07)', () => {
   })
 })
 
+describe("the speed limits of a definition's fleet (FR-WAY-10)", () => {
+  const choices = (stack: StackView): Choices => ({
+    waylines: [CORRIDOR],
+    fleets: [FLEET_RECORD],
+    geofences: [],
+    stacks: [stack],
+    models: [],
+    origin: FARM,
+  })
+
+  it("takes the stack's limit from what GET /v1/envelope answered", () => {
+    expect(limitsFor(FLEET_RECORD.id, choices(STACK))).toEqual({
+      defaultMs: 15,
+      capMs: 15,
+      capOf: "the stack's limit",
+    })
+  })
+
+  it('knows no limit, rather than failing, while the envelope cannot be read', () => {
+    expect(limitsFor(FLEET_RECORD.id, choices({ ...STACK, envelope: ENVELOPE_JSON }))).toEqual(
+      NO_LIMITS,
+    )
+    expect(limitsFor(FLEET_RECORD.id, choices({ ...STACK, envelope: null }))).toEqual(NO_LIMITS)
+  })
+})
+
 describe('a stored flight its definition no longer makes (FR-OPS-07)', () => {
   const choices: Choices = {
     waylines: [CORRIDOR],
@@ -630,7 +666,12 @@ describe('a stored flight its definition no longer makes (FR-OPS-07)', () => {
     const assignment = assignmentOf({ speedMs: 10, flight: made })
     const judged = {
       ...choices,
-      stacks: [{ ...STACK, envelope: { ...ENVELOPE_JSON, max_height_m: 20 } }],
+      stacks: [
+        {
+          ...STACK,
+          envelope: { ...ENVELOPE_READ, envelope: { ...ENVELOPE_JSON, max_height_m: 20 } },
+        },
+      ],
     }
     expect(flightOutdated(operation, assignment, judged)).toBe(true)
   })

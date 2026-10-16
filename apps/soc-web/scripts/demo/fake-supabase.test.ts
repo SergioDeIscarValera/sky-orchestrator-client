@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { FieldRefusedError, type Backend, type Fleet } from '../../src/backend/backend'
 import { bake } from '../../src/geometry/bake'
-import { designFromJson, envelopeFromSkyOrchestrator } from '../../src/geometry/designJson'
+import { designFromJson, envelopeFromStackRead } from '../../src/geometry/designJson'
 import { supabaseBackend } from '../../src/backend/supabase'
 import { parseRuntimeConfiguration } from '../../src/config/runtime'
 import { PASSWORD_FOR_TESTS } from '../../src/test/keys'
@@ -419,7 +419,7 @@ describe("the demo's operations, read and written through the console backend (m
       envelopeReadAt: '2026-10-11T12:40:00+00:00',
     })
     // The envelope reads as Sky Orchestrator's own, strictly: the same limits the bake checks.
-    expect(envelopeFromSkyOrchestrator(lab?.envelope)).toMatchObject({
+    expect(envelopeFromStackRead(lab?.envelope)).toMatchObject({
       maxHeightM: 120,
       maxHorizontalSpeedMs: 15,
     })

@@ -13,7 +13,7 @@ import type {
   Wayline,
 } from '../backend/backend'
 import type { Baked } from '../geometry/bake'
-import { envelopeFromSkyOrchestrator, flightFromJson, flightToJson } from '../geometry/designJson'
+import { envelopeFromStackRead, flightFromJson, flightToJson } from '../geometry/designJson'
 import { planFlight, type Flight } from '../geometry/flight'
 import type { Envelope, Violation } from '../geometry/limits'
 import type { Geodetic } from '../geometry/projection'
@@ -134,10 +134,19 @@ export function limitsFor(fleetId: string, choices: Choices): SpeedLimits {
   if (fleet === undefined) return NO_LIMITS
   const stack = choices.stacks.find(({ gatewaySn }) => gatewaySn === fleet.gatewaySn)
   const model = choices.models.find(({ model: name }) => name === fleet.model)
-  return speedLimits(
-    envelopeOf(stack)?.maxHorizontalSpeedMs ?? null,
-    model?.maxHorizontalSpeedMs ?? null,
-  )
+  return speedLimits(stackLimitMs(stack), model?.maxHorizontalSpeedMs ?? null)
+}
+
+/**
+ * The stack's speed limit, or null where its envelope is not known or cannot be read: the form
+ * then asks for a speed instead of failing, and Save says why the envelope cannot be read.
+ */
+function stackLimitMs(stack: StackView | undefined): number | null {
+  try {
+    return envelopeOf(stack)?.maxHorizontalSpeedMs ?? null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -261,11 +270,12 @@ export function flightFor(inputs: FlightInputs): Record<string, unknown> | null 
 
 /**
  * The stack's envelope as the flight is checked against it, or null while the stack has not read
- * one (FR-LNK-09): then no leg is split and no limit is judged. Throws on an envelope it cannot read.
+ * one (FR-LNK-09): then no leg is split and no limit is judged. The stack holds what GET
+ * /v1/envelope answered, the limits under `envelope`. Throws on an envelope it cannot read.
  */
 export function envelopeOf(stack: StackView | undefined): Envelope | null {
   if (stack === undefined || stack.envelope === null) return null
-  return envelopeFromSkyOrchestrator(stack.envelope)
+  return envelopeFromStackRead(stack.envelope)
 }
 
 /** The flight a stored assignment holds, read as the schema reads it; null while it holds none. */
