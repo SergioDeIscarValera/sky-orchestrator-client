@@ -451,10 +451,13 @@ re-baking.
 
 ### FR-WAY-10 — Speed · MUST
 A wayline flies at one speed, set in the operation when its fleet is assigned
-(`FR-OPS-01`), no higher than the stack's limit or the model's maximum, whichever
-is lower.
+(`FR-OPS-01`). Left blank it is the stack's limit, or the model's maximum where
+that is lower; a speed given instead is no higher than the stack's limit or the
+model's maximum, whichever is lower. Sky Orchestrator flies the speed it is given
+in metres per second, capped by its envelope's `max_horizontal_speed_ms`.
 
-**Acceptance**: a speed above either limit is refused naming the limit.
+**Acceptance**: a blank speed is saved as the lower of the two limits; a speed
+above either limit is refused naming the limit.
 
 ### FR-WAY-11 — Flight file · MUST
 The flight file is a KMZ in the WPML subset Sky Orchestrator accepts, built
@@ -487,7 +490,8 @@ operation a wayline and a fleet appear at most once.
 
 **Acceptance**: a second assignment is refused in the MVP with the reason; the
 same fleet twice is refused by the database; an operation planned without a
-height, or an assignment without a speed, is refused naming it.
+height, or an assignment without a speed, is refused naming it; the console saves
+no definition without a geofence.
 
 ### FR-OPS-02 — One state machine · MUST
 An operation moves through declared states, by declared transitions only, each

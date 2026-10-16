@@ -7,6 +7,7 @@ import { useAssign, useChangeAssignment, useChangeOperation } from './data'
 import {
   definitionFieldOf,
   draftFlight,
+  limitsFor,
   MAX_HEIGHT_M,
   planSave,
   readDefinition,
@@ -28,9 +29,11 @@ interface Props {
 }
 
 /**
- * The operation's definition (FR-OPS-01): its name, geofence, takeoff security height, and its
- * one assignment's wayline, fleet and speed. One Save writes what changed, and the assignment's
- * flight with it. Read-only where it may not change, with the same values.
+ * The operation's definition (FR-OPS-01): its name, geofence and height, the height its aircraft
+ * climb to before the transit (Sky Orchestrator's takeoff security height), and its one
+ * assignment's wayline, fleet and speed. The speed may be left blank: it flies the stack's limit,
+ * capped by the model's maximum (FR-WAY-10). One Save writes what changed, and the assignment's
+ * flight with it. Read-only where it may not change, folded to one line until opened.
  */
 export function OperationDefinition({ operation, assignment, choices, editable }: Props) {
   const changeOperation = useChangeOperation()
@@ -47,9 +50,7 @@ export function OperationDefinition({ operation, assignment, choices, editable }
   }
 
   const text: DefinitionText = { ...storedText(operation, assignment), ...edits }
-  const fleet = choices.fleets.find(({ id }) => id === text.fleetId)
-  const maxSpeedMs =
-    choices.models.find(({ model }) => model === fleet?.model)?.maxHorizontalSpeedMs ?? null
+  const limits = limitsFor(text.fleetId, choices)
 
   const set = (field: keyof DefinitionText, value: string) => {
     setEdits((current) => ({ ...current, [field]: value }))
@@ -57,7 +58,7 @@ export function OperationDefinition({ operation, assignment, choices, editable }
 
   const save = async () => {
     setRefusal(null)
-    const read = readDefinition(text, { maxSpeedMs })
+    const read = readDefinition(text, limits)
     if (!read.ok) {
       setErrors(read.errors)
       return
@@ -127,7 +128,11 @@ export function OperationDefinition({ operation, assignment, choices, editable }
                 set('geofenceId', event.target.value)
               }}
             >
-              <option value="">None</option>
+              {text.geofenceId === '' && (
+                <option value="" disabled>
+                  Choose a geofence
+                </option>
+              )}
               {choices.geofences.map(({ id, name }) => (
                 <option key={id} value={id}>
                   {name}
@@ -139,7 +144,7 @@ export function OperationDefinition({ operation, assignment, choices, editable }
             </select>
           )}
         </Field>
-        <Field label="Takeoff security height" error={errors.heightM}>
+        <Field label="Height" error={errors.heightM}>
           {(props) => (
             <span className="flex items-center gap-2">
               <span className="w-32 shrink-0">
@@ -160,71 +165,82 @@ export function OperationDefinition({ operation, assignment, choices, editable }
             </span>
           )}
         </Field>
-        <Field label="Wayline" error={errors.waylineId}>
-          {(props) => (
-            <select
-              {...props}
-              className={FIELD}
-              value={text.waylineId}
-              onChange={(event) => {
-                set('waylineId', event.target.value)
-              }}
-            >
-              {assignment === null && <option value="">None</option>}
-              {choices.waylines.map(({ id, name }) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-              {isRetired(choices.waylines, text.waylineId) && (
-                <option value={text.waylineId}>Retired</option>
-              )}
-            </select>
-          )}
-        </Field>
-        <Field label="Fleet" error={errors.fleetId}>
-          {(props) => (
-            <select
-              {...props}
-              className={FIELD}
-              value={text.fleetId}
-              onChange={(event) => {
-                set('fleetId', event.target.value)
-              }}
-            >
-              {assignment === null && <option value="">None</option>}
-              {choices.fleets.map(({ id, name }) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-              {isRetired(choices.fleets, text.fleetId) && (
-                <option value={text.fleetId}>Retired</option>
-              )}
-            </select>
-          )}
-        </Field>
-        <Field label="Speed" error={errors.speedMs}>
-          {(props) => (
-            <span className="flex items-center gap-2">
-              <span className="w-32 shrink-0">
-                <input
-                  {...props}
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  max={maxSpeedMs ?? undefined}
-                  className={FIELD}
-                  value={text.speedMs}
-                  onChange={(event) => {
-                    set('speedMs', event.target.value)
-                  }}
-                />
+        <fieldset className="border-border flex flex-col gap-4 rounded-xl border p-3">
+          <legend className="text-muted px-1 text-xs font-semibold tracking-wider uppercase">
+            Wayline and fleet
+          </legend>
+          <Field label="Wayline" error={errors.waylineId}>
+            {(props) => (
+              <select
+                {...props}
+                className={FIELD}
+                value={text.waylineId}
+                onChange={(event) => {
+                  set('waylineId', event.target.value)
+                }}
+              >
+                {assignment === null && <option value="">None</option>}
+                {choices.waylines.map(({ id, name }) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+                {isRetired(choices.waylines, text.waylineId) && (
+                  <option value={text.waylineId}>Retired</option>
+                )}
+              </select>
+            )}
+          </Field>
+          <Field label="Fleet" error={errors.fleetId}>
+            {(props) => (
+              <select
+                {...props}
+                className={FIELD}
+                value={text.fleetId}
+                onChange={(event) => {
+                  set('fleetId', event.target.value)
+                }}
+              >
+                {assignment === null && <option value="">None</option>}
+                {choices.fleets.map(({ id, name }) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+                {isRetired(choices.fleets, text.fleetId) && (
+                  <option value={text.fleetId}>Retired</option>
+                )}
+              </select>
+            )}
+          </Field>
+          <Field label="Speed" error={errors.speedMs}>
+            {(props) => (
+              <span className="flex items-center gap-2">
+                <span className="w-32 shrink-0">
+                  <input
+                    {...props}
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    max={limits.capMs ?? undefined}
+                    placeholder={limits.defaultMs === null ? undefined : String(limits.defaultMs)}
+                    className={FIELD}
+                    value={text.speedMs}
+                    onChange={(event) => {
+                      set('speedMs', event.target.value)
+                    }}
+                  />
+                </span>
+                <span className="text-muted text-sm">m/s</span>
+                {limits.capMs !== null && (
+                  <span className="text-muted text-xs tabular-nums">
+                    max {String(limits.capMs)}
+                  </span>
+                )}
               </span>
-              <span className="text-muted text-sm">m/s</span>
-            </span>
-          )}
-        </Field>
+            )}
+          </Field>
+        </fieldset>
       </div>
       {refusal !== null && (
         <p role="alert" className={`${ALERT} mt-4`}>
@@ -265,14 +281,21 @@ function ReadOnly({
 }) {
   const height = operation.takeoffSecurityHeightM
   const speed = assignment?.speedMs ?? null
+  const geofence = nameOf(choices.geofences, operation.geofenceId)
+  const wayline = nameOf(choices.waylines, assignment?.waylineId ?? null)
+  const summary = [geofence, height === null ? null : `${String(height)} m`, wayline]
+    .filter((part) => part !== null)
+    .join(' · ')
   return (
     <Details
       title="Definition"
+      folded
+      aside={summary}
       rows={[
         ['Name', operation.name],
-        ['Geofence', nameOf(choices.geofences, operation.geofenceId)],
-        ['Takeoff security height', height === null ? 'Not set' : `${String(height)} m`],
-        ['Wayline', nameOf(choices.waylines, assignment?.waylineId ?? null)],
+        ['Geofence', geofence],
+        ['Height', height === null ? 'Not set' : `${String(height)} m`],
+        ['Wayline', wayline],
         ['Fleet', nameOf(choices.fleets, assignment?.fleetId ?? null)],
         ['Speed', speed === null ? 'Not set' : `${String(speed)} m/s`],
       ]}

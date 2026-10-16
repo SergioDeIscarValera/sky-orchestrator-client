@@ -20,7 +20,12 @@ function judgement(checkId: string, overrides: Partial<OperationCheck> = {}): Op
   }
 }
 
-const list = () => screen.findByRole('list', { name: 'Preflight checks' })
+/** The checks' section, once its checks are read: the lists of those not passing and passing. */
+async function list(): Promise<HTMLElement> {
+  const region = await screen.findByRole('region', { name: 'Checks' })
+  await within(region).findByText(/^\d+\/\d+ passing$/)
+  return region
+}
 
 /** The check's row, found by its name: each row begins with the name of its check. */
 async function rowNamed(name: string): Promise<HTMLElement> {
@@ -44,7 +49,7 @@ describe('an operation preflight checks (FR-OPS-04, FR-OPS-05)', () => {
     )
     expect(screen.getAllByText('Unknown')).toHaveLength(CHECK_ORDER.length)
     expect(screen.queryByText('Pass')).toBeNull()
-    expect(screen.getByRole('region', { name: 'Checks' })).toContainElement(await list())
+    expect(screen.getByText('0/16 passing')).toBeVisible()
   })
 
   it("shows each judgement's state, its measured value and its detail, the last two muted", async () => {
@@ -69,8 +74,9 @@ describe('an operation preflight checks (FR-OPS-04, FR-OPS-05)', () => {
     expect(within(positioning).getByText('Nine satellites; twelve are needed.')).toHaveClass(
       'text-muted',
     )
+    // A check that passes is folded away beneath those that do not: there, not in view.
     const link = await rowNamed('Stack link')
-    expect(within(link).getByText('Pass')).toBeVisible()
+    expect(within(link).getByText('Pass')).toBeInTheDocument()
     expect(within(link).getByText('link state connected')).toHaveClass('text-muted')
   })
 
@@ -157,7 +163,7 @@ describe('an operation preflight checks (FR-OPS-04, FR-OPS-05)', () => {
       backend,
       account: PILOT,
     })
-    expect(within(await rowNamed('Positioning')).getByText('Pass')).toBeVisible()
+    expect(within(await rowNamed('Positioning')).getByText('Pass')).toBeInTheDocument()
     act(() => {
       backend.addCheck(
         operation.id,
@@ -166,10 +172,49 @@ describe('an operation preflight checks (FR-OPS-04, FR-OPS-05)', () => {
     })
     await waitFor(() => {
       expect(
-        within(screen.getByRole('list', { name: 'Preflight checks' })).getByText('Fail'),
+        within(screen.getByRole('list', { name: 'Checks not passing' })).getByText('Fail'),
       ).toBeVisible()
     })
     expect(reads).toHaveBeenCalledOnce()
+  })
+
+  it('heads the checks with how many pass, lists those not passing first, and folds those passing', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await operationIn(backend, 'preparing')
+    for (const id of CHECK_ORDER) backend.addCheck(operation.id, judgement(id))
+    backend.addCheck(operation.id, judgement('PF-BATTERY', { state: 'fail' }))
+    backend.addCheck(operation.id, judgement('PF-GNSS', { state: 'unknown' }))
+    const { user } = renderInOrganization(<OperationChecks operationId={operation.id} />, {
+      backend,
+      account: PILOT,
+    })
+    expect(await screen.findByText('14/16 passing')).toBeVisible()
+    const open = screen.getByRole('list', { name: 'Checks not passing' })
+    expect(
+      within(open)
+        .getAllByRole('listitem')
+        .map((row) => row.querySelector('p')?.textContent),
+    ).toEqual([CHECK_WORDS['PF-GNSS'], CHECK_WORDS['PF-BATTERY']])
+    const folded = screen.getByText('14/16 passing').closest('details')
+    expect(folded).not.toBeNull()
+    expect(folded).not.toHaveAttribute('open')
+    await user.click(screen.getByText('14/16 passing'))
+    expect(folded).toHaveAttribute('open')
+    expect(
+      within(screen.getByRole('list', { name: 'Checks passing' })).getAllByRole('listitem'),
+    ).toHaveLength(14)
+  })
+
+  it('shows no list of checks not passing once every one passes', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await operationIn(backend, 'ready')
+    for (const id of CHECK_ORDER) backend.addCheck(operation.id, judgement(id))
+    renderInOrganization(<OperationChecks operationId={operation.id} />, {
+      backend,
+      account: PILOT,
+    })
+    expect(await screen.findByText('16/16 passing')).toBeVisible()
+    expect(screen.queryByRole('list', { name: 'Checks not passing' })).toBeNull()
   })
 
   it('says it is loading while the operation is read', async () => {
@@ -196,7 +241,7 @@ describe('an operation preflight checks (FR-OPS-04, FR-OPS-05)', () => {
     })
     expect(await screen.findByRole('alert')).toHaveTextContent('Supabase is unreachable')
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(within(await rowNamed('Stack link')).getByText('Pass')).toBeVisible()
+    expect(within(await rowNamed('Stack link')).getByText('Pass')).toBeInTheDocument()
     expect(reads).toHaveBeenCalledTimes(2)
   })
 

@@ -16,7 +16,7 @@ export function Details({
   children,
 }: {
   readonly title: string
-  /** Said of the whole section, beside its title. */
+  /** Said of the whole section, beside its title; folded, beside it in the summary. */
   readonly aside?: ReactNode
   readonly rows: readonly (readonly [string, ReactNode])[]
   readonly folded?: boolean
@@ -39,11 +39,18 @@ export function Details({
       <details className="group border-border mt-4 border-t pt-3">
         <summary className="text-muted hover:text-heading flex cursor-pointer list-none items-center justify-between text-xs font-semibold tracking-wider uppercase transition-colors duration-200">
           {title}
-          <ChevronDown
-            size={16}
-            aria-hidden
-            className="transition-transform duration-200 group-open:rotate-180"
-          />
+          <span className="flex min-w-0 items-center gap-2">
+            {aside !== undefined && (
+              <span className="min-w-0 truncate text-xs font-normal tracking-normal normal-case">
+                {aside}
+              </span>
+            )}
+            <ChevronDown
+              size={16}
+              aria-hidden
+              className="shrink-0 transition-transform duration-200 group-open:rotate-180"
+            />
+          </span>
         </summary>
         {facts}
         {children}

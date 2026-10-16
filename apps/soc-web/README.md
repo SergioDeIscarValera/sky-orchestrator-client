@@ -320,9 +320,11 @@ is missing. Schema `soc` must be in Supabase's
 Sign in with any email and any password; the demo has no secret. Finca Norte (owner) has three
 aircraft on stack `lab`: one online in a fleet, one online in no fleet, and one whose stack is
 `unreachable`. It has one fleet, which can be edited and retired, and the aircraft in no fleet can
-be registered. Almendral (viewer) has no aircraft and no fleets. Finca Norte has one operation in
-draft, North corridor, flown by Norte 1 along the north corridor wayline, with its pilot (the demo
-user) and an empty log. The operations panel lists it; Save stores the flight of its definition, and
+be registered. Almendral (viewer) has no aircraft and no fleets. Finca Norte has one geofence, North
+field, round the north corridor, and one operation in draft, North corridor, inside it and flown by
+Norte 1 along the north corridor wayline, with its pilot (the demo user) and an empty log; its
+height and its speed are left blank. The operations panel lists it; Save stores the flight of its
+definition, a blank speed as the stack's limit, and
 New and the operators write in memory like the rest. The demo plays soc-operations and soc-cloud, so
 an operation can be flown end to end in it: plan, prepare, simulate, launch, pause, return home and
 stop. The phone starts in its simulator, so a simulation runs there; it turns to real mode once the

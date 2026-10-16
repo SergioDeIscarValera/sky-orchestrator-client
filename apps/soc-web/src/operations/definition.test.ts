@@ -18,13 +18,16 @@ import {
   fenceProblems,
   flightFor,
   MAX_HEIGHT_M,
+  NO_LIMITS,
   operatorsOpen,
   planSave,
   readDefinition,
+  speedLimits,
   storedFlight,
   storedText,
   type DefinitionDraft,
   type DefinitionText,
+  type SpeedLimits,
 } from './definition'
 
 const FARM: Geodetic = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
@@ -127,9 +130,11 @@ function assignmentOf(overrides: Partial<Assignment> = {}): Assignment {
   }
 }
 
+const GEOFENCE = '22222222-2222-4222-8222-222222222222'
+
 const TYPED: DefinitionText = {
   name: 'North corridor',
-  geofenceId: '',
+  geofenceId: GEOFENCE,
   heightM: '30',
   waylineId: WAYLINE,
   fleetId: FLEET,
@@ -148,23 +153,50 @@ function draftOver(overrides: Partial<DefinitionDraft> = {}): DefinitionDraft {
   }
 }
 
-function readOk(text: DefinitionText, maxSpeedMs: number | null = 19): DefinitionDraft {
-  const read = readDefinition(text, { maxSpeedMs })
+/** The limits of a stack whose envelope allows 12 m/s, for a model whose maximum is 19 m/s. */
+const LIMITS: SpeedLimits = speedLimits(12, 19)
+
+function readOk(text: DefinitionText, limits: SpeedLimits = LIMITS): DefinitionDraft {
+  const read = readDefinition(text, limits)
   if (!read.ok) throw new Error(`refused: ${JSON.stringify(read.errors)}`)
   return read.draft
 }
 
-function errorsOf(text: Partial<DefinitionText>, maxSpeedMs: number | null = 19) {
-  const read = readDefinition({ ...TYPED, ...text }, { maxSpeedMs })
+function errorsOf(text: Partial<DefinitionText>, limits: SpeedLimits = LIMITS) {
+  const read = readDefinition({ ...TYPED, ...text }, limits)
   if (read.ok) throw new Error('expected a refusal')
   return read.errors
 }
 
+describe('the speed an assignment may fly at (FR-WAY-10)', () => {
+  it("defaults to the stack's limit and caps there, below the model's maximum", () => {
+    expect(speedLimits(3, 12)).toEqual({ defaultMs: 3, capMs: 3, capOf: "the stack's limit" })
+  })
+
+  it("caps at the model's maximum below the stack's limit, and defaults there too", () => {
+    expect(speedLimits(15, 12)).toEqual({
+      defaultMs: 12,
+      capMs: 12,
+      capOf: "the model's maximum",
+    })
+  })
+
+  it("defaults to nothing while the stack's limit is unknown, the model still capping", () => {
+    expect(speedLimits(null, 12)).toEqual({
+      defaultMs: null,
+      capMs: 12,
+      capOf: "the model's maximum",
+    })
+    expect(speedLimits(3, null)).toEqual({ defaultMs: 3, capMs: 3, capOf: "the stack's limit" })
+    expect(speedLimits(null, null)).toEqual(NO_LIMITS)
+  })
+})
+
 describe('the definition the operator types (FR-OPS-01, FR-WAY-10)', () => {
-  it('reads the typed values, the name trimmed and the blanks as not set', () => {
-    expect(
-      readOk({ ...TYPED, name: '  North corridor  ', geofenceId: '', heightM: '', speedMs: '' }),
-    ).toEqual(draftOver({ name: 'North corridor', heightM: null, speedMs: null }))
+  it('reads the typed values, the name trimmed and a blank height as not set', () => {
+    expect(readOk({ ...TYPED, name: '  North corridor  ', heightM: '' })).toEqual(
+      draftOver({ name: 'North corridor', geofenceId: GEOFENCE, heightM: null }),
+    )
     expect(readOk({ ...TYPED, heightM: '30.5', speedMs: '.5' })).toMatchObject({
       heightM: 30.5,
       speedMs: 0.5,
@@ -175,24 +207,41 @@ describe('the definition the operator types (FR-OPS-01, FR-WAY-10)', () => {
     expect(errorsOf({ name: '   ' })).toEqual({ name: 'An operation needs a name.' })
   })
 
+  it('refuses an operation with no geofence: it holds for every wayline the operation flies', () => {
+    expect(errorsOf({ geofenceId: '' })).toEqual({ geofenceId: 'An operation needs a geofence.' })
+  })
+
   it('refuses a height that is not a number, not above zero, or above the schema bound', () => {
     expect(errorsOf({ heightM: 'thirty' })).toEqual({ heightM: 'Enter a number.' })
     expect(errorsOf({ heightM: '-5' })).toEqual({ heightM: 'Enter a number.' })
-    expect(errorsOf({ heightM: '0' })).toEqual({
-      heightM: 'The takeoff security height must be above zero.',
-    })
+    expect(errorsOf({ heightM: '0' })).toEqual({ heightM: 'The height must be above zero.' })
     expect(errorsOf({ heightM: '120.5' })).toEqual({
-      heightM: `The takeoff security height is at most ${String(MAX_HEIGHT_M)} m.`,
+      heightM: `The height is at most ${String(MAX_HEIGHT_M)} m.`,
     })
     expect(readOk({ ...TYPED, heightM: '120' }).heightM).toBe(120)
   })
 
-  it("refuses a speed above the fleet's model maximum, and names the maximum", () => {
-    expect(errorsOf({ speedMs: '19.5' }, 19)).toEqual({
-      speedMs: "Above the fleet's model maximum of 19 m/s.",
+  it("flies a blank speed at the default, the stack's limit", () => {
+    expect(readOk({ ...TYPED, speedMs: '' }).speedMs).toBe(12)
+    expect(readOk({ ...TYPED, speedMs: '' }, speedLimits(3, 12)).speedMs).toBe(3)
+  })
+
+  it("asks for a speed while the stack's limit is not known, since there is no default", () => {
+    expect(errorsOf({ speedMs: '' }, speedLimits(null, 12))).toEqual({
+      speedMs: "Enter a speed: the stack's limit is not known yet.",
     })
-    expect(readOk({ ...TYPED, speedMs: '19' }, 19).speedMs).toBe(19)
-    expect(readOk({ ...TYPED, speedMs: '40' }, null).speedMs).toBe(40)
+    expect(readOk({ ...TYPED, speedMs: '8' }, speedLimits(null, 12)).speedMs).toBe(8)
+  })
+
+  it('refuses a speed above the cap, naming whose limit it is', () => {
+    expect(errorsOf({ speedMs: '12.5' })).toEqual({
+      speedMs: "Above the stack's limit of 12 m/s.",
+    })
+    expect(errorsOf({ speedMs: '13' }, speedLimits(15, 12))).toEqual({
+      speedMs: "Above the model's maximum of 12 m/s.",
+    })
+    expect(readOk({ ...TYPED, speedMs: '12' }).speedMs).toBe(12)
+    expect(readOk({ ...TYPED, speedMs: '40' }, NO_LIMITS).speedMs).toBe(40)
   })
 
   it('refuses a speed that is not above zero', () => {
@@ -214,12 +263,14 @@ describe('the definition the operator types (FR-OPS-01, FR-WAY-10)', () => {
     expect(readOk({ ...TYPED, waylineId: '', fleetId: '', speedMs: '' })).toMatchObject({
       waylineId: null,
       fleetId: null,
+      speedMs: null,
     })
   })
 
   it('reports every refused field at once, not the first alone', () => {
-    expect(errorsOf({ name: '', heightM: 'x', speedMs: '0' })).toEqual({
+    expect(errorsOf({ name: '', geofenceId: '', heightM: 'x', speedMs: '0' })).toEqual({
       name: 'An operation needs a name.',
+      geofenceId: 'An operation needs a geofence.',
       heightM: 'Enter a number.',
       speedMs: 'The speed the fleet flies the wayline at must be above zero.',
     })
@@ -530,7 +581,7 @@ describe('a stored flight its definition no longer makes (FR-OPS-07)', () => {
     models: [],
     origin: FARM,
   }
-  const operation = operationOf({ takeoffSecurityHeightM: 30 })
+  const operation = operationOf({ takeoffSecurityHeightM: 30, geofenceId: GEOFENCE })
   const made = flightFor({
     wayline: CORRIDOR,
     fleet: FLEET_RECORD,

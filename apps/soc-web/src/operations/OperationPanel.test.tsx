@@ -58,11 +58,11 @@ describe("the organization's operations (FR-OPS-01, FR-AUT-03)", () => {
     await openAt(backend, '?panel=operations')
 
     // Each row reads its own assignment, so the line is there once the read has settled.
-    expect(await screen.findByText('Draft · Norte 1 · North corridor')).toBeVisible()
+    expect(await screen.findByText('Defining · Norte 1 · North corridor')).toBeVisible()
     const rows = within(list()).getAllByRole('listitem')
     expect(rows.map((row) => row.textContent)).toEqual([
-      'South fieldDraft',
-      'North corridorDraft · Norte 1 · North corridor',
+      'South fieldDefining',
+      'North corridorDefining · Norte 1 · North corridor',
     ])
   })
 
@@ -89,7 +89,7 @@ describe("the organization's operations (FR-OPS-01, FR-AUT-03)", () => {
     await user.click(await screen.findByRole('button', { name: 'New' }))
     const [made] = await backend.operations(NORTH.id)
     expect(made).toMatchObject({ name: 'New operation', state: 'draft' })
-    expect(await within(list()).findByText('Draft')).toBeVisible()
+    expect(await within(list()).findByText('Defining')).toBeVisible()
     await waitFor(() => {
       expect(params().get('operation')).toBe(made?.id)
     })

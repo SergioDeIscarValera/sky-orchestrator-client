@@ -59,14 +59,10 @@ export function PanelHost() {
           <Suspense fallback={<Waiting>Loading the waylines…</Waiting>}>
             <WaylinePanel />
           </Suspense>
-        ) : destination.panel === 'operations' ? (
+        ) : (
           <Suspense fallback={<Waiting>Loading the operations…</Waiting>}>
             <OperationPanel />
           </Suspense>
-        ) : (
-          <p className="text-muted mt-3 text-sm">
-            {`${destination.label} arrive in ${destination.arrives ?? 'a later milestone'}.`}
-          </p>
         )}
       </RegionBoundary>
     </section>
