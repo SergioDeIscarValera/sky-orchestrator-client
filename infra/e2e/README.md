@@ -75,6 +75,19 @@ user created through its admin API, with a profile, and owns Finca Norte.
 Both latencies come from this machine's one clock: the dock stamps each OSD with
 it, and the driver reads it as Chrome hands it each frame.
 
+## The probe on the platform (DEP-23)
+
+`test_broadcast_probe.py` runs `soc-broadcast-probe` as its own process, with the
+environment the compose service gives it, against this platform. soc-cloud serves
+one organization on the lab stack, a dock announces and flies an aircraft, and a
+member and a stranger are enrolled through GoTrue. The probe joins the member's
+telemetry topic through Kong, and the Realtime container is restarted 8 s into its
+30 s window. The test asserts that the probe exits 0 and prints no credential, token
+or address of an account; that it received samples; that it joined again after the
+restart (`reconnects` of at least 1); that the stranger was refused before and after
+the run; and that p95 is within 150 ms. The probe's own rules are in
+[soc-cloud's README](../../services/soc-cloud/README.md#measuring-broadcast-latency).
+
 ## Against Sky Orchestrator's released stack (M4)
 
 ```bash
