@@ -20,7 +20,7 @@ import type {
  */
 
 export const STATE_WORDS: Readonly<Record<OperationState, string>> = {
-  draft: 'Draft',
+  draft: 'Defining',
   planned: 'Planned',
   preparing: 'Preparing',
   simulating: 'Simulating',
@@ -115,7 +115,7 @@ export const TRANSITION_WORDS: Readonly<Record<Transition, string>> = {
   simulate: 'Simulate',
   launch: 'Launch',
   stop: 'Stop',
-  cancel: 'Cancel',
+  cancel: 'Cancel operation',
 }
 
 export const REQUEST_WORDS: Readonly<Record<TransitionStatus, string>> = {
@@ -263,6 +263,17 @@ const FIGURE = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 })
 /** A percent as words, such as `42.5%`. */
 export function formatPercent(value: number): string {
   return `${FIGURE.format(value)}%`
+}
+
+/**
+ * A reason as a sentence: soc-operations words its refusals as clauses, `the operation has no
+ * height`, which read as `The operation has no height.` A reason already a sentence stays one.
+ */
+export function asSentence(reason: string): string {
+  const clause = reason.trim()
+  if (clause === '') return clause
+  const capital = clause.charAt(0).toUpperCase() + clause.slice(1)
+  return /[.!?]$/.test(capital) ? capital : `${capital}.`
 }
 
 export function isEventKind(kind: string): kind is EventKind {

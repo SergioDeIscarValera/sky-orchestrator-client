@@ -25,6 +25,7 @@ import {
   TRANSITION_WORDS,
   checkWords,
   eventWords,
+  asSentence,
   formatPercent,
   inlineWords,
   isEventKind,
@@ -47,7 +48,7 @@ const kindsOf = (path: URL) =>
 describe("an operation's words (FR-OPS-02, FR-OPS-05, FR-LOG-02)", () => {
   it('names each state and gives it a tone', () => {
     expect(STATE_WORDS).toEqual({
-      draft: 'Draft',
+      draft: 'Defining',
       planned: 'Planned',
       preparing: 'Preparing',
       simulating: 'Simulating',
@@ -74,7 +75,7 @@ describe("an operation's words (FR-OPS-02, FR-OPS-05, FR-LOG-02)", () => {
       simulate: 'Simulate',
       launch: 'Launch',
       stop: 'Stop',
-      cancel: 'Cancel',
+      cancel: 'Cancel operation',
     })
     expect(REQUEST_WORDS).toEqual({
       pending: 'Pending',
@@ -236,9 +237,9 @@ describe('an operation in its list, and its members (FR-OPS-01, IR-OPR)', () => 
   })
 
   it('leaves out the names an operation does not have yet', () => {
-    expect(operationSummary({ state: 'draft', fleet: null, wayline: null })).toBe('Draft')
+    expect(operationSummary({ state: 'draft', fleet: null, wayline: null })).toBe('Defining')
     expect(operationSummary({ state: 'draft', fleet: 'Norte 1', wayline: null })).toBe(
-      'Draft · Norte 1',
+      'Defining · Norte 1',
     )
   })
 
@@ -288,6 +289,14 @@ describe("a flight's and a command's words and tones (FR-CMD-06, FR-SAF-04)", ()
       timed_out: 'bad',
       expired: 'muted',
     })
+  })
+
+  it("words a refusal's clause as a sentence, and leaves a sentence as it is", () => {
+    expect(asSentence('the operation has no height')).toBe('The operation has no height.')
+    expect(asSentence('  the fleet Norte 1 has no speed  ')).toBe('The fleet Norte 1 has no speed.')
+    expect(asSentence('The geofence is not valid.')).toBe('The geofence is not valid.')
+    expect(asSentence('Is the stack there?')).toBe('Is the stack there?')
+    expect(asSentence('')).toBe('')
   })
 
   it('formats a percent with at most two decimals', () => {

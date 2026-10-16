@@ -268,13 +268,17 @@ describe('the flight console in an operation (FR-CMD-01, FR-SAF-04)', () => {
     }
   })
 
-  it('sits right under the header of the operation, above its definition', async () => {
+  it("sits under the operation's steps and moves, above its drones and its definition", async () => {
     const backend = new FakeBackend(NEIGHBOUR)
     const operation = await flyingOperation(backend, 'in_flight')
     const { inspector } = await openOperation(backend, operation)
-    const heading = within(inspector).getByRole('heading', { name: 'North corridor' })
+    const steps = within(inspector).getByRole('list', { name: 'Steps' })
     const consoleElement = await consoleOf(inspector)
-    expect(consoleElement.previousElementSibling).toBe(heading.parentElement)
+    const drones = within(inspector).getByRole('region', { name: 'Drones' })
+    const follows = (a: Node, b: Node) =>
+      (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    expect(follows(steps, consoleElement)).toBe(true)
+    expect(follows(consoleElement, drones)).toBe(true)
   })
 })
 

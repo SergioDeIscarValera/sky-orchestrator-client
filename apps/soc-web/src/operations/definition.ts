@@ -25,7 +25,7 @@ import { fenceViolations } from '../plans/fenceRules'
  * component reads the lists and the queries, and calls these.
  */
 
-/** The highest takeoff security height, in metres: the flight schema's own bound (FR-OPS-01). */
+/** The highest operation height, in metres: the flight schema's own bound (FR-OPS-01). */
 export const MAX_HEIGHT_M = 120
 
 /** A definition may change until a flight of it is prepared: from simulating on, it is fixed (IR-OPS-02). */
@@ -94,39 +94,88 @@ function numberOf(text: string): number | null | 'invalid' {
 }
 
 /**
- * The refusals the database would give, before asking it (FR-OPS-01, FR-WAY-10): a name, a
- * height in (0, 120], a speed above zero and at most the fleet's model maximum, and a wayline and
- * a fleet together, since an assignment names both. The database gives the same words for the
- * ones it refuses too.
+ * The speed an assignment may fly at and the one it flies when none is typed (FR-WAY-10): Sky
+ * Orchestrator flies the file's speed as given, capped by its envelope's max_horizontal_speed_ms,
+ * so the envelope's limit is the default, and the cap is the lower of it and the model's maximum,
+ * named. Either may be unknown: the stack's envelope before soc-cloud reads it, a model the
+ * catalogue gives no maximum.
  */
-export function readDefinition(
-  text: DefinitionText,
-  limits: { readonly maxSpeedMs: number | null },
-): ReadDefinition {
+export interface SpeedLimits {
+  readonly defaultMs: number | null
+  readonly capMs: number | null
+  /** Whose limit the cap is, as a refusal names it. */
+  readonly capOf: "the stack's limit" | "the model's maximum" | null
+}
+
+export function speedLimits(envelopeMaxMs: number | null, modelMaxMs: number | null): SpeedLimits {
+  if (envelopeMaxMs === null && modelMaxMs === null) {
+    return { defaultMs: null, capMs: null, capOf: null }
+  }
+  if (modelMaxMs === null || (envelopeMaxMs !== null && envelopeMaxMs <= modelMaxMs)) {
+    return {
+      defaultMs: envelopeMaxMs === null ? null : Math.min(envelopeMaxMs, modelMaxMs ?? Infinity),
+      capMs: envelopeMaxMs,
+      capOf: "the stack's limit",
+    }
+  }
+  return {
+    defaultMs: envelopeMaxMs === null ? null : Math.min(envelopeMaxMs, modelMaxMs),
+    capMs: modelMaxMs,
+    capOf: "the model's maximum",
+  }
+}
+
+/** No limits known: nothing defaults and nothing caps, as when the stored definition is read back. */
+export const NO_LIMITS: SpeedLimits = { defaultMs: null, capMs: null, capOf: null }
+
+/** The speed limits of the fleet a definition names: its stack's envelope and its model's maximum. */
+export function limitsFor(fleetId: string, choices: Choices): SpeedLimits {
+  const fleet = choices.fleets.find(({ id }) => id === fleetId)
+  if (fleet === undefined) return NO_LIMITS
+  const stack = choices.stacks.find(({ gatewaySn }) => gatewaySn === fleet.gatewaySn)
+  const model = choices.models.find(({ model: name }) => name === fleet.model)
+  return speedLimits(
+    envelopeOf(stack)?.maxHorizontalSpeedMs ?? null,
+    model?.maxHorizontalSpeedMs ?? null,
+  )
+}
+
+/**
+ * The refusals the database would give, before asking it (FR-OPS-01, FR-WAY-10): a name, a
+ * geofence, a height in (0, 120], and a speed above zero and at most the cap, the default taken
+ * where none is typed; and a wayline and a fleet together, since an assignment names both. The
+ * database gives the same words for the ones it refuses too.
+ */
+export function readDefinition(text: DefinitionText, limits: SpeedLimits): ReadDefinition {
   const errors: { -readonly [K in DefinitionField]?: string } = {}
   const name = text.name.trim()
   if (name === '') errors.name = 'An operation needs a name.'
+  if (text.geofenceId === '') errors.geofenceId = 'An operation needs a geofence.'
   const heightM = numberOf(text.heightM)
   if (heightM === 'invalid') errors.heightM = 'Enter a number.'
   else if (heightM !== null && !(heightM > 0)) {
-    errors.heightM = 'The takeoff security height must be above zero.'
+    errors.heightM = 'The height must be above zero.'
   } else if (heightM !== null && heightM > MAX_HEIGHT_M) {
-    errors.heightM = `The takeoff security height is at most ${String(MAX_HEIGHT_M)} m.`
-  }
-  const speedMs = numberOf(text.speedMs)
-  if (speedMs === 'invalid') errors.speedMs = 'Enter a number.'
-  else if (speedMs !== null && !(speedMs > 0)) {
-    errors.speedMs = 'The speed the fleet flies the wayline at must be above zero.'
-  } else if (speedMs !== null && limits.maxSpeedMs !== null && speedMs > limits.maxSpeedMs) {
-    errors.speedMs = `Above the fleet's model maximum of ${String(limits.maxSpeedMs)} m/s.`
+    errors.heightM = `The height is at most ${String(MAX_HEIGHT_M)} m.`
   }
   const waylineId = text.waylineId === '' ? null : text.waylineId
   const fleetId = text.fleetId === '' ? null : text.fleetId
+  const typed = numberOf(text.speedMs)
+  // Blank flies the default once the assignment has a fleet; without one there is no speed yet.
+  const speedMs = typed === null && fleetId !== null ? limits.defaultMs : typed
+  if (speedMs === 'invalid') errors.speedMs = 'Enter a number.'
+  else if (speedMs !== null && !(speedMs > 0)) {
+    errors.speedMs = 'The speed the fleet flies the wayline at must be above zero.'
+  } else if (speedMs !== null && limits.capMs !== null && speedMs > limits.capMs) {
+    errors.speedMs = `Above ${limits.capOf ?? 'the limit'} of ${String(limits.capMs)} m/s.`
+  } else if (speedMs === null && fleetId !== null) {
+    errors.speedMs = "Enter a speed: the stack's limit is not known yet."
+  }
   if (waylineId === null && fleetId !== null)
     errors.waylineId = 'Choose the wayline this fleet flies.'
   if (fleetId === null && waylineId !== null)
     errors.fleetId = 'Choose the fleet that flies this wayline.'
-  if (waylineId === null && fleetId === null && typeof speedMs === 'number') {
+  if (waylineId === null && fleetId === null && typeof typed === 'number') {
     errors.speedMs = 'Choose a wayline and a fleet first.'
   }
   if (Object.keys(errors).length > 0) return { ok: false, errors }
@@ -134,7 +183,7 @@ export function readDefinition(
     ok: true,
     draft: {
       name,
-      geofenceId: text.geofenceId === '' ? null : text.geofenceId,
+      geofenceId: text.geofenceId,
       heightM: typeof heightM === 'number' ? heightM : null,
       waylineId,
       fleetId,
@@ -384,10 +433,17 @@ export function flightOutdated(
   choices: Choices,
 ): boolean {
   if (assignment === null || assignment.flight === null) return false
-  const read = readDefinition(storedText(operation, assignment), { maxSpeedMs: null })
-  if (!read.ok) return false
+  // What is stored, as it is: the form's rules judge what is typed, not what was saved.
+  const stored: DefinitionDraft = {
+    name: operation.name,
+    geofenceId: operation.geofenceId,
+    heightM: operation.takeoffSecurityHeightM,
+    waylineId: assignment.waylineId,
+    fleetId: assignment.fleetId,
+    speedMs: assignment.speedMs,
+  }
   try {
-    const current = draftFlight(read.draft, choices)
+    const current = draftFlight(stored, choices)
     return current !== null && !sameJson(current, assignment.flight)
   } catch {
     return false

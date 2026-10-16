@@ -8,19 +8,23 @@ import {
 } from '../backend/backend'
 import { FakeBackend, NEIGHBOUR, NORTH, PILOT } from '../test/FakeBackend'
 import { operationIn, renderInOrganization } from '../test/inOrganization'
+import { CHECK_ORDER } from './format'
 import { OperationActions } from './OperationActions'
 
-/** The moves each state offers, in the order the console shows them (FR-OPS-02). */
+/**
+ * The moves each state offers, in the order the console shows them (FR-OPS-02): the one to the next
+ * step first, then going back or cancelling. A stop is the flight console's, so none shows here.
+ */
 const TABLE: Readonly<Record<OperationState, readonly string[]>> = {
-  draft: ['Plan', 'Cancel'],
-  planned: ['Prepare', 'Cancel'],
-  preparing: ['Simulate', 'Stop preparing', 'Cancel'],
+  draft: ['Plan', 'Cancel operation'],
+  planned: ['Prepare', 'Cancel operation'],
+  preparing: ['Simulate', 'Stop preparing', 'Cancel operation'],
   simulating: [],
-  simulated: ['Cancel'],
-  ready: ['Launch', 'Cancel'],
+  simulated: ['Cancel operation'],
+  ready: ['Launch', 'Cancel operation'],
   launching: [],
-  in_flight: ['Stop'],
-  paused: ['Stop'],
+  in_flight: [],
+  paused: [],
   returning: [],
   completed: [],
   aborted: [],
@@ -89,6 +93,27 @@ async function decide(
   })
 }
 
+/** Every check judged as `state` but those named, judged as their own (FR-OPS-04). */
+function judge(
+  backend: FakeBackend,
+  operation: Operation,
+  state: 'pass' | 'fail' = 'pass',
+  others: Readonly<Record<string, 'pass' | 'fail' | 'unknown'>> = {},
+) {
+  act(() => {
+    for (const checkId of CHECK_ORDER) {
+      backend.addCheck(operation.id, {
+        checkId,
+        state: others[checkId] ?? state,
+        blocking: checkId !== 'PF-CLOCK',
+        value: null,
+        detail: null,
+        evaluatedAt: '2026-10-11T10:00:00Z',
+      })
+    }
+  })
+}
+
 describe('the moves a member may ask an operation (FR-OPS-02, FR-OPS-09)', () => {
   it.each(STATES)('offers an operation in %s the moves of its state, in order', async (state) => {
     const backend = new FakeBackend(PILOT)
@@ -110,22 +135,26 @@ describe('the moves a member may ask an operation (FR-OPS-02, FR-OPS-09)', () =>
     const backend = new FakeBackend(NEIGHBOUR)
     backend.memberships.set(NEIGHBOUR.userId, [{ ...NORTH, role: 'editor' }])
     const operation = await operationIn(backend, 'ready')
+    judge(backend, operation)
     renderMoves(operation, backend, { account: NEIGHBOUR, role: 'editor' })
     await loaded()
     const launch = move('Launch')
     expect(launch).toHaveAttribute('aria-disabled', 'true')
     expect(launch).toHaveAccessibleDescription('Pilots only')
     expect(launch).toHaveAttribute('title', 'Pilots only')
-    expect(move('Cancel')).toHaveAttribute('aria-disabled', 'false')
-    expect(move('Cancel')).toHaveAccessibleDescription('')
+    expect(move('Cancel operation')).toHaveAttribute('aria-disabled', 'false')
+    expect(move('Cancel operation')).toHaveAccessibleDescription('')
   })
 
   it('lets a pilot who is an owner ask the flight moves, with no reason shown', async () => {
     const backend = new FakeBackend(PILOT)
     const operation = await operationIn(backend, 'ready', [PILOT.userId])
+    judge(backend, operation)
     renderMoves(operation, backend)
     await loaded()
-    expect(move('Launch')).toBeEnabled()
+    await waitFor(() => {
+      expect(move('Launch')).toBeEnabled()
+    })
     expect(move('Launch')).toHaveAttribute('aria-disabled', 'false')
     expect(move('Launch')).toHaveAccessibleDescription('')
   })
@@ -133,26 +162,55 @@ describe('the moves a member may ask an operation (FR-OPS-02, FR-OPS-09)', () =>
   it('shows a viewer every move disabled, saying Editors only, and sends none of them', async () => {
     const backend = new FakeBackend(PILOT)
     const operation = await operationIn(backend, 'preparing', [PILOT.userId])
+    judge(backend, operation)
     backend.memberships.set(PILOT.userId, [{ ...NORTH, role: 'viewer' }])
     const asks = vi.spyOn(backend, 'requestTransition')
     const { user } = renderMoves(operation, backend, { role: 'viewer' })
     await loaded()
-    for (const name of ['Simulate', 'Stop preparing', 'Cancel']) {
+    for (const name of ['Simulate', 'Stop preparing', 'Cancel operation']) {
       expect(move(name)).toHaveAttribute('aria-disabled', 'true')
       expect(move(name)).toHaveAccessibleDescription('Editors only')
     }
     await user.click(move('Simulate'))
     await user.click(move('Stop preparing'))
+    await user.click(move('Cancel operation'))
     expect(screen.queryByRole('group')).toBeNull()
     expect(asks).not.toHaveBeenCalled()
   })
 
   it('names the editor rule for a viewer who is a pilot, since it comes first', async () => {
     const backend = new FakeBackend(PILOT)
-    const operation = await operationIn(backend, 'in_flight', [PILOT.userId])
+    const operation = await operationIn(backend, 'ready', [PILOT.userId])
+    judge(backend, operation)
     renderMoves(operation, backend, { role: 'viewer' })
     await loaded()
-    expect(move('Stop')).toHaveAccessibleDescription('Editors only')
+    expect(move('Launch')).toHaveAccessibleDescription('Editors only')
+  })
+
+  it('holds a simulation back while a blocking check does not pass, and says how many', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await operationIn(backend, 'preparing', [PILOT.userId])
+    const asks = vi.spyOn(backend, 'requestTransition')
+    const { user } = renderMoves(operation, backend)
+    await loaded()
+    // Nothing judged yet: every check is unknown, and an unknown check never passes.
+    await waitFor(() => {
+      expect(move('Simulate')).toHaveAttribute('aria-disabled', 'true')
+    })
+    expect(move('Simulate')).toHaveAccessibleDescription('15 checks not passing')
+    judge(backend, operation, 'pass', { 'PF-BATTERY': 'fail' })
+    await waitFor(() => {
+      expect(move('Simulate')).toHaveAccessibleDescription('1 check not passing')
+    })
+    await user.click(move('Simulate'))
+    expect(screen.queryByRole('group')).toBeNull()
+    expect(asks).not.toHaveBeenCalled()
+    // The clock's warning does not block: failing alone, it holds nothing back.
+    judge(backend, operation, 'pass', { 'PF-CLOCK': 'fail' })
+    await waitFor(() => {
+      expect(move('Simulate')).toHaveAttribute('aria-disabled', 'false')
+    })
+    expect(screen.queryByText(/not passing/)).toBeNull()
   })
 
   it('asks a plan with a client request id made fresh for each press', async () => {
@@ -180,14 +238,18 @@ describe('the moves a member may ask an operation (FR-OPS-02, FR-OPS-09)', () =>
   it('confirms a simulation as a flight in the simulator, and asks it only once confirmed', async () => {
     const backend = new FakeBackend(PILOT)
     const operation = await operationIn(backend, 'preparing', [PILOT.userId])
+    judge(backend, operation)
     const asks = vi.spyOn(backend, 'requestTransition')
     const { user } = renderMoves(operation, backend)
     await loaded()
+    await waitFor(() => {
+      expect(move('Simulate')).toHaveAttribute('aria-disabled', 'false')
+    })
     await user.click(move('Simulate'))
     const asking = screen.getByRole('group', { name: 'Fly in the simulator' })
     expect(asks).not.toHaveBeenCalled()
-    expect(within(asking).getByRole('button', { name: 'Cancel' })).toHaveFocus()
-    await user.click(within(asking).getByRole('button', { name: 'Cancel' }))
+    expect(within(asking).getByRole('button', { name: 'Back' })).toHaveFocus()
+    await user.click(within(asking).getByRole('button', { name: 'Back' }))
     expect(screen.queryByRole('group')).toBeNull()
     expect(asks).not.toHaveBeenCalled()
     await user.click(move('Simulate'))
@@ -205,13 +267,17 @@ describe('the moves a member may ask an operation (FR-OPS-02, FR-OPS-09)', () =>
   it('confirms a launch as a real flight before it is asked', async () => {
     const backend = new FakeBackend(PILOT)
     const operation = await operationIn(backend, 'ready', [PILOT.userId])
+    judge(backend, operation)
     const asks = vi.spyOn(backend, 'requestTransition')
     const { user } = renderMoves(operation, backend)
     await loaded()
+    await waitFor(() => {
+      expect(move('Launch')).toHaveAttribute('aria-disabled', 'false')
+    })
     await user.click(move('Launch'))
     const asking = screen.getByRole('group', { name: 'Fly for real' })
     expect(within(asking).getByRole('button', { name: 'Launch' })).toBeEnabled()
-    expect(within(asking).getByRole('button', { name: 'Cancel' })).toBeEnabled()
+    expect(within(asking).getByRole('button', { name: 'Back' })).toBeEnabled()
     expect(asks).not.toHaveBeenCalled()
     await user.click(within(asking).getByRole('button', { name: 'Launch' }))
     await waitFor(() => {
@@ -220,19 +286,21 @@ describe('the moves a member may ask an operation (FR-OPS-02, FR-OPS-09)', () =>
     expect(asks.mock.calls[0]?.[1]).toBe('launch')
   })
 
-  it('confirms a stop as every aircraft returning home', async () => {
+  it('confirms a cancel before it is asked, since a cancelled operation is closed for good', async () => {
     const backend = new FakeBackend(PILOT)
-    const operation = await operationIn(backend, 'in_flight', [PILOT.userId])
+    const operation = await operationIn(backend, 'planned', [PILOT.userId])
     const asks = vi.spyOn(backend, 'requestTransition')
     const { user } = renderMoves(operation, backend)
     await loaded()
-    await user.click(move('Stop'))
-    const asking = screen.getByRole('group', { name: 'Every aircraft returns home' })
-    await user.click(within(asking).getByRole('button', { name: 'Stop' }))
+    await user.click(move('Cancel operation'))
+    const asking = screen.getByRole('group', { name: 'Cancel for good' })
+    expect(asks).not.toHaveBeenCalled()
+    expect(within(asking).getByRole('button', { name: 'Back' })).toHaveFocus()
+    await user.click(within(asking).getByRole('button', { name: 'Cancel operation' }))
     await waitFor(() => {
       expect(asks).toHaveBeenCalledOnce()
     })
-    expect(asks.mock.calls[0]?.[1]).toBe('stop')
+    expect(asks.mock.calls[0]?.[1]).toBe('cancel')
   })
 
   it('holds the moves while a request is pending or running, and frees them once it is accepted', async () => {
@@ -243,7 +311,7 @@ describe('the moves a member may ask an operation (FR-OPS-02, FR-OPS-09)', () =>
     await user.click(move('Plan'))
     expect(await screen.findByRole('status')).toHaveTextContent('PlanPending')
     expect(move('Plan')).toBeDisabled()
-    expect(move('Cancel')).toBeDisabled()
+    expect(move('Cancel operation')).toBeDisabled()
     await decide(backend, operation, 'running')
     expect(await screen.findByRole('status')).toHaveTextContent('PlanRunning')
     expect(move('Plan')).toBeDisabled()
@@ -273,6 +341,28 @@ describe('the moves a member may ask an operation (FR-OPS-02, FR-OPS-09)', () =>
         .map((item) => item.textContent),
     ).toEqual(['The geofence is not valid.', 'No fleet flies the wayline.'])
     expect(screen.getByRole('status')).toHaveTextContent('Stop preparingRefused')
+  })
+
+  it("words soc-operations' refusals as sentences", async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await operationIn(backend, 'draft')
+    const { user } = renderMoves(operation, backend)
+    await loaded()
+    await user.click(move('Plan'))
+    await decide(backend, operation, 'running')
+    await decide(backend, operation, 'refused', [
+      'the operation has no height',
+      'the wayline has not been flown for this operation yet',
+    ])
+    const alert = await screen.findByRole('alert')
+    expect(
+      within(alert)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      'The operation has no height.',
+      'The wayline has not been flown for this operation yet.',
+    ])
   })
 
   it('lists the reasons of a failed request too', async () => {

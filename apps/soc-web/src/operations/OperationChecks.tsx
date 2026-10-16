@@ -2,13 +2,15 @@ import { Waiting } from '../fleets/Details'
 import { useChecks, useOperation } from './data'
 import { Failure } from './Failure'
 import { checksShown, shownChecks, type ShownCheck } from './checks'
+import { checkCount } from './journey'
 import { CHECK_STATE_TONE, CHECK_STATE_WORDS, checkWords, valueWords } from './format'
 import { OperationPill } from './OperationPill'
 import { Section } from './Section'
 
 /**
  * An operation's preflight checks in FR-OPS-05's order, each with its state and what it measured
- * (FR-OPS-04). Nothing shows while the operation is a draft or planned, or once it is closed.
+ * (FR-OPS-04): those not passing first, in view. Nothing shows while the operation is a draft or
+ * planned, or once it is closed.
  */
 export function OperationChecks({ operationId }: { readonly operationId: string }) {
   const operation = useOperation(operationId)
@@ -24,19 +26,46 @@ export function OperationChecks({ operationId }: { readonly operationId: string 
   )
 }
 
-/** The checks are read only once they show, so a draft or a closed operation reads none. */
+/**
+ * The checks are read only once they show, so a draft or a closed operation reads none. How many
+ * pass out of all heads them, and opens those that pass, folded away; those that do not pass are
+ * listed beneath it, in view, each with what it measured.
+ */
 function Judgements({ operationId }: { readonly operationId: string }) {
   const checks = useChecks(operationId)
   if (checks.isPending) return <Waiting>Loading the checks…</Waiting>
   if (checks.isError) {
     return <Failure message={checks.error.message} onRetry={() => void checks.refetch()} />
   }
+  const shown = shownChecks(checks.data)
+  const { passing, total } = checkCount(shown)
+  const open = shown.filter(({ state }) => state !== 'pass')
+  const passed = shown.filter(({ state }) => state === 'pass')
+  const count = `${String(passing)}/${String(total)} passing`
   return (
-    <ul aria-label="Preflight checks" className="divide-border mt-3 flex flex-col divide-y">
-      {shownChecks(checks.data).map((check) => (
-        <CheckRow key={check.id} check={check} />
-      ))}
-    </ul>
+    <>
+      {passed.length > 0 ? (
+        <details className="group mt-2">
+          <summary className="text-heading hover:text-primary-emphasis cursor-pointer text-sm font-semibold tabular-nums">
+            {count}
+          </summary>
+          <ul aria-label="Checks passing" className="divide-border flex flex-col divide-y">
+            {passed.map((check) => (
+              <CheckRow key={check.id} check={check} />
+            ))}
+          </ul>
+        </details>
+      ) : (
+        <p className="text-heading mt-2 text-sm font-semibold tabular-nums">{count}</p>
+      )}
+      {open.length > 0 && (
+        <ul aria-label="Checks not passing" className="divide-border mt-1 flex flex-col divide-y">
+          {open.map((check) => (
+            <CheckRow key={check.id} check={check} />
+          ))}
+        </ul>
+      )}
+    </>
   )
 }
 
