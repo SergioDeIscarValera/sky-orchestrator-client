@@ -10,6 +10,7 @@ import {
   designFromJson,
   designToJson,
   envelopeFromSkyOrchestrator,
+  envelopeFromStackRead,
   flightFromJson,
   flightToJson,
 } from './designJson'
@@ -1063,6 +1064,27 @@ describe("Sky Orchestrator's envelope (FR-WAY-11)", () => {
 
   it.each(FILE.cases)('reads the envelope of $name', (vector) => {
     expect(() => envelopeFromSkyOrchestrator(vector.envelope)).not.toThrow()
+  })
+
+  /** A whole answer of GET /v1/envelope (the openapi's EnvelopeRead), as soc.stacks holds it. */
+  const READ = {
+    envelope: SKY_ORCHESTRATOR_ENVELOPE,
+    envelope_fingerprint: 'e'.repeat(64),
+    config_fingerprint: 'c'.repeat(64),
+    application_in_force: null,
+  }
+
+  it('reads the limits from a whole answer of GET /v1/envelope, as a stack records it', () => {
+    expect(envelopeFromStackRead(READ)).toStrictEqual(
+      envelopeFromSkyOrchestrator(SKY_ORCHESTRATOR_ENVELOPE),
+    )
+  })
+
+  it('refuses the limits alone as a stack read, naming what is missing', () => {
+    expect(() => envelopeFromStackRead(SKY_ORCHESTRATOR_ENVELOPE)).toThrow(
+      /envelope read\.envelope_fingerprint/,
+    )
+    expect(() => envelopeFromStackRead({ ...READ, envelope: undefined })).toThrow(/^envelope: /)
   })
 })
 

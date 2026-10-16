@@ -45,12 +45,14 @@ from soc_e2e.so_stack import SoStack
 pytestmark = [pytest.mark.lane, pytest.mark.sky_orchestrator]
 
 #: The simulated flight runs at real time, so the route lasts as long on the wall clock. Each cycle
-#: takes about four seconds of it, the holds and their replies: 50 cycles take about 200 s.
+#: takes about five seconds, the holds and their replies, and the aircraft flies for about half of
+#: it: from a resume's reply until the next pause's, the pause's 1.5 s hold and its reply.
 PACE = 1
-#: The route is flown at 1 m/s, not the golden flight's 5 m/s: at 5 m/s the route is 23 s of flight,
-#: too short for the cycles. At 1 m/s it is over two minutes, and the flight is still in the air
-#: after the last cycle.
-FLIGHT_SPEED_MS = 1.0
+#: The route is flown at 0.5 m/s, not the golden flight's 5 m/s: at 5 m/s it is 23 s of flight, and
+#: at 1 m/s its 114 m held only 48 of the 50 cycles once the replies took 400 ms (v0.5.0's release
+#: run). At 0.5 m/s it is nearly four minutes, twice what the cycles fly. Sky Orchestrator takes any
+#: speed above zero (mission-plan.schema.json's speed_ms).
+FLIGHT_SPEED_MS = 0.5
 CYCLES = 50
 #: NFR-PERF-02: the reply to a command is shown within one second, at p95.
 REPLY_P95_MS = 1000
@@ -68,7 +70,7 @@ COMPLETED_WITHIN_S = 900
 
 #: The console's words for the operation's states (apps/soc-web/src/operations/format.ts).
 WORDS = {
-    "draft": "Draft",
+    "draft": "Defining",
     "planned": "Planned",
     "preparing": "Preparing",
     "simulating": "Simulating",
@@ -95,7 +97,7 @@ MOVES = [
     ("in_flight", "returning"),
     ("returning", "completed"),
 ]
-#: Each move as the log's entry reads once the console has shown it: "State changed · Draft to
+#: Each move as the log's entry reads once the console has shown it: "State changed · Defining to
 #: Planned", less its prefix.
 SHOWN = [f"{WORDS[before]} to {WORDS[after]}" for before, after in MOVES]
 

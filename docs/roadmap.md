@@ -17,14 +17,14 @@ criteria named in the changelog's Known limitations, and closes once they are.
 The MVP is M5: **a first real flight commanded from SOC**
 ([ADR-0013](architecture/decisions/0013-narrow-vertical-slice-for-the-mvp.md)).
 
-| Milestone | Release | Outcome | State on 2026-10-12 |
+| Milestone | Release | Outcome | State on 2026-10-16 |
 | --- | --- | --- | --- |
 | M0 Foundations | v0.1.0 | Repository, conventions, pipelines, requirements, decisions | Closed, released |
 | M1 Platform and viability | v0.2.0 | Every unit runs, measured where the design could break | Released with 4 of 7 criteria demonstrated; 3 wait on the mini-PC's box steps and read access to SO's packages |
 | M2 Live fleet | v0.3.0, v0.3.1 | A registered aircraft's live telemetry in 3D, on the farm's terrain | Closed, released: 5 of 5 criteria, in the console end to end; v0.3.1 met the rest of its requirements the mini-PC does not wait on |
 | M3 Mission design | v0.4.0 | Geofences and waylines drawn, baked, validated, turned into files SO accepts | Closed, released: 4 of 4 criteria; Sky Orchestrator's own ingest accepts every reference file and refuses as SOC predicts |
-| M4 Operations | v0.5.0 | A whole operation flown from the web against SO's fake bridge | Next |
-| M5 First real flight | v0.6.0 | **MVP**: the same, with the real aircraft | Planned |
+| M4 Operations | v0.5.0 | A whole operation flown from the web against SO's fake bridge | Closed, released: 5 of 5 criteria, against Sky Orchestrator v0.4.3 and its fake bridge, in the console end to end |
+| M5 First real flight | v0.6.0 | **MVP**: the same, with the real aircraft | Next |
 
 ---
 
@@ -139,7 +139,7 @@ memory over an hour, the GPU's share and recorded flights as fixtures (#90).
 
 ---
 
-## M4 — Operations · v0.5.0
+## M4 — Operations · *closed 2026-10-16, v0.5.0*
 
 Needs Sky Orchestrator's M4 items `DEP-01` to `DEP-06`, and `DEP-28` and `DEP-29`
 (delivered in SO's v0.4.3), listed in the dependency register of the
@@ -148,11 +148,11 @@ requirements.
 | Step | Pull request |
 | --- | --- |
 | Operations, flights, files, events, telemetry history, and the operation transition requests `soc-operations` executes (ADR-0006) in the database | `feature/database/operations` (#115); the console's data, `feature/web/operations-data` (#116) |
-| `soc-operations`: the lifecycle, the checks, the simulated pass, launch and completion | `feature/operations/lifecycle` (#118) |
-| `soc-cloud`: commands on the wire, progress, the cloud geofence, telemetry history | `feature/libs/cloud-geofence` (#112), `feature/cloud/flight-progress` (#113), `feature/cloud/so-api` (#114), `feature/cloud/stack-watch` (#117: each stack's status and envelope, the dry runs), `feature/cloud/flights` (#119) |
-| Operation wizard and preparation console | `feature/web/operation-preparation` (#120) |
+| `soc-operations`: the lifecycle, the checks, the simulated pass, launch and completion | `feature/operations/lifecycle` (#118); `feature/operations/envelope-freshness` (#123, the envelope held current between its reads) |
+| `soc-cloud`: commands on the wire, progress, the cloud geofence, telemetry history | `feature/libs/cloud-geofence` (#112), `feature/cloud/flight-progress` (#113), `feature/cloud/so-api` (#114), `feature/cloud/stack-watch` (#117: each stack's status and envelope, the dry runs), `feature/cloud/flights` (#119); `feature/cloud/geofence-reaction` (#125, the return timed over replayed crossings) |
+| Operation wizard and preparation console | `feature/web/operation-preparation` (#120); `feature/web/live-state-catch-up` (#124); `feature/web/operation-inspector` (#128, the inspector led by its steps and its next move); `feature/web/operation-focus` (#129, the operation alone and framed in the scene) |
 | Flight console: telemetry, commands, mode banner, track, live log | `feature/web/flight-console` (#122, with the safety controls and a demo that flies the stored flight) |
-| End-to-end suite against SO's images and fake bridge in CI | `feature/infra/end-to-end` (#121, against SO v0.4.3: simulated and real) |
+| End-to-end suite against SO's images and fake bridge in CI | `feature/infra/end-to-end` (#121, against SO v0.4.3: simulated and real); `feature/infra/console-operation` (#126, the same flight worked in Chrome through the console); `feature/contracts/so-replay-fixtures` (#127) |
 
 **Exit criteria**
 

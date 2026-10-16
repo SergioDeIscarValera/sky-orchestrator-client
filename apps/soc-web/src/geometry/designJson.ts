@@ -273,6 +273,25 @@ function violationOf(json: z.infer<typeof VIOLATION>): Violation {
 }
 
 /**
+ * What Sky Orchestrator's GET /v1/envelope answers, its EnvelopeRead: the limits under `envelope`,
+ * beside its two fingerprints and the application in force, which is not read.
+ */
+const ENVELOPE_READ = z.object({
+  envelope: z.unknown(),
+  envelope_fingerprint: z.string(),
+  config_fingerprint: z.string(),
+})
+
+/**
+ * The envelope from a whole answer of GET /v1/envelope, as soc-cloud records it on soc.stacks
+ * (IR-STK) and soc-operations reads it: the limits under `envelope`; the rest is not read.
+ */
+export function envelopeFromStackRead(raw: unknown): Envelope {
+  const read = parse(ENVELOPE_READ, raw, 'envelope read')
+  return envelopeFromSkyOrchestrator(read.envelope)
+}
+
+/**
  * Sky Orchestrator's envelope from the object its GET /v1/envelope answers under `envelope`. Its
  * fingerprints and application_in_force are not read: the Envelope holds only the limits.
  */

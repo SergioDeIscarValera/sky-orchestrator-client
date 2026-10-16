@@ -39,6 +39,17 @@ const ENVELOPE = {
   max_horizontal_speed_ms: 15,
 }
 
+/** What GET /v1/envelope answers for `envelope`, as soc-cloud records it on the stack. */
+function readOf(envelope: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (envelope === null) return null
+  return {
+    envelope,
+    envelope_fingerprint: 'e'.repeat(64),
+    config_fingerprint: 'c'.repeat(64),
+    application_in_force: null,
+  }
+}
+
 const FLEET = {
   name: 'Norte 1',
   model: MAVIC_AIR_2.model,
@@ -64,10 +75,13 @@ async function farm({
   state = 'draft',
   role = 'owner',
   envelope = ENVELOPE,
+  stackEnvelope,
 }: {
   readonly state?: OperationState
   readonly role?: Role
   readonly envelope?: Record<string, unknown> | null
+  /** What the stack holds instead of the read of `envelope`, as it is. */
+  readonly stackEnvelope?: Record<string, unknown> | null
 } = {}) {
   const backend = new FakeBackend(NEIGHBOUR)
   const fleet = await backend.registerFleet(NORTH.id, FLEET)
@@ -77,7 +91,7 @@ async function farm({
       gatewaySn: 'SOTESTDOCK01',
       name: 'lab',
       linkState: 'connected',
-      envelope,
+      envelope: stackEnvelope === undefined ? readOf(envelope) : stackEnvelope,
       envelopeReadAt: envelope === null ? null : '2026-10-11T10:00:00Z',
     },
   ])
@@ -150,6 +164,25 @@ describe('an operation in the inspector (FR-OPS-01, FR-OPS-07)', () => {
         `North corridor · 10 m/s · ${String(flight.waypoints.length)} waypoints · ${formatLength(flight.distanceM)}`,
       )
     })
+  })
+
+  it("stays up while the stack's envelope cannot be read: no default speed, and Save says why", async () => {
+    // The limits alone, which no stack records: soc-cloud keeps GET /v1/envelope's whole answer.
+    const { backend, fleet, wayline, operation } = await farm({ stackEnvelope: ENVELOPE })
+    const { user } = await openAt(backend, operation.id)
+    expect(screen.queryByText(/The inspector stopped/)).toBeNull()
+    await user.type(within(inspector()).getByLabelText('Height'), '30')
+    await user.selectOptions(within(inspector()).getByLabelText('Wayline'), wayline.id)
+    await user.selectOptions(within(inspector()).getByLabelText('Fleet'), fleet.id)
+    expect(within(inspector()).getByLabelText('Speed')).not.toHaveAttribute('placeholder')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(
+      await within(inspector()).findByText("Enter a speed: the stack's limit is not known yet."),
+    ).toBeVisible()
+    await user.type(within(inspector()).getByLabelText('Speed'), '10')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/envelope read/)
+    expect(backend.assignmentRows.get(operation.id) ?? []).toHaveLength(0)
   })
 
   it('marks a stored flight its definition no longer makes, and writes the new one on Save', async () => {
