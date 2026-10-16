@@ -50,9 +50,10 @@ From `soc-cloud` receiving an aircraft OSD to a subscribed browser receiving it:
 10 minute run at 5 Hz.
 
 ### NFR-PERF-02 — Command latency · MUST
-From a pilot's click to the command published on Sky Orchestrator's `services`
-topic: **≤ 300 ms at p95**. From the click to the reply shown in the console:
-**≤ 1 s at p95**.
+From a pilot's confirmation to the command published on Sky Orchestrator's
+`services` topic: **≤ 300 ms at p95**. From the confirmation to the reply shown in
+the console: **≤ 1 s at p95**. The confirmation is the moment the command is
+asked: a click, or the end of the hold that confirms a command (`FR-CMD-07`).
 
 **Measured by**: the intent's creation, publish and reply times, over 100
 command cycles against the fake bridge stack.

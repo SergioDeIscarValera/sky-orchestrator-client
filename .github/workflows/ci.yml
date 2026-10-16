@@ -285,14 +285,20 @@ jobs:
       # pinned by the vendored release, read from GHCR with this run's token, the fake bridge
       # standing in for the phone. An operation flown in the simulator, paused and resumed
       # 50 times (NFR-PERF-02), held from a real launch while the simulator runs, and flown
-      # again through a restart of each service (NFR-REL-01).
+      # again through a restart of each service (NFR-REL-01). The same flight worked in
+      # Chrome through the console: 50 pauses and resumes, each reply shown within 1 s at p95.
+      # Node runs whenever the lane's changes do (the node step), so it is there for this one.
       - name: End to end against Sky Orchestrator
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' && steps.lane-changes.outputs.changed == 'true' }}
         env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOC_E2E_SOFTWARE_GL: "1"
         run: |
           set -euo pipefail
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          corepack enable
+          (cd apps/soc-web && pnpm install --frozen-lockfile)
           uv run --frozen pytest infra/e2e/tests -m "lane and sky_orchestrator"
 
       # The binary, not the action: the action needs a licence on organization
