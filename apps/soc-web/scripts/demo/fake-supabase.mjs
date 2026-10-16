@@ -14,6 +14,7 @@ import { WebSocket, WebSocketServer } from 'ws'
 
 import { createLifecycle, stackStatus, TIMINGS } from './lifecycle.mjs'
 import { createOperationTables, DatabaseError } from './operation-tables.mjs'
+import { ordered } from './postgrest-order.mjs'
 
 const HOST = '127.0.0.1'
 const CATALOGUE = new URL('../../../../contracts/catalogue/aircraft-models.json', import.meta.url)
@@ -808,14 +809,19 @@ function requestCommand(app, body) {
 const WRITABLE = new Set(['operations', 'assignments', 'operators'])
 
 /**
- * One of the operations' tables: GET the rows its filters keep; for the writable ones, POST one
- * (201 with the row), PATCH or DELETE the rows its filters keep (the list of those, empty when none).
- * The demo stores what it is given: the database's own checks are not repeated here. Each write is
- * broadcast as the database broadcasts it (operation-tables.mjs).
+ * One of the operations' tables: GET the rows its filters keep, in the order it names; for the
+ * writable ones, POST one (201 with the row), PATCH or DELETE the rows its filters keep (the list of
+ * those, empty when none). The demo stores what it is given: the database's own checks are not
+ * repeated here. Each write is broadcast as the database broadcasts it (operation-tables.mjs).
  */
 function operationTable(app, name, method, searchParams, body) {
   const { state, db } = app
-  if (method === 'GET') return { status: 200, payload: filtered(state, name, searchParams) }
+  if (method === 'GET') {
+    return {
+      status: 200,
+      payload: ordered(filtered(state, name, searchParams), searchParams.get('order')),
+    }
+  }
   if (!WRITABLE.has(name)) {
     return { status: 405, payload: { message: `the demo does not write ${name}` } }
   }
@@ -880,7 +886,7 @@ function defaultsOf(name, now) {
   return {}
 }
 
-/** The rows a PostgREST query keeps: each `column=eq.value` filter must hold; select and order filter nothing. */
+/** The rows a PostgREST query keeps: each `column=eq.value` filter must hold; select and order keep all. */
 function filtered(state, name, searchParams) {
   const filters = [...searchParams].filter(
     ([column]) => !['select', 'order', 'limit', 'offset'].includes(column),

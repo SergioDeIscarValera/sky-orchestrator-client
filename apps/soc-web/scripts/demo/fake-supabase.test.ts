@@ -487,6 +487,30 @@ describe("the demo's operations, read and written through the console backend (m
     })
   })
 
+  it("answers an operation's requests newest first, as the console reads its latest", async () => {
+    const operation = await corridorOperation()
+    const first = await backend.requestTransition(
+      operation.id,
+      'plan',
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    )
+    // A few milliseconds apart: the database stamps each request with its own time.
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    const second = await backend.requestTransition(
+      operation.id,
+      'plan',
+      'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    )
+    const requests = await backend.requests(operation.id)
+    expect(requests.slice(0, 2).map(({ id }) => id)).toEqual([second.id, first.id])
+    expect(requests.map(({ requestedAt }) => requestedAt)).toEqual(
+      requests
+        .map(({ requestedAt }) => requestedAt)
+        .toSorted()
+        .reverse(),
+    )
+  })
+
   it('refuses a command for a flight the demo does not fly, as the database refuses a stranger', async () => {
     const operation = await corridorOperation()
     const refused = await backend
