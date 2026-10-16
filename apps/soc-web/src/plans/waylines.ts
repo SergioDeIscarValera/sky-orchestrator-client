@@ -5,20 +5,11 @@ import { formatLength } from './format'
 import { startedDesign, type Designing } from './waylineDesigner'
 import type { WaylineSketch } from './waylineSketch'
 
-/** How long a flight takes, in minutes and seconds. */
-export function formatDuration(seconds: number): string {
-  const whole = Math.round(seconds)
-  const minutes = Math.floor(whole / 60)
-  const rest = whole % 60
-  return minutes === 0
-    ? `${String(rest)} s`
-    : `${String(minutes)} min ${String(rest).padStart(2, '0')} s`
-}
-
 /** What the list and the inspector say under a wayline's name. */
 export function waylineSummary(wayline: Wayline): string {
-  const { waypointCount, distanceM, durationS } = wayline.metrics
-  return `${String(waypointCount)} waypoints · ${formatLength(distanceM)} · ${formatDuration(durationS)}`
+  const { waypointCount, distanceM } = wayline.metrics
+  const waypoints = waypointCount === 1 ? '1 waypoint' : `${String(waypointCount)} waypoints`
+  return `${waypoints} · ${formatLength(distanceM)}`
 }
 
 /** A primitive in a word and its size, as the designer lists them. */
@@ -55,18 +46,13 @@ export function draftOf(name: string, design: Design, baked: Baked): WaylineDraf
     name: name.trim(),
     takeoff: design.takeoff,
     defaultHeightM: design.defaultHeightM,
-    speedMs: design.speedMs,
     design: written,
     waypoints: baked.waypoints.map(({ index, latitudeDeg, longitudeDeg, heightM }): Waypoint => ({
       index,
       position: { latitudeDeg, longitudeDeg },
       heightM,
     })),
-    metrics: {
-      waypointCount: baked.waypoints.length,
-      distanceM: baked.distanceM,
-      durationS: baked.durationS,
-    },
+    metrics: { waypointCount: baked.waypoints.length, distanceM: baked.distanceM },
     bakeVersion: BAKE_VERSION,
   }
 }
@@ -78,19 +64,7 @@ export function designingOf(wayline: Wayline): Designing {
     name: wayline.name,
     takeoff: design.takeoff,
     defaultHeightM: design.defaultHeightM,
-    speedMs: design.speedMs,
-    takeoffSecurityHeightM: design.takeoffSecurityHeightM,
-    finishAction: design.finishAction,
     primitives: design.primitives,
   }
   return startedDesign({ id: wayline.id, sketch })
-}
-
-/** The height a saved wayline climbs to first, from its design; null if the design does not read. */
-export function climbOf(wayline: Wayline): number | null {
-  try {
-    return designFromJson(wayline.design).takeoffSecurityHeightM
-  } catch {
-    return null
-  }
 }

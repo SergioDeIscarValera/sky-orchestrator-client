@@ -3,7 +3,11 @@ import { Minus, Plus, Scan } from 'lucide-react'
 import { useCameraCommands, type CameraCommand } from './commands'
 import { CARD } from '../app/styles'
 
-const TOOLS: readonly { command: CameraCommand; label: string; Icon: typeof Plus }[] = [
+const TOOLS: readonly {
+  command: Exclude<CameraCommand, 'fit'>
+  label: string
+  Icon: typeof Plus
+}[] = [
   { command: 'closer', label: 'Closer', Icon: Plus },
   { command: 'farther', label: 'Farther', Icon: Minus },
   { command: 'overview', label: 'Back to the site overview', Icon: Scan },

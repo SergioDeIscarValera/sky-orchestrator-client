@@ -370,13 +370,25 @@ envelope ceiling.
 ## FR-WAY — Waylines and flight files
 
 ### FR-WAY-01 — Takeoff point · MUST
-A wayline starts from a takeoff point placed on the terrain, inside the
-operation's geofence when designed for one.
+A wayline starts from a takeoff point placed on the terrain and climbs straight
+up from it to its default height before anything else: its first waypoint is
+right above the takeoff. It never climbs or descends on a slant, which costs the
+aircraft more energy: every leg is level or straight up or down. Going up, it
+climbs where it is, then flies level; going down, it flies level, then descends
+where it arrives. A wayline is
+geometry only: the operation that flies it gives it its geofence, its speed, the
+height it climbs to over the takeoff and its return home (`FR-OPS-01`).
 
-**Acceptance**: a takeoff outside the geofence is refused at placement.
+**Acceptance**: every golden bake's first waypoint is right above its takeoff,
+and no leg of any golden bake or flight is on a slant;
+a wayline without a takeoff point is refused, naming it; a
+takeoff outside the operation's geofence is refused when the operation is
+planned (`FR-OPS-03`).
 
 ### FR-WAY-02 — Route tool · MUST
-An ordered polyline flown in the order drawn, with its direction shown.
+An ordered polyline flown in the order drawn, with its direction shown. Once
+drawn, its points move and its legs bend, as every primitive's place and figures
+change after it is drawn.
 
 **Acceptance**: the baked wayline visits the route's points in drawn order.
 
@@ -386,8 +398,9 @@ Points of interest, visited in the order the bake chooses.
 **Acceptance**: the bake visits every point exactly once.
 
 ### FR-WAY-04 — Circle tool · SHOULD
-A centre and a radius, previewed live as the radius changes, with direction and a
-number of points derived from `max_arc_spacing_m`.
+A centre and a radius, set with the pointer or typed exactly, previewed live as
+the radius changes, with direction and a number of points derived from
+`max_arc_spacing_m`.
 
 **Acceptance**: every generated point lies at the radius within 0.1 m, and no arc
 between consecutive points exceeds the spacing.
@@ -402,7 +415,7 @@ within 0.1 m and every point lies inside the area.
 
 ### FR-WAY-06 — Heights · MUST
 A wayline has a default height above takeoff; any point may override it. No
-height exceeds the geofence ceiling.
+height flown exceeds the operation's geofence ceiling.
 
 **Acceptance**: a point above the ceiling is refused with its index.
 
@@ -410,16 +423,19 @@ height exceeds the geofence ceiling.
 The bake turns the takeoff point and all drawn primitives into one ordered
 wayline: routes, circles and grids keep their internal order with the entry and
 direction that shorten the transit; points of interest are ordered by nearest
-neighbour improved by 2-opt; legs longer than `max_leg_m` are split; points
-closer than 0.5 m merge. The result shows waypoint count, distance, estimated
-duration and every violation. The same design always bakes to the same wayline.
+neighbour improved by 2-opt; points closer than 0.5 m merge. The result shows
+its waypoint count and distance. The same design always bakes to the same
+wayline. The operation's flight of it splits legs longer than `max_leg_m`,
+estimates its duration at the operation's speed and names every violation; the
+bake's own waypoints fly as baked.
 
-**Acceptance**: the golden vectors in `contracts/geometry/` bake identically in
-TypeScript, and the Python validator accepts their results.
+**Acceptance**: the golden vectors in `contracts/geometry/` bake and fly
+identically in TypeScript, and the Python validator accepts their results.
 
 ### FR-WAY-08 — Validation · MUST
-Every point and every leg lies inside the geofence; heights within the ceiling;
-waypoint count, leg length, total distance and speed within the stack's envelope.
+A wayline flown by an operation keeps every point and every leg inside the
+operation's geofence, its heights within the ceiling, and its waypoint count, leg
+lengths, total distance and speed within the stack's envelope.
 Each violation names its rule and its waypoint. Sky Orchestrator's own verdict
 (`FR-LNK-09`) is shown next to SOC's.
 
@@ -434,14 +450,18 @@ as saved.
 re-baking.
 
 ### FR-WAY-10 — Speed · MUST
-A wayline has one speed, no higher than the stack's limit or the model's maximum,
-whichever is lower.
+A wayline flies at one speed, set in the operation when its fleet is assigned
+(`FR-OPS-01`). Left blank it is the stack's limit, or the model's maximum where
+that is lower; a speed given instead is no higher than the stack's limit or the
+model's maximum, whichever is lower. Sky Orchestrator flies the speed it is given
+in metres per second, capped by its envelope's `max_horizontal_speed_ms`.
 
-**Acceptance**: a speed above either limit is refused naming the limit.
+**Acceptance**: a blank speed is saved as the lower of the two limits; a speed
+above either limit is refused naming the limit.
 
 ### FR-WAY-11 — Flight file · MUST
 The flight file is a KMZ in the WPML subset Sky Orchestrator accepts, built
-deterministically from the baked wayline
+deterministically from the operation's flight of the baked wayline
 ([ADR-0008](../architecture/decisions/0008-flight-files-served-on-sky-orchestrators-network.md)).
 
 **Acceptance**: golden files for the reference waylines are byte-identical on
@@ -459,13 +479,19 @@ resume (`DEP-13`).
 ## FR-OPS — Operations
 
 ### FR-OPS-01 — Create an operation · MUST
-An operation has a name, a geofence (chosen or generated), assignments of
-waylines to fleets, and operators (pilots and observers from the organization's
-members). In the MVP an operation has exactly one assignment; within an
+An operation has a name, a height, a geofence (chosen or generated), assignments
+of waylines to fleets, and operators (pilots and observers from the
+organization's members). The geofence holds for the operation and every wayline
+in it. The height is what each aircraft climbs to over its takeoff before the
+transit, Sky Orchestrator's takeoff security height. Each assignment sets the
+speed its fleet flies its wayline at (`FR-WAY-10`), and every flight ends
+returning home. In the MVP an operation has exactly one assignment; within an
 operation a wayline and a fleet appear at most once.
 
 **Acceptance**: a second assignment is refused in the MVP with the reason; the
-same fleet twice is refused by the database.
+same fleet twice is refused by the database; an operation planned without a
+height, or an assignment without a speed, is refused naming it; the console saves
+no definition without a geofence.
 
 ### FR-OPS-02 — One state machine · MUST
 An operation moves through declared states, by declared transitions only, each
@@ -565,8 +591,9 @@ naming the vertex.
 From `ready`, after explicit confirmation by a pilot, the real flight is prepared
 with the same file and executed. Refusals are shown with their meaning, told
 apart by the method that drew them (SO's ADR-0037): `314010` on a prepare, "this
-file has not completed a simulation on this stack, or lies outside the phone's
-own envelope: the phone's record names the distance"; `314010` on an execute, "arm
+file has not completed a simulation on this stack, lies outside the phone's own
+envelope, or asks a return height the aircraft did not take: the phone's record
+names which" (`DEP-29`); `314010` on an execute, "arm
 the phone, release the aircraft held from the phone's console, or confirm real
 flight on the phone's screen, and retry" (`DEP-12`; a phone whose app build has
 no simulator pass cannot fly real, SO's ADR-0040; SO does not say which before

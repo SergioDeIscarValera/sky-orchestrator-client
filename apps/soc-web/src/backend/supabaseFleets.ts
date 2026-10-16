@@ -14,7 +14,21 @@ import {
 } from './backend'
 import { rows } from './rows'
 
-const STATE_EVENTS = ['stack', 'device', 'fleet', 'command_intent', 'geofence', 'wayline'] as const
+/** Every broadcast on the organization's state topic (ADR-0007), each passed on as it was sent. */
+const STATE_EVENTS = [
+  'stack',
+  'device',
+  'fleet',
+  'command_intent',
+  'geofence',
+  'wayline',
+  'operation',
+  'flight',
+  'flight_state',
+  'operation_event',
+  'transition_request',
+  'operation_check',
+] as const
 
 /** The part of a Realtime channel the console uses, so it can be faked in tests. */
 export interface StateChannel {
@@ -114,6 +128,17 @@ const NOT_NULL: Readonly<Record<string, { field: FleetField; message: string }>>
   },
 }
 const NOT_ALLOWED = '42501'
+/** The words the trigger raises fleet_identity_in_flight with: PostgREST sends no constraint name. */
+const FLYING = 'its aircraft is flying'
+
+/**
+ * How long after joining the state topic the console reads everything once more when no broadcast
+ * has come. Realtime starts delivering the database's broadcasts to a join a moment after it: a
+ * change committed in between reaches no listener, and the read the join set off may have run
+ * before it was committed (found by the console's end to end against Sky Orchestrator: Plan
+ * accepted, the header still reading Draft). The first broadcast after the join ends the wait.
+ */
+export const JOIN_SETTLE_MS = 5000
 
 export function refusal(error: PostgrestError): BackendError {
   const constraint = /constraint "([^"]+)"/.exec(error.message)?.[1]
@@ -130,7 +155,20 @@ export function refusal(error: PostgrestError): BackendError {
   if (error.message.includes('a retired fleet does not change')) {
     return new FieldRefusedError('A retired fleet does not change.', null, error.code)
   }
+  if (error.message.includes(FLYING)) return flyingRefusal(error.code)
   return new BackendError(error.message, error.code)
+}
+
+/**
+ * The wire identity of a fleet whose aircraft flies: the trigger refuses its change and names no
+ * field, since the gateway and the aircraft serials are both the identity (migration 0010, FR-FLE-05).
+ */
+export function flyingRefusal(code: string | null = '23514'): FieldRefusedError {
+  return new FieldRefusedError(
+    'This aircraft is flying: its wire identity stays until its flight ends.',
+    null,
+    code,
+  )
 }
 
 /**
@@ -272,16 +310,42 @@ export function fleetOperations(client: SupabaseClient, channel: ChannelFactory)
 
     onState(organizationId: string, listener: (event: StateEvent) => void): () => void {
       const subscription = channel(`org:${organizationId}:soc:state`)
+      const joined = () => {
+        listener({ kind: 'joined', payload: {} })
+      }
+      // Whether the database's broadcasts are yet known to reach this join, and the read once more
+      // set for when none has come by JOIN_SETTLE_MS.
+      let delivering = true
+      let settle: ReturnType<typeof setTimeout> | null = null
+      const stopSettling = () => {
+        if (settle !== null) clearTimeout(settle)
+        settle = null
+      }
       for (const kind of STATE_EVENTS) {
         subscription.on('broadcast', { event: kind }, ({ payload }) => {
           listener({ kind, payload })
+          // The first broadcast after a join shows the database's broadcasts reach it: whatever
+          // was committed before, and lost on the way, is read now.
+          if (!delivering) {
+            delivering = true
+            stopSettling()
+            joined()
+          }
         })
       }
       // Realtime calls back SUBSCRIBED on the first join and on every rejoin after a drop.
       subscription.subscribe((status) => {
-        if (status === 'SUBSCRIBED') listener({ kind: 'joined', payload: {} })
+        if (status !== 'SUBSCRIBED') return
+        joined()
+        delivering = false
+        stopSettling()
+        settle = setTimeout(() => {
+          settle = null
+          joined()
+        }, JOIN_SETTLE_MS)
       })
       return () => {
+        stopSettling()
         void subscription.unsubscribe()
       }
     },

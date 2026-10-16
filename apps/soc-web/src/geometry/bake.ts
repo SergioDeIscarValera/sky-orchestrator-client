@@ -1,20 +1,22 @@
 import { circlePoints } from './circle'
 import { cover } from './grid'
-import { violations as envelopeViolations, type Envelope, type Violation } from './limits'
 import type { Point } from './planar'
 import { eastNorth, geodeticAt, type Geodetic } from './projection'
 import { distanceM } from './sphere'
 
 /**
- * The bake (FR-WAY-07, ADR-0009): a design's takeoff point and drawn primitives turned
- * into one ordered wayline, Sky Orchestrator's mission plan field for field. Routes keep
- * the order drawn; circles keep their direction and enter where the transit is
+ * The bake (FR-WAY-07, ADR-0009): a wayline's takeoff point and drawn primitives turned
+ * into its waypoints in the order flown, each with its height above the takeoff. Routes
+ * keep the order drawn; circles keep their direction and enter where the transit is
  * shortest; grids keep their back and forth from whichever corner shortens it; points of
  * interest are visited once each in the order that does. Units are ordered exactly by
  * Held-Karp up to EXACT_UNITS, above that by nearest neighbour improved by 2-opt. Points
- * closer than MERGE_M merge, legs longer than the stack's limit are split with 1 % to
- * spare, and every violation of the envelope is reported, none fixed silently. The same
- * design always bakes to the same wayline.
+ * closer than MERGE_M merge. The first waypoint is right above the takeoff, at the default
+ * height, and every leg after it is level or straight up or down, never on a slant, which
+ * costs the aircraft more energy: going up it climbs where it is, then flies level; going
+ * down it flies level, then descends where it is going. A wayline is geometry: the operation that flies it gives its
+ * speed, its climb and its finish, splits a leg longer than its stack allows, and judges it
+ * against its envelope and geofence (flight.ts). The same design always bakes the same.
  */
 
 export interface DesignPoint extends Geodetic {
@@ -41,14 +43,10 @@ export type Primitive =
       readonly heightM?: number
     }
 
-export type FinishAction = 'return_home' | 'hold' | 'land'
-
 export interface Design {
   readonly takeoff: Geodetic
+  /** Above the takeoff point, for every point that gives none of its own (FR-WAY-06). */
   readonly defaultHeightM: number
-  readonly takeoffSecurityHeightM: number
-  readonly speedMs: number
-  readonly finishAction: FinishAction
   readonly primitives: readonly Primitive[]
 }
 
@@ -57,12 +55,6 @@ export interface BakeSettings {
   readonly origin: Geodetic
   /** The console's `max_arc_spacing_m`, for circles. */
   readonly maxArcSpacingM: number
-  /**
-   * The stack's limits, Sky Orchestrator's envelope; null while the console does not
-   * know them (they arrive with FR-LNK-09): then no leg is split and no limit is checked,
-   * and the operation's preflight checks them before any flight.
-   */
-  readonly envelope: Envelope | null
 }
 
 export interface BakedWaypoint extends Geodetic {
@@ -71,30 +63,21 @@ export interface BakedWaypoint extends Geodetic {
 }
 
 export interface Baked {
-  readonly referencePoint: Geodetic
-  readonly takeoffSecurityHeightM: number
-  readonly speedMs: number
-  readonly finishAction: FinishAction
   readonly waypoints: readonly BakedWaypoint[]
-  /** From the reference point through every waypoint, in Sky Orchestrator's metric. */
+  /** From the takeoff point through every waypoint, in Sky Orchestrator's metric. */
   readonly distanceM: number
-  /** The distance at the wayline's speed: the transit up and back are the aircraft's. */
-  readonly durationS: number
-  readonly violations: readonly Violation[]
 }
 
 /**
  * The version of this bake, saved with every wayline it bakes (IR-WAY-01): a change to
- * how it orders, merges or splits bumps it, so a saved wayline says what made it.
+ * how it orders or merges bumps it, so a saved wayline says what made it.
  */
-export const BAKE_VERSION = '1.0.0'
+export const BAKE_VERSION = '2.2.0'
 
 /** Points closer than this merge into the first of them (FR-WAY-07). */
 export const MERGE_M = 0.5
 /** Up to this many units the order is searched exactly (ADR-0009). */
 export const EXACT_UNITS = 13
-/** A split leg keeps this share of the stack's limit to spare (ADR-0009). */
-export const SPLIT_SLACK = 0.01
 
 interface Stop {
   readonly at: Point
@@ -313,36 +296,47 @@ function merged(stops: readonly Stop[]): Stop[] {
   return kept
 }
 
+const samePlace = (a: Point, b: Point) => a[0] === b[0] && a[1] === b[1]
+
 /**
- * The stops with every leg longer than the stack's limit, less its slack, split evenly,
- * the height carried along it, measured as Sky Orchestrator measures.
+ * The stops with every height change made straight up or down where it is safest: going
+ * up, before leaving; going down, on arriving. A stop in the middle of one straight run up
+ * or down, from the takeoff's ground on, goes: the aircraft does not stop there.
  */
-function split(stops: readonly Stop[], start: Stop, settings: BakeSettings): Stop[] {
-  if (settings.envelope === null) return [...stops]
-  const longest = settings.envelope.maxLegM * (1 - SPLIT_SLACK)
-  const geodetic = (at: Point) => geodeticAt(settings.origin, { eastM: at[0], northM: at[1] })
+function levelOrVertical(stops: readonly Stop[], start: Point): Stop[] {
+  const ground: Stop = { at: start, heightM: 0 }
   const out: Stop[] = []
-  let before = start
-  for (const stop of stops) {
-    const leg = distanceM(geodetic(before.at), geodetic(stop.at))
-    const pieces = Math.max(1, Math.ceil(leg / longest))
-    for (let piece = 1; piece < pieces; piece += 1) {
-      const share = piece / pieces
-      out.push({
-        at: [
-          before.at[0] + share * (stop.at[0] - before.at[0]),
-          before.at[1] + share * (stop.at[1] - before.at[1]),
-        ],
-        heightM: before.heightM + share * (stop.heightM - before.heightM),
-      })
-    }
+  const push = (stop: Stop) => {
+    const last = out.at(-1)
+    const prior = out.at(-2) ?? ground
+    const through =
+      last !== undefined &&
+      samePlace(prior.at, last.at) &&
+      samePlace(last.at, stop.at) &&
+      (last.heightM - prior.heightM) * (stop.heightM - last.heightM) > 0
+    if (through) out.pop()
     out.push(stop)
-    before = stop
+  }
+  let previous: Stop | null = null
+  for (const stop of stops) {
+    if (
+      previous !== null &&
+      !samePlace(previous.at, stop.at) &&
+      stop.heightM !== previous.heightM
+    ) {
+      push(
+        stop.heightM > previous.heightM
+          ? { at: previous.at, heightM: stop.heightM }
+          : { at: stop.at, heightM: previous.heightM },
+      )
+    }
+    push(stop)
+    previous = stop
   }
   return out
 }
 
-/** The design baked into one wayline, every violation of the envelope with it. */
+/** The design baked into its waypoints in the order flown, and their distance. */
 export function bake(design: Design, settings: BakeSettings): Baked {
   const takeoffPlaced = eastNorth(settings.origin, design.takeoff)
   const start: Point = [takeoffPlaced.eastM, takeoffPlaced.northM]
@@ -350,48 +344,28 @@ export function bake(design: Design, settings: BakeSettings): Baked {
   const order =
     units.length <= EXACT_UNITS ? exactOrder(units, start) : heuristicOrder(units, start)
   const flown = order.flatMap(({ unit, variant }) => units[unit]?.variants[variant] ?? [])
-  const stops = split(
-    merged(flown),
-    { at: start, heightM: design.takeoffSecurityHeightM },
-    settings,
-  )
-  const waypoints = stops.map((stop, index): BakedWaypoint => {
-    const place = geodeticAt(settings.origin, { eastM: stop.at[0], northM: stop.at[1] })
+  // Straight up from the takeoff to the wayline's height first, unless a point drawn there
+  // is that climb already, at its own height. Nothing drawn is no wayline: no climb either.
+  const [first] = flown
+  const climbs = first !== undefined && distance(first.at, start) >= MERGE_M
+  const stops = climbs ? [{ at: start, heightM: design.defaultHeightM }, ...flown] : flown
+  const waypoints = levelOrVertical(merged(stops), start).map((stop, index): BakedWaypoint => {
+    // Above the takeoff is above the takeoff itself, not its image through the local frame.
+    const place = samePlace(stop.at, start)
+      ? { latitudeDeg: design.takeoff.latitudeDeg, longitudeDeg: design.takeoff.longitudeDeg }
+      : geodeticAt(settings.origin, { eastM: stop.at[0], northM: stop.at[1] })
     return { index, ...place, heightM: stop.heightM }
   })
-  let previous: Geodetic = design.takeoff
+  return { waypoints, distanceM: pathLengthM(design.takeoff, waypoints) }
+}
+
+/** From `from` through every point in order, in Sky Orchestrator's metric. */
+export function pathLengthM(from: Geodetic, through: readonly Geodetic[]): number {
+  let previous = from
   let total = 0
-  for (const waypoint of waypoints) {
-    total += distanceM(previous, waypoint)
-    previous = waypoint
+  for (const point of through) {
+    total += distanceM(previous, point)
+    previous = point
   }
-  const found =
-    settings.envelope === null
-      ? []
-      : envelopeViolations(
-          {
-            referencePoint: design.takeoff,
-            takeoffSecurityHeightM: design.takeoffSecurityHeightM,
-            speedMs: design.speedMs,
-            waypoints: waypoints.map((w) => ({
-              index: w.index,
-              position: w,
-              heightM: w.heightM,
-            })),
-          },
-          settings.envelope,
-        )
-  return {
-    referencePoint: design.takeoff,
-    takeoffSecurityHeightM: design.takeoffSecurityHeightM,
-    speedMs: design.speedMs,
-    finishAction: design.finishAction,
-    waypoints,
-    distanceM: total,
-    durationS: total / design.speedMs,
-    violations:
-      waypoints.length === 0
-        ? [{ rule: 'no_waypoints', message: 'nothing is drawn to fly' }, ...found]
-        : found,
-  }
+  return total
 }

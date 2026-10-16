@@ -11,9 +11,9 @@ import { useSiteFrame } from '../scene/siteFrame'
 import { useCreateWayline, useRetireWayline, useWaylines } from './data'
 import { formatLength } from './format'
 import { useWaylineDesigner } from './waylineDesigner'
-import { designingOf, formatDuration, waylineSummary } from './waylines'
+import { designingOf, waylineSummary } from './waylines'
 
-/** A wayline as saved, its bake as flown (FR-WAY-09), and what an editor does to it. */
+/** A wayline as saved, its bake (FR-WAY-09), and what an editor does to it. */
 export function WaylineDetail({ waylineId }: { readonly waylineId: string }) {
   const { organization } = useOrganization()
   const waylines = useWaylines()
@@ -69,7 +69,6 @@ export function WaylineDetail({ waylineId }: { readonly waylineId: string }) {
         name: `${wayline.name} (copy)`,
         takeoff: wayline.takeoff,
         defaultHeightM: wayline.defaultHeightM,
-        speedMs: wayline.speedMs,
         design: wayline.design,
         waypoints: wayline.waypoints,
         metrics: wayline.metrics,
@@ -184,8 +183,6 @@ export function WaylineDetail({ waylineId }: { readonly waylineId: string }) {
         rows={[
           ['Waypoints', String(wayline.metrics.waypointCount)],
           ['Distance', formatLength(wayline.metrics.distanceM)],
-          ['Duration', formatDuration(wayline.metrics.durationS)],
-          ['Speed', `${String(wayline.speedMs)} m/s`],
           [
             'Heights above takeoff',
             heights.length === 0

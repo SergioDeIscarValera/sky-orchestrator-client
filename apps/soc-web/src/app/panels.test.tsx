@@ -1,15 +1,48 @@
-import { act, screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 
-import { FakeBackend, NEIGHBOUR } from '../test/FakeBackend'
+import type { FleetDraft, WaylineDraft } from '../backend/backend'
+import { FakeBackend, MAVIC_AIR_2, NEIGHBOUR, NORTH } from '../test/FakeBackend'
 import { renderApp } from '../test/render'
-import { readView, select, selectionOf } from './router'
+import { readView, select, selectionOf, withPanel } from './router'
 
-async function openAt(search = '') {
+const DRAFT: FleetDraft = {
+  name: 'Norte 1',
+  model: MAVIC_AIR_2.model,
+  airframeSerial: '1WNBH9',
+  controllerSerial: null,
+  gatewaySn: 'SOTESTDOCK01',
+  aircraftSn: 'SOTESTUAV001',
+  flightTimeBeforeSocS: 5400,
+}
+
+const SPOT = { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }
+const CORRIDOR: WaylineDraft = {
+  name: 'Corridor 1',
+  takeoff: SPOT,
+  defaultHeightM: 30,
+  design: {},
+  waypoints: [{ index: 0, position: SPOT, heightM: 30 }],
+  metrics: { waypointCount: 1, distanceM: 0 },
+  bakeVersion: '1',
+}
+
+async function openAt(search = '', backend = new FakeBackend(NEIGHBOUR)) {
   window.history.replaceState(null, '', `/${search}`)
-  const rendered = renderApp(new FakeBackend(NEIGHBOUR))
+  const rendered = renderApp(backend)
   await screen.findByRole('banner')
   return rendered
 }
+
+/** NORTH with Norte 1 on SOTESTUAV001 and one saved wayline, each a selection to make. */
+async function farm() {
+  const backend = new FakeBackend(NEIGHBOUR)
+  const fleet = await backend.registerFleet(NORTH.id, DRAFT)
+  const wayline = await backend.createWayline(NORTH.id, CORRIDOR)
+  return { backend, fleet, wayline }
+}
+
+const inspector = () => screen.getByRole('complementary', { name: 'Inspector' })
+const params = () => new URLSearchParams(window.location.search)
 
 afterEach(() => {
   window.history.replaceState(null, '', '/')
@@ -63,6 +96,25 @@ describe('the view in the URL (NFR-UX-03)', () => {
     expect(selectionOf(select({}, selection))).toEqual(selection)
   })
 
+  it('reads an operation, after a wayline and before an aircraft', () => {
+    const wayline = '33333333-3333-4333-8333-333333333333'
+    const operation = '66666666-6666-4666-8666-666666666666'
+    const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
+    expect(readView({ panel: 'operations', operation })).toEqual({
+      panel: 'operations',
+      operation,
+    })
+    expect(readView({ operation, wayline })).toEqual({ wayline })
+    expect(readView({ ...aircraft, operation })).toEqual({ operation })
+    expect(readView({ operation: 'North corridor' })).toEqual({})
+    const selection = { kind: 'operation', operationId: operation } as const
+    expect(select({ panel: 'operations', wayline }, selection)).toEqual({
+      panel: 'operations',
+      operation,
+    })
+    expect(selectionOf(select({}, selection))).toEqual(selection)
+  })
+
   it("reads a selection's open form, and no form without a selection", () => {
     const aircraft = { gateway: 'SOTESTDOCK01', aircraft: 'SOTESTUAV001' }
     expect(readView({ ...aircraft, form: 'register' })).toEqual({ ...aircraft, form: 'register' })
@@ -84,6 +136,11 @@ describe('the view in the URL (NFR-UX-03)', () => {
     expect(selectionOf({})).toBeNull()
   })
 
+  it('opens a panel with nothing selected, or with none open', () => {
+    expect(withPanel('geofences')).toEqual({ panel: 'geofences' })
+    expect(withPanel(undefined)).toEqual({})
+  })
+
   it('opens and closes a panel from the rail, and keeps it in the URL', async () => {
     const { user } = await openAt()
     const fleet = screen.getByRole('button', { name: 'Fleet' })
@@ -99,9 +156,9 @@ describe('the view in the URL (NFR-UX-03)', () => {
     expect(window.location.search).toBe('')
   })
 
-  it('opens the panel a shared link names, and says when its content arrives', async () => {
+  it('opens the operations panel a shared link names, empty until one is made', async () => {
     await openAt('?panel=operations')
-    expect(await screen.findByText('Operations arrive in M4.')).toBeInTheDocument()
+    expect(await screen.findByText('No operations yet.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Operations' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -129,7 +186,96 @@ describe('the view in the URL (NFR-UX-03)', () => {
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'Operations' }))
     })
-    expect(await screen.findByText('Operations arrive in M4.')).toBeInTheDocument()
+    expect(await screen.findByText('No operations yet.')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Fleet' })).toBeNull()
+  })
+})
+
+describe('changing the panel drops the selection (NFR-UX-03)', () => {
+  it('drops a fleet when the rail opens geofences', async () => {
+    const { backend, fleet } = await farm()
+    const { user } = await openAt(`?panel=fleet&fleet=${fleet.id}`, backend)
+    await within(inspector()).findByRole('heading', { name: 'Norte 1' })
+    await user.click(screen.getByRole('button', { name: 'Geofences' }))
+    expect(await screen.findByRole('heading', { name: 'Geofences' })).toBeVisible()
+    expect([params().get('panel'), params().get('fleet')]).toEqual(['geofences', null])
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+    })
+  })
+
+  it('drops a wayline when the rail opens geofences', async () => {
+    const { backend, wayline } = await farm()
+    const { user } = await openAt(`?panel=waylines&wayline=${wayline.id}`, backend)
+    await within(inspector()).findByRole('heading', { name: 'Corridor 1' })
+    await user.click(screen.getByRole('button', { name: 'Geofences' }))
+    expect(await screen.findByRole('heading', { name: 'Geofences' })).toBeVisible()
+    expect([params().get('panel'), params().get('wayline')]).toEqual(['geofences', null])
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+    })
+  })
+
+  it('drops an operation when the rail opens geofences', async () => {
+    const backend = new FakeBackend(NEIGHBOUR)
+    const operation = await backend.createOperation(NORTH.id, {
+      name: 'North corridor',
+      geofenceId: null,
+      takeoffSecurityHeightM: null,
+    })
+    const { user } = await openAt(`?panel=operations&operation=${operation.id}`, backend)
+    await within(inspector()).findByRole('heading', { name: 'North corridor' })
+    await user.click(screen.getByRole('button', { name: 'Geofences' }))
+    expect(await screen.findByRole('heading', { name: 'Geofences' })).toBeVisible()
+    expect([params().get('panel'), params().get('operation')]).toEqual(['geofences', null])
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+    })
+  })
+
+  it('drops a wayline when the rail opens the fleet', async () => {
+    const { backend, wayline } = await farm()
+    const { user } = await openAt(`?panel=waylines&wayline=${wayline.id}`, backend)
+    await within(inspector()).findByRole('heading', { name: 'Corridor 1' })
+    await user.click(screen.getByRole('button', { name: 'Fleet' }))
+    expect(await screen.findByRole('heading', { name: 'Fleet' })).toBeVisible()
+    expect([params().get('panel'), params().get('wayline')]).toEqual(['fleet', null])
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+    })
+  })
+
+  it('drops a selection made in the scene when the rail opens a panel', async () => {
+    const { backend } = await farm()
+    const { user } = await openAt('?gateway=SOTESTDOCK01&aircraft=SOTESTUAV001', backend)
+    await within(inspector()).findByRole('heading', { name: 'SOTESTUAV001' })
+    await user.click(screen.getByRole('button', { name: 'Waylines' }))
+    expect(await screen.findByRole('heading', { name: 'Waylines' })).toBeVisible()
+    expect([params().get('panel'), params().get('aircraft')]).toEqual(['waylines', null])
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+    })
+  })
+
+  it("drops the selection with the panel's close button", async () => {
+    const { backend, fleet } = await farm()
+    const { user } = await openAt(`?panel=fleet&fleet=${fleet.id}`, backend)
+    await within(inspector()).findByRole('heading', { name: 'Norte 1' })
+    await user.click(screen.getByRole('button', { name: 'Close Fleet' }))
+    await waitFor(() => {
+      expect(window.location.search).toBe('')
+    })
+    expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
+  })
+
+  it('drops the selection when the rail closes the open panel', async () => {
+    const { backend, fleet } = await farm()
+    const { user } = await openAt(`?panel=fleet&fleet=${fleet.id}`, backend)
+    await within(inspector()).findByRole('heading', { name: 'Norte 1' })
+    await user.click(screen.getByRole('button', { name: 'Fleet' }))
+    await waitFor(() => {
+      expect(window.location.search).toBe('')
+    })
+    expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
   })
 })

@@ -3,18 +3,18 @@
 The flight files of reference waylines, as text. The tests in
 `services/soc-operations/tests/test_flight_files.py` rebuild each case and require the same
 bytes ([ADR-0008](../../docs/architecture/decisions/0008-flight-files-served-on-sky-orchestrators-network.md),
-FR-WAY-11). A KMZ is binary and stays out of git (NFR-MNT-04), so each case keeps the bake it is
-built from, the two XML texts inside the KMZ, and the KMZ's own hashes.
+FR-WAY-11). A KMZ is binary and stays out of git (NFR-MNT-04), so each case keeps the flight it
+is built from, the two XML texts inside the KMZ, and the KMZ's own hashes.
 
-| Case | Bake | Wayline name in the file |
+| Case | Flight | Wayline name in the file |
 | --- | --- | --- |
-| `route-return-home/` | The route example's bake, from `contracts/geometry/examples/design.route.json`: four waypoints, one height above the rest, `return_home` | Route return home |
+| `route-return-home/` | The route example's bake, from `contracts/geometry/examples/design.route.json`, flown from its takeoff at 20 m and 5 m/s: the climb right above the takeoff and four waypoints, one 5 m above the rest, climbed to and descended from straight up and down, `return_home` | Route return home |
 | `six-waypoints-land/` | Six waypoints, a speed into two of them (waypoints 1 and 3), `land` | Six waypoints land |
 
 Each case holds:
 
-- `bake.json`: the bake, the input to `flight_files.build`. It follows the `baked` definition of
-  `contracts/geometry/design.schema.json`.
+- `flight.json`: the flight, the input to `flight_files.build`. It follows the `flight`
+  definition of `contracts/geometry/design.schema.json`.
 - `template.kml` and `waylines.wpml`: the two texts the builder writes into the KMZ. Both are
   UTF-8 with LF endings and a final newline.
 - `kmz.sha256`: the KMZ's SHA-256, and its fingerprint (the MD5 that Sky Orchestrator's plan
@@ -34,8 +34,8 @@ from pathlib import Path
 from soc_operations import flight_files
 
 case, name = Path("contracts/flight-files/route-return-home"), "Route return home"
-baked = json.loads((case / "bake.json").read_text(encoding="utf-8"))
-kmz = flight_files.build(baked, name=name)
+flight = json.loads((case / "flight.json").read_text(encoding="utf-8"))
+kmz = flight_files.build(flight, name=name)
 with zipfile.ZipFile(io.BytesIO(kmz)) as archive:
     (case / "template.kml").write_bytes(archive.read(flight_files.TEMPLATE_PATH))
     (case / "waylines.wpml").write_bytes(archive.read(flight_files.WAYLINES_PATH))

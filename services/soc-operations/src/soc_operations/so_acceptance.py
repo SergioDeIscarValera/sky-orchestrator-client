@@ -3,7 +3,7 @@
 Builds every golden case of contracts/flight-files with soc_operations.flight_files, runs
 so-wayline's own ``ingest.validate`` on each KMZ under three envelopes, and compares what it
 refuses, rule by rule and waypoint by waypoint, with what soc_geo.limits predicts for the same
-bake. Sky Orchestrator's code is read from its checkout and run in its own interpreter; nothing
+flight. Sky Orchestrator's code is read from its checkout and run in its own interpreter; nothing
 of its stack is touched.
 
 Passes when every golden file is VALID under the permissive envelope and SO's refusals equal
@@ -138,16 +138,16 @@ def main(arguments: list[str] | None = None) -> int:
         jobs: list[dict[str, Any]] = []
         predictions: dict[str, list[Finding]] = {}
         for case, name in CASES.items():
-            baked = json.loads((golden / case / "bake.json").read_text(encoding="utf-8"))
-            (work / f"{case}.kmz").write_bytes(flight_files.build(baked, name=name))
-            longitude, latitude = baked["reference_point"]
+            flight = json.loads((golden / case / "flight.json").read_text(encoding="utf-8"))
+            (work / f"{case}.kmz").write_bytes(flight_files.build(flight, name=name))
+            longitude, latitude = flight["reference_point"]
             for envelope_name, limits in ENVELOPES.items():
                 key = f"{case}/{envelope_name}"
                 centre = Geodetic(latitude_deg=latitude, longitude_deg=longitude)
                 found = violations(
-                    plan_of(baked),
+                    plan_of(flight),
                     envelope_of(centre, limits),
-                    transitional_speed_ms=baked["speed_ms"],
+                    transitional_speed_ms=flight["speed_ms"],
                 )
                 predictions[key] = sorted(
                     {(v.rule, v.waypoint_index) for v in found},

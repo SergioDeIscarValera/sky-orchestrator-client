@@ -779,6 +779,7 @@ dependencies = [
     { name = "msgspec" },
     { name = "soc-config" },
     { name = "soc-db" },
+    { name = "soc-geo" },
     { name = "soc-log" },
     { name = "soc-realtime" },
     { name = "soc-supervision" },
@@ -798,6 +799,7 @@ requires-dist = [
     { name = "msgspec", specifier = "==0.22.0" },
     { name = "soc-config", editable = "libs/soc-config" },
     { name = "soc-db", editable = "libs/soc-db" },
+    { name = "soc-geo", editable = "libs/soc-geo" },
     { name = "soc-log", editable = "libs/soc-log" },
     { name = "soc-realtime", editable = "libs/soc-realtime" },
     { name = "soc-supervision", editable = "libs/soc-supervision" },
@@ -876,6 +878,7 @@ dependencies = [
     { name = "soc-config" },
     { name = "soc-database" },
     { name = "soc-geo" },
+    { name = "soc-operations" },
     { name = "soc-realtime" },
 ]
 
@@ -888,6 +891,7 @@ requires-dist = [
     { name = "soc-config", editable = "libs/soc-config" },
     { name = "soc-database", editable = "database" },
     { name = "soc-geo", editable = "libs/soc-geo" },
+    { name = "soc-operations", editable = "services/soc-operations" },
     { name = "soc-realtime", editable = "libs/soc-realtime" },
 ]
 

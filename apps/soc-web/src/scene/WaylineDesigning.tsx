@@ -1,23 +1,23 @@
 import { Html, Line } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
+import { useThree, type ThreeEvent } from '@react-three/fiber'
 import { MapPin } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import { useSettings } from '../config/settings'
 import { circlePoints } from '../geometry/circle'
 import { cover } from '../geometry/grid'
-import { locate, type Point } from '../geometry/planar'
 import type { Primitive } from '../geometry/bake'
 import { eastNorth, type Geodetic } from '../geometry/projection'
-import { useGeofences } from '../plans/data'
-import { judge } from '../plans/waylineBake'
-import { clicked, useWaylineDesigner } from '../plans/waylineDesigner'
+import { formatLength } from '../plans/format'
+import { bakeSketch } from '../plans/waylineBake'
+import { clicked, primitiveChosen, useWaylineDesigner } from '../plans/waylineDesigner'
 import { CANVAS_SETTINGS } from './canvas'
 import { draped, type Flat } from './drape'
 import { flatOf, groundAtPointer, placeOf, useGroundTool } from './groundTool'
 import { usePalette } from './palette'
 import type { Site } from './site'
 import { Dots } from './Dots'
+import { WaylineHandles } from './WaylineHandles'
 import { flownPath } from './waylinePath'
 
 /** Above the ground, as the geofences' lines. */
@@ -31,14 +31,13 @@ interface Props {
 
 /**
  * The wayline open in the designer, on the terrain (FR-WAY-01 to FR-WAY-07): its takeoff,
- * what is drawn laid over the ground, what is being drawn in the accent colour, and the
- * bake flown at its heights above the takeoff, its waypoints that break a rule in the
- * danger colour. The ground's clicks go to the tool taken up.
+ * what is drawn laid over the ground, what is being drawn in the accent colour, and its
+ * bake at its heights above the takeoff. The ground's clicks go to the tool taken up; with
+ * none, a click on what is drawn opens it in its editor, its handles over it.
  */
 export function WaylineDesigning({ site, origin }: Props) {
   const designing = useWaylineDesigner((state) => state.designing)
   const change = useWaylineDesigner((state) => state.change)
-  const geofences = useGeofences()
   const settings = useSettings()
   const palette = usePalette()
   const camera = useThree((state) => state.camera)
@@ -56,28 +55,13 @@ export function WaylineDesigning({ site, origin }: Props) {
     [camera, canvas, site, origin],
   )
 
-  // The takeoff is refused outside the geofence the wayline is designed for (FR-WAY-01).
-  const fenceId = designing?.geofenceId ?? null
-  const fenceRing = geofences.data?.find(({ id }) => id === fenceId)?.polygon ?? null
   useEffect(() => {
     if (!open) return
-    const ring =
-      fenceRing === null
-        ? null
-        : fenceRing.map((vertex): Point => {
-            const placed = eastNorth(origin, vertex)
-            return [placed.eastM, placed.northM]
-          })
-    const admits = (at: Geodetic) => {
-      if (ring === null) return true
-      const placed = eastNorth(origin, at)
-      return locate(ring, [placed.eastM, placed.northM]) === 'inside'
-    }
     return useGroundTool.getState().hold(({ clientX, clientY }) => {
       const at = groundAt(clientX, clientY)
-      if (at !== null) change((current) => clicked(current, at, admits))
+      if (at !== null) change((current) => clicked(current, at))
     })
-  }, [open, groundAt, change, fenceRing, origin])
+  }, [open, groundAt, change])
 
   useEffect(() => {
     if (!aiming) return
@@ -121,16 +105,27 @@ export function WaylineDesigning({ site, origin }: Props) {
     const { x, z } = flat(at)
     return [x, site.ground(x, z) + LIFT_M, z]
   }
-  const fence = geofences.data?.find(({ id }) => id === designing.geofenceId) ?? null
-  const { baked, violations } = judge(sketch, {
-    origin,
-    maxArcSpacingM: settings.maxArcSpacingM,
-    fence: fence === null ? null : { polygon: fence.polygon, maxHeightM: fence.maxHeightM },
-  })
-  const breaking = new Set(
-    violations.flatMap(({ waypointIndex }) => (waypointIndex === undefined ? [] : [waypointIndex])),
-  )
-  const path = baked === null ? null : flownPath(baked, origin, site)
+  const baked = bakeSketch(sketch, { origin, maxArcSpacingM: settings.maxArcSpacingM })
+  const takeoff = sketch.takeoff
+  // The wayline's own path: from its takeoff straight to its first waypoint, the climb being
+  // the operation's (M4).
+  // The wayline climbs straight up from its takeoff to its height (FR-WAY-01): shown as
+  // soon as both are given, before anything is drawn; the bake starts there after.
+  const climb =
+    takeoff !== null && sketch.defaultHeightM !== null && sketch.defaultHeightM > 0
+      ? [{ ...takeoff, heightM: sketch.defaultHeightM }]
+      : null
+  const flown = baked !== null && baked.waypoints.length > 0 ? baked.waypoints : climb
+  const path =
+    flown === null || takeoff === null
+      ? null
+      : flownPath(
+          { referencePoint: takeoff, takeoffSecurityHeightM: null, waypoints: flown },
+          origin,
+          site,
+        )
+  const top = path?.waypoints[0]
+  const topHeightM = flown?.[0]?.heightM
   const [centre] = pending
   const sized =
     sizing && centre !== undefined && hover !== null
@@ -164,75 +159,50 @@ export function WaylineDesigning({ site, origin }: Props) {
 
   const drawnLine = (primitive: Primitive, index: number) => {
     const key = `drawn-${String(index)}`
+    const open = designing.selected === index
+    const colour = open ? palette.accent : palette.gridMajor
+    // With no tool, what is drawn is chosen by a click; a tool's clicks go to the ground.
+    const choose =
+      designing.tool === null
+        ? (event: ThreeEvent<MouseEvent>) => {
+            event.stopPropagation()
+            change((current) => primitiveChosen(current, index))
+          }
+        : undefined
+    const line = (points: readonly Flat[], closing: boolean, dashed: boolean) => (
+      <Line
+        key={key}
+        name={`drawn ${String(index + 1)}`}
+        points={lay(points, closing)}
+        color={colour}
+        lineWidth={open ? 2 : 1.5}
+        dashed={dashed}
+        dashSize={3}
+        gapSize={2}
+        depthTest={false}
+        renderOrder={open ? 9 : 8}
+        onClick={choose}
+      />
+    )
     switch (primitive.kind) {
       case 'route':
-        return (
-          <Line
-            key={key}
-            points={lay(primitive.points.map(flat), false)}
-            color={palette.gridMajor}
-            lineWidth={1.5}
-            dashed
-            dashSize={3}
-            gapSize={2}
-            depthTest={false}
-            renderOrder={8}
-          />
-        )
+        return line(primitive.points.map(flat), false, true)
       case 'points':
-        return (
-          <Dots
-            key={key}
-            points={primitive.points.map(onGround)}
-            colour={palette.gridMajor}
-            size={7}
-          />
-        )
-      case 'circle': {
-        const ring = circlePoints(origin, primitive, settings.maxArcSpacingM).map(flat)
-        return (
-          <Line
-            key={key}
-            points={lay(ring, false)}
-            color={palette.gridMajor}
-            lineWidth={1.5}
-            dashed
-            dashSize={3}
-            gapSize={2}
-            depthTest={false}
-            renderOrder={8}
-          />
-        )
-      }
+        return <Dots key={key} points={primitive.points.map(onGround)} colour={colour} size={7} />
+      case 'circle':
+        return line(circlePoints(origin, primitive, settings.maxArcSpacingM).map(flat), false, true)
       case 'grid':
-        return (
-          <Line
-            key={key}
-            points={lay(primitive.area.map(flat), true)}
-            color={palette.gridMajor}
-            lineWidth={1.5}
-            depthTest={false}
-            renderOrder={8}
-          />
-        )
+        return line(primitive.area.map(flat), true, false)
     }
   }
 
   return (
     <group>
-      {fence !== null && (
-        <Line
-          points={lay(fence.polygon.map(flat), true)}
-          color={palette.gridMajor}
-          lineWidth={1}
-          depthTest={false}
-          renderOrder={7}
-        />
-      )}
       {sketch.primitives.map(drawnLine)}
       {pending.length > 0 && (
         <>
-          {pending.length > 1 && (
+          {/* Points of interest are points: only a route or a grid's area is a line. */}
+          {pending.length > 1 && designing.tool !== 'points' && (
             <Line
               points={lay(pending.map(flat), designing.tool === 'grid')}
               color={palette.accent}
@@ -256,6 +226,15 @@ export function WaylineDesigning({ site, origin }: Props) {
           renderOrder={10}
         />
       )}
+      {covered.length > 0 && (
+        <Dots
+          points={covered.flatMap((line) =>
+            line.map(({ x, z }) => [x, site.ground(x, z) + LIFT_M, z] as const),
+          )}
+          colour={palette.accent}
+          size={5}
+        />
+      )}
       {covered.map((line, index) =>
         line.length < 2 ? null : (
           <Line
@@ -277,20 +256,21 @@ export function WaylineDesigning({ site, origin }: Props) {
           renderOrder={11}
         />
       )}
-      {path !== null && (
-        <>
-          <Dots
-            points={path.waypoints.filter((_, index) => !breaking.has(index))}
-            colour={palette.accent}
-            size={7}
-          />
-          <Dots
-            points={path.waypoints.filter((_, index) => breaking.has(index))}
-            colour={palette.danger}
-            size={9}
-          />
-        </>
+      {path !== null && <Dots points={path.waypoints} colour={palette.accent} size={7} />}
+      {top !== undefined && topHeightM !== undefined && (
+        <Html position={[...top]} center zIndexRange={[19, 0]} className="pointer-events-none">
+          <span className="rounded-pill bg-surface text-heading shadow-card block translate-x-1/2 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap tabular-nums">
+            {formatLength(topHeightM)}
+          </span>
+        </Html>
       )}
+      <WaylineHandles
+        designing={designing}
+        site={site}
+        origin={origin}
+        groundAt={groundAt}
+        change={change}
+      />
       {sketch.takeoff !== null && (
         <Html
           position={onGround(sketch.takeoff)}

@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 
+import { SafetyBar } from '../operations/SafetyBar'
 import { MapTools } from '../scene/MapTools'
 import { Inspector } from './Inspector'
 import { NavigationRail } from './NavigationRail'
 import { PanelHost } from './PanelHost'
+import { RegionBoundary } from './RegionBoundary'
 import { select, selectionOf, useChangeView, useSelection } from './router'
 import { SceneRegion } from './SceneRegion'
 import { TopBar } from './TopBar'
@@ -32,8 +34,13 @@ export function Shell() {
   const selected = useSelection() !== null
   useEscapeStepsBack()
   return (
-    <div className="bg-page relative h-dvh w-dvw overflow-hidden">
-      <SceneRegion />
+    // Clipped, not hidden: a hidden box still scrolls when something inside asks to be seen, and a
+    // panel's screen-reader text, placed against this box, reaches below the window.
+    <div className="bg-page relative h-dvh w-dvw overflow-clip">
+      {/* Every region fails alone (FR-CMD-07): the others, and the safety controls, keep working. */}
+      <RegionBoundary name="scene" className="absolute inset-0 grid place-items-center p-8">
+        <SceneRegion />
+      </RegionBoundary>
       {/* The second row never grows past the window: a panel taller than it scrolls inside
           itself, and the map tools stay in view. */}
       <div
@@ -42,16 +49,28 @@ export function Shell() {
         }`}
       >
         <div className="col-span-full">
-          <TopBar />
+          <RegionBoundary name="top bar">
+            <TopBar />
+          </RegionBoundary>
         </div>
         <div className="self-start">
-          <NavigationRail />
+          <RegionBoundary name="navigation">
+            <NavigationRail />
+          </RegionBoundary>
         </div>
         <div className="flex min-h-0 flex-col items-start justify-between">
           <PanelHost />
-          {/* Bottom right whether or not a panel is open (the design system). */}
-          <div className="mt-auto self-end">
-            <MapTools />
+          {/* The safety controls bottom left and the map tools bottom right, whether or not a
+              panel is open (the design system), so the controls are on every screen (FR-CMD-07). */}
+          <div className="mt-auto flex w-full items-end justify-between gap-4">
+            <RegionBoundary name="safety controls">
+              <SafetyBar />
+            </RegionBoundary>
+            <div className="ml-auto">
+              <RegionBoundary name="map tools">
+                <MapTools />
+              </RegionBoundary>
+            </div>
           </div>
         </div>
         <Inspector />

@@ -7,6 +7,7 @@ import { Vector3 } from 'three'
 import {
   configureControls,
   coveredBy,
+  fitPose,
   flyTo,
   framePose,
   keepAboveTerrain,
@@ -88,6 +89,16 @@ export function Controls({ site, organizationId }: Props) {
           const { x, y, z } = last.subject
           const pose = framePose(new Vector3(x, y, z), camera, size, coveredBy(panel !== undefined))
           void flyTo(controls, pose, site, transition)
+        } else if (last.command === 'fit') {
+          if (last.box === undefined) return
+          // As the overview does, fitting lets go of a followed aircraft: the operation is the subject now.
+          useCameraCommands.getState().pin(null)
+          const camera = {
+            position: controls.getPosition(new Vector3()),
+            target: controls.getTarget(new Vector3()),
+          }
+          const pose = fitPose(last.box, camera, size, coveredBy(panel !== undefined))
+          void flyTo(controls, pose, site, transition)
         } else {
           const share = last.command === 'closer' ? CLOSER : FARTHER
           void controls.dolly(controls.distance * share, transition)
@@ -97,6 +108,15 @@ export function Controls({ site, organizationId }: Props) {
       }),
     [site, reducedMotion, invalidate, size, panel],
   )
+
+  // Declared after the overview and the subscription above, so both are in place when a sender waiting for
+  // the camera (OperationFocus) is told it can send: a command sent from an earlier effect would be lost.
+  useEffect(() => {
+    useCameraCommands.getState().setReady(true)
+    return () => {
+      useCameraCommands.getState().setReady(false)
+    }
+  }, [])
 
   return <CameraControls ref={ref} makeDefault />
 }

@@ -10,6 +10,120 @@ requests it merged.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-16
+
+M4 (operations) closed: an operation is planned, prepared, simulated and flown
+from the console against Sky Orchestrator's released stack, with every move in
+its log, the commands held to confirm, the safety controls on every screen and
+the cloud geofence watching every executing flight. Its five exit criteria are
+met against Sky Orchestrator v0.4.3 and its fake bridge.
+
+### Added
+
+- `soc-geo`: one telemetry sample judged against a flight's geofence snapshot:
+  inside, in the warning band, outside or above the ceiling, or unknown (#112).
+- Migration `0010`: operations and their lifecycle of 14 states, assignments,
+  operators, flight files, flights and their states, command intents,
+  transition requests, the preflight checks and the append-only operation log,
+  each broadcast on the organization's state topic (#115).
+- `soc-cloud`:
+  - each stack's status and envelope read from Sky Orchestrator's wayline API,
+    an unanswered read recorded as unknown; flight files judged in dry runs
+    (#114, #117);
+  - a flight task's progress decoded with how it ended (#113);
+  - each flight watched from its prepare: its file kept for the dock, every
+    sample judged against its geofence, the first outside returning the aircraft
+    home before anything is written, once, across restarts; take-off, landing,
+    the aircraft's own return and stale telemetry logged; one sample a second
+    kept as its track (#119).
+- `soc-operations`: the lifecycle decided from each request, command outcome
+  and flight progress; the sixteen preflight checks judged every second; a real
+  launch only for a file whose simulation ended ok under the same phone
+  configuration, in real mode (#118).
+- The console:
+  - the operations panel, and the operation in the inspector: its definition,
+    planned flight, operators, checks, moves and log, streamed as recorded
+    (#116, #120);
+  - the flight console under a flying operation's header: the mode, Simulated
+    flight or Real flight; the status, waypoint and progress; Pause, Resume,
+    Return home, Stop and Undo, each held 1.5 s to send; the aircraft's live
+    values; the commands' feed with the meaning of every refusal (#122);
+  - Pause all and Return all home on every screen while an operation launches or
+    flies, each region of the console failing alone (#122);
+  - each flight's track drawn over its plan (#122);
+  - `pnpm demo` plays the lifecycle, and the operation's aircraft flies its
+    stored flight (#122);
+  - the operation's five steps, plan to done, with the move to the next first,
+    a simulation or a launch held back while a blocking check does not pass;
+    its checks counted, those passing folded away; a card per drone with its
+    route and what it says now (#128);
+  - with an operation selected, only its aircraft drawn and the camera framing
+    it; a drone selected while its operation is underway drawn with its flight,
+    and an operation's route drawn before its flight is saved (#129).
+- `contracts/results`: what each Sky Orchestrator refusal means, by the method
+  that drew it, shared by soc-operations and the console (#118, #122).
+- The end to end against Sky Orchestrator's released stack (`soc_e2e.so_stack`):
+  its compose files and configuration contract vendored at v0.4.3, an operation
+  simulated and flown real, restarts mid-flight, and its own simulation gate;
+  the same flight worked in Chrome through the console (#121, #126).
+
+### Changed
+
+- The configuration contract is 2.3.0: soc-cloud reads `stack_status_poll_ms`
+  and `stack_envelope_poll_s` (#117); soc-operations reads
+  `stack_envelope_poll_s` and holds an envelope current for two of its reads;
+  a status must be read more often than it goes stale (#123).
+- An assignment's speed may be left blank: it is saved as the stack's limit, or
+  the model's maximum where that is lower. An operation needs a geofence, and
+  its height reads Height. Settings is gone from the rail, as nothing fills it
+  in the MVP (#128).
+
+### Fixed
+
+- PF-ENVELOPE no longer fails between two reads of the envelope (#123).
+- The console keeps a check or a log entry a read in flight would have
+  overwritten, and reads its state again once Realtime delivers after a join,
+  so a change made just after it opens is not lost (#124).
+- The end to end against Sky Orchestrator no longer leaves a directory owned
+  by root in the checkout: the recorded flight its compose file mounts is
+  vendored (#127).
+- The console no longer scrolls as a whole when something in a panel asks to be
+  seen; the demo shows an operation's latest request, not its first (#128).
+
+### Measured
+
+- Commands through Sky Orchestrator's released stack and fake bridge, 100
+  pauses and resumes of a simulated flight: 4.1 ms p95 to the wire, 21.8 ms p95
+  to the dock's reply (`NFR-PERF-02` asks 300 ms and 1 s); in Chrome, 100
+  commands in 50 cycles, the reply shown 99 to 114 ms p95 after the hold
+  confirmed it; each logged move shown in the console within 32 ms of being
+  recorded while the channel delivers (`FR-LOG-03` asks 1 s).
+- The geofence return: 0.1 ms p99 over 200 replayed crossings in soc-cloud,
+  2.1 ms p99 over 20 crossings through Mosquitto (`NFR-PERF-04` asks 100 ms).
+- A restart of soc-cloud or soc-operations mid-flight, simulated or real: the
+  flight ends ok, its prepare and execute sent once each, its track kept
+  (`NFR-REL-01`).
+- A real prepare of a file never simulated is refused by SOC and, sent straight
+  to Sky Orchestrator, by its own gate (`314010`, `NFR-SAF-05`).
+
+### Deploy
+
+- Every `soc-cloud.json` needs `stack_status_poll_ms` and
+  `stack_envelope_poll_s`; every `soc-operations.json` needs
+  `stack_envelope_poll_s`, the same value as its soc-cloud's (default 30).
+- Migration `0010` runs before the services start.
+
+### Known limitations
+
+- Sky Orchestrator v0.4.3 is not cleared for real flight until its build passes
+  the phone's own simulator session (its NFR-SAF-04).
+- The real launch is flown against the fake bridge; the first real flight is M5.
+- Realtime delivers to a console's state channel only a moment after it joins;
+  a change made in that moment shows once the console reads its state again,
+  at most 5 s later (`JOIN_SETTLE_MS`).
+- At Sky Orchestrator v0.4.3 a flight's waypoint index reads 0 after its last
+  waypoint, during the return home; SO fixed it for its next release (SO #135).
+
 ## [0.4.0] — 2026-10-12
 
 M3 (mission design) closed: geofences and waylines drawn on the farm's terrain,

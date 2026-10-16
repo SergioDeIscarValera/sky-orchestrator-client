@@ -50,13 +50,12 @@ const WAYLINE_ROW = {
   name: 'Ronda',
   takeoff: [-4.7245, 41.6523],
   default_height_m: 40,
-  speed_ms: 5,
   design: { schema_version: '1.0.0', primitives: [] },
   waypoints: [
     { index: 0, position: [-4.7245, 41.6523], height_m: 40, actions: [] },
-    { index: 1, position: [-4.71, 41.64], height_m: 45, speed_ms: 4 },
+    { index: 1, position: [-4.71, 41.64], height_m: 45 },
   ],
-  metrics: { waypoint_count: 2, distance_m: 1234.5, duration_s: 300 },
+  metrics: { waypoint_count: 2, distance_m: 1234.5 },
   bake_version: '1.0.0',
   created_at: STAMP,
   updated_at: STAMP,
@@ -67,13 +66,12 @@ const WAYLINE_DRAFT: WaylineDraft = {
   name: 'Ronda',
   takeoff: { latitudeDeg: 41.6523, longitudeDeg: -4.7245 },
   defaultHeightM: 40,
-  speedMs: 5,
   design: { schema_version: '1.0.0', primitives: [] },
   waypoints: [
     { index: 0, position: { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }, heightM: 40 },
-    { index: 1, position: { latitudeDeg: 41.64, longitudeDeg: -4.71 }, heightM: 45, speedMs: 4 },
+    { index: 1, position: { latitudeDeg: 41.64, longitudeDeg: -4.71 }, heightM: 45 },
   ],
-  metrics: { waypointCount: 2, distanceM: 1234.5, durationS: 300 },
+  metrics: { waypointCount: 2, distanceM: 1234.5 },
   bakeVersion: '1.0.0',
 }
 
@@ -376,10 +374,9 @@ describe('the waylines through PostgREST (IR-WAY, FR-WAY-09)', () => {
         name: 'Ronda',
         takeoff: WAYLINE_DRAFT.takeoff,
         defaultHeightM: 40,
-        speedMs: 5,
         design: { schema_version: '1.0.0', primitives: [] },
         waypoints: WAYLINE_DRAFT.waypoints,
-        metrics: { waypointCount: 2, distanceM: 1234.5, durationS: 300 },
+        metrics: { waypointCount: 2, distanceM: 1234.5 },
         bakeVersion: '1.0.0',
         createdAt: STAMP,
         updatedAt: STAMP,
@@ -407,13 +404,12 @@ describe('the waylines through PostgREST (IR-WAY, FR-WAY-09)', () => {
       name: 'Ronda',
       takeoff: [-4.7245, 41.6523],
       default_height_m: 40,
-      speed_ms: 5,
       design: { schema_version: '1.0.0', primitives: [] },
       waypoints: [
         { index: 0, position: [-4.7245, 41.6523], height_m: 40 },
-        { index: 1, position: [-4.71, 41.64], height_m: 45, speed_ms: 4 },
+        { index: 1, position: [-4.71, 41.64], height_m: 45 },
       ],
-      metrics: { waypoint_count: 2, distance_m: 1234.5, duration_s: 300 },
+      metrics: { waypoint_count: 2, distance_m: 1234.5 },
       bake_version: '1.0.0',
     })
   })
@@ -427,12 +423,12 @@ describe('the waylines through PostgREST (IR-WAY, FR-WAY-09)', () => {
       waypoints: [
         { index: 0, position: { latitudeDeg: 41.6523, longitudeDeg: -4.7245 }, heightM: 40 },
       ],
-      metrics: { waypointCount: 1, distanceM: 0, durationS: 0 },
+      metrics: { waypointCount: 1, distanceM: 0 },
       bakeVersion: '1.0.1',
     })
     expect(last(supabase).body).toEqual({
       waypoints: [{ index: 0, position: [-4.7245, 41.6523], height_m: 40 }],
-      metrics: { waypoint_count: 1, distance_m: 0, duration_s: 0 },
+      metrics: { waypoint_count: 1, distance_m: 0 },
       bake_version: '1.0.1',
     })
   })
@@ -503,7 +499,6 @@ describe('the waylines through PostgREST (IR-WAY, FR-WAY-09)', () => {
       'defaultHeightM',
       "A wayline's default height must be above zero.",
     ],
-    ['wayline_speed_positive', 'speedMs', "A wayline's speed must be above zero."],
     ['wayline_design_object', 'design', 'The design must be an object.'],
     [
       'wayline_waypoints_baked',
@@ -513,7 +508,7 @@ describe('the waylines through PostgREST (IR-WAY, FR-WAY-09)', () => {
     [
       'wayline_metrics_object',
       'metrics',
-      'The metrics of the bake need a waypoint count, a distance and a duration, as numbers.',
+      'The metrics of the bake need a waypoint count and a distance, as numbers.',
     ],
     [
       'wayline_bake_version_given',
@@ -554,7 +549,7 @@ describe('the waylines through PostgREST (IR-WAY, FR-WAY-09)', () => {
       body: [
         {
           ...WAYLINE_ROW,
-          waypoints: [{ index: 0, position: [-4.7245, 41.6523], height_m: '40', speed_ms: null }],
+          waypoints: [{ index: 0, position: [-4.7245, 41.6523], height_m: '40' }],
         },
       ],
     })

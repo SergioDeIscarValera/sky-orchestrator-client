@@ -11,6 +11,7 @@ import { useAircraftColours } from '../fleets/colours'
 import { Swatch } from '../fleets/Swatch'
 import { useFleets } from '../fleets/data'
 import type { Geodetic } from '../geometry/projection'
+import { useOperationAircraft } from '../operations/involvement'
 import { useTelemetryStore, useTrack } from '../telemetry/context'
 import { useFreshness } from '../telemetry/freshness'
 import {
@@ -81,6 +82,9 @@ export function Aircraft({
   const [hovered, setHovered] = useState<string | null>(null)
   const [labelled, setLabelled] = useState<readonly string[]>([])
   const selected = selectedKey(selection, fleets.data)
+  // While an operation is selected, the scene draws the aircraft of its fleets and no other (FR-SCN-04).
+  const operationId = selection?.kind === 'operation' ? selection.operationId : null
+  const involved = useOperationAircraft(operationId)
   const pinned = useCameraCommands((state) => state.pinned)
   const reducedMotion = useReducedMotion()
   // Pinned, the camera first flies in to frame the aircraft, then moves with it.
@@ -139,6 +143,11 @@ export function Aircraft({
     invalidate()
   }, [pinned, invalidate])
 
+  // The aircraft drawn change with the operation's fleets, which are read after the selection.
+  useEffect(() => {
+    invalidate()
+  }, [involved, invalidate])
+
   // The organization's aircraft are another set once it changes: nothing stays pinned.
   useEffect(
     () => () => {
@@ -153,6 +162,7 @@ export function Aircraft({
     const positions = new Map<string, Placement>()
     if (origin !== null) {
       for (const [key, track] of store.getState().tracks) {
+        if (involved !== null && !involved.has(key)) continue
         const drawn = drawnAt(track, origin, now, settings, site.ground)
         if (drawn === null) continue
         aircraft.push({ key, drawn, colour: colourOf(key) })

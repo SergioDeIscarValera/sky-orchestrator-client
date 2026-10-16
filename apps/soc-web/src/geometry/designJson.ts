@@ -2,20 +2,22 @@ import { BackendError } from '../backend/backend'
 import { positionFromStorage, positionToStorage } from '../backend/positions'
 import { z } from '../schema'
 import type { Baked, BakedWaypoint, Design, DesignPoint, Primitive } from './bake'
+import type { Flight } from './flight'
 import type { Envelope, Violation } from './limits'
 import type { Geodetic } from './projection'
 
 /**
- * A wayline's design and its bake as contracts/geometry/design.schema.json writes them
+ * A wayline's design and its bake, and the flight an operation makes of it, as
+ * contracts/geometry/design.schema.json (2.0.0) writes them
  * (FR-WAY-09): what the designer saves to soc.waylines and reads back as saved. Reading
  * refuses what the schema refuses, naming the path of each refusal; it never guesses a value
  * or fills a default. Writing gives the schema's keys and only those, the optional ones left
  * out when undefined. Sky Orchestrator's envelope is read the same way (FR-WAY-11).
  */
 
-/** The version written; a document at any 1.x.y reads, as the schema's pattern allows. */
-const SCHEMA_VERSION = '1.0.0'
-const VERSION_1X = z.string().check(z.regex(/^1\.[0-9]+\.[0-9]+$/))
+/** The version written; a document at any 2.x.y reads, as the schema's pattern allows. */
+const SCHEMA_VERSION = '2.2.0'
+const VERSION_2X = z.string().check(z.regex(/^2\.[0-9]+\.[0-9]+$/))
 
 /** positionFromStorage's answer, its refusal returned rather than thrown, for a zod transform. */
 function positionOrRefusal(stored: unknown): Geodetic | string {
@@ -114,12 +116,9 @@ const GRID = z.strictObject({
 const PRIMITIVE = z.discriminatedUnion('kind', [ROUTE, POINTS, CIRCLE, GRID])
 
 const DESIGN = z.strictObject({
-  schema_version: VERSION_1X,
+  schema_version: VERSION_2X,
   takeoff: POSITION,
   default_height_m: ABOVE_ZERO,
-  takeoff_security_height_m: z.number().check(z.gt(0), z.lte(120)),
-  speed_ms: ABOVE_ZERO,
-  finish_action: FINISH_ACTION,
   primitives: z.array(PRIMITIVE),
 })
 
@@ -137,10 +136,18 @@ const BAKED_WAYPOINT = z.strictObject({
   actions: RESERVED_ACTIONS,
 })
 
-// A bake with no waypoint is never a plan, so the schema refuses one: the bake reports
-// `no_waypoints` for nothing drawn, and saving that bake is refused here.
+// A bake with no waypoint is never a wayline, so the schema refuses one: nothing drawn
+// bakes to no waypoint, and saving that bake is refused here.
 const BAKED = z.strictObject({
-  schema_version: VERSION_1X,
+  schema_version: VERSION_2X,
+  waypoints: z.array(BAKED_WAYPOINT).check(z.minLength(1)),
+  distance_m: z.number().check(z.gte(0)),
+})
+
+// A flight with no waypoint is never a plan: the flight reports `no_waypoints`, and
+// writing it down is refused here.
+const FLIGHT = z.strictObject({
+  schema_version: VERSION_2X,
   takeoff_security_height_m: z.number().check(z.gt(0), z.lte(120)),
   reference_point: POSITION,
   speed_ms: ABOVE_ZERO,
@@ -191,9 +198,6 @@ export function designFromJson(raw: unknown): Design {
   return {
     takeoff: json.takeoff,
     defaultHeightM: json.default_height_m,
-    takeoffSecurityHeightM: json.takeoff_security_height_m,
-    speedMs: json.speed_ms,
-    finishAction: json.finish_action,
     primitives: json.primitives.map((primitive) => primitiveOf(primitive)),
   }
 }
@@ -232,9 +236,18 @@ function pointOf(json: z.infer<typeof POINT>): DesignPoint {
   }
 }
 
-/** The console's Baked from a bake as the schema writes it, refused when the schema refuses it. */
+/** The console's Baked from a wayline's bake as the schema writes it, refused when it refuses it. */
 export function bakedFromJson(raw: unknown): Baked {
   const json = parse(BAKED, raw, 'baked')
+  return {
+    waypoints: json.waypoints.map((waypoint) => waypointOf(waypoint)),
+    distanceM: json.distance_m,
+  }
+}
+
+/** The console's Flight from a flight as the schema writes it, refused when the schema refuses it. */
+export function flightFromJson(raw: unknown): Flight {
+  const json = parse(FLIGHT, raw, 'flight')
   return {
     referencePoint: json.reference_point,
     takeoffSecurityHeightM: json.takeoff_security_height_m,
@@ -257,6 +270,25 @@ function violationOf(json: z.infer<typeof VIOLATION>): Violation {
     message: json.message,
     ...(json.waypoint_index === undefined ? {} : { waypointIndex: json.waypoint_index }),
   }
+}
+
+/**
+ * What Sky Orchestrator's GET /v1/envelope answers, its EnvelopeRead: the limits under `envelope`,
+ * beside its two fingerprints and the application in force, which is not read.
+ */
+const ENVELOPE_READ = z.object({
+  envelope: z.unknown(),
+  envelope_fingerprint: z.string(),
+  config_fingerprint: z.string(),
+})
+
+/**
+ * The envelope from a whole answer of GET /v1/envelope, as soc-cloud records it on soc.stacks
+ * (IR-STK) and soc-operations reads it: the limits under `envelope`; the rest is not read.
+ */
+export function envelopeFromStackRead(raw: unknown): Envelope {
+  const read = parse(ENVELOPE_READ, raw, 'envelope read')
+  return envelopeFromSkyOrchestrator(read.envelope)
 }
 
 /**
@@ -287,9 +319,6 @@ export function designToJson(design: Design) {
     schema_version: SCHEMA_VERSION,
     takeoff: positionToStorage(design.takeoff),
     default_height_m: design.defaultHeightM,
-    takeoff_security_height_m: design.takeoffSecurityHeightM,
-    speed_ms: design.speedMs,
-    finish_action: design.finishAction,
     primitives: design.primitives.map((primitive) => primitiveToJson(primitive)),
   }
 }
@@ -328,25 +357,38 @@ function pointToJson(point: DesignPoint) {
   }
 }
 
-/** A bake as design.schema.json writes it. Writing refuses only a position out of range. */
+/** A wayline's bake as design.schema.json writes it. Writing refuses only a position out of range. */
 export function bakedToJson(baked: Baked) {
   return {
     schema_version: SCHEMA_VERSION,
-    takeoff_security_height_m: baked.takeoffSecurityHeightM,
-    reference_point: positionToStorage(baked.referencePoint),
-    speed_ms: baked.speedMs,
-    finish_action: baked.finishAction,
-    waypoints: baked.waypoints.map((waypoint) => ({
-      index: waypoint.index,
-      position: positionToStorage(waypoint),
-      height_m: waypoint.heightM,
-    })),
+    waypoints: baked.waypoints.map((waypoint) => waypointToJson(waypoint)),
     distance_m: baked.distanceM,
-    duration_s: baked.durationS,
-    violations: baked.violations.map((violation) => ({
+  }
+}
+
+/** A flight as design.schema.json writes it. Writing refuses only a position out of range. */
+export function flightToJson(flight: Flight) {
+  return {
+    schema_version: SCHEMA_VERSION,
+    takeoff_security_height_m: flight.takeoffSecurityHeightM,
+    reference_point: positionToStorage(flight.referencePoint),
+    speed_ms: flight.speedMs,
+    finish_action: flight.finishAction,
+    waypoints: flight.waypoints.map((waypoint) => waypointToJson(waypoint)),
+    distance_m: flight.distanceM,
+    duration_s: flight.durationS,
+    violations: flight.violations.map((violation) => ({
       rule: violation.rule,
       message: violation.message,
       ...(violation.waypointIndex === undefined ? {} : { waypoint_index: violation.waypointIndex }),
     })),
+  }
+}
+
+function waypointToJson(waypoint: BakedWaypoint) {
+  return {
+    index: waypoint.index,
+    position: positionToStorage(waypoint),
+    height_m: waypoint.heightM,
   }
 }

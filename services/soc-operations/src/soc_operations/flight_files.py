@@ -1,16 +1,16 @@
 """A wayline's flight file: the KMZ that Sky Orchestrator's dock downloads (FR-WAY-11, ADR-0008).
 
-The baked wayline becomes two files, laid out as DJI's WPML has them. ``wpmz/template.kml``
+A wayline's flight becomes two files, laid out as DJI's WPML has them. ``wpmz/template.kml``
 is the planning file, which Sky Orchestrator reads for its name and template type only.
 ``wpmz/waylines.wpml`` is the execution file, the one that is flown. Every element written
 is in Sky Orchestrator's accepted subset (``contracts/sky-orchestrator/wpml/supported-subset.md``),
 and the tests hold the output to that page's own tables.
 
-The same bake and name always give the same bytes, on any machine: a fixed entry order,
+The same flight and name always give the same bytes, on any machine: a fixed entry order,
 timestamp and attributes, no comment and no extra fields, and the entries stored rather than
 deflated, so no zlib release can move a byte. A flight file is a few kilobytes.
 
-A bake's positions are ``[longitude, latitude]``. DJI's order, latitude first in
+A flight's positions are ``[longitude, latitude]``. DJI's order, latitude first in
 ``takeOffRefPoint``, is translated here and nowhere else.
 """
 
@@ -30,6 +30,9 @@ from xml.parsers import expat
 from xml.sax.saxutils import escape
 
 WPML_NAMESPACE = "http://www.dji.com/wpmz/1.0.2"
+#: The version of the WPML profile this builder writes, kept with every file it builds
+#: (IR-FIL): a file is never rebuilt, so what flew says which profile it was written in.
+PROFILE_VERSION = "1.0.0"
 KML_NAMESPACE = "http://www.opengis.net/kml/2.2"
 TEMPLATE_PATH = "wpmz/template.kml"
 WAYLINES_PATH = "wpmz/waylines.wpml"
@@ -39,9 +42,9 @@ WAYLINES_PATH = "wpmz/waylines.wpml"
 MAX_HEIGHT_M = 120.0
 MAX_SPEED_MS = 15.0
 
-# Sky Orchestrator's finish_action names for the bake's three, as DJI's finishAction spells them.
+# Sky Orchestrator's finish_action names for the flight's three, as DJI's finishAction spells them.
 FINISH_ACTIONS = {"return_home": "goHome", "hold": "noAction", "land": "autoLand"}
-DJI_FINISH_ACTIONS = {dji: bake for bake, dji in FINISH_ACTIONS.items()}
+DJI_FINISH_ACTIONS = {dji: ours for ours, dji in FINISH_ACTIONS.items()}
 
 # A fixed archive: no clock, no platform default, no comment, no extra fields.
 ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
@@ -62,7 +65,7 @@ class _Waypoint:
     index: int
     position: tuple[float, float]
     height_m: float
-    speed_ms: float | None  # the speed into this waypoint, when the bake gives one
+    speed_ms: float | None  # the speed into this waypoint, when the flight gives one
 
 
 @dataclass(frozen=True)
@@ -75,14 +78,14 @@ class _Wayline:
     waypoints: tuple[_Waypoint, ...]
 
 
-def build(baked: Mapping[str, Any], *, name: str) -> bytes:
-    """The KMZ for a bake. The same bake and name always give the same bytes.
+def build(flight: Mapping[str, Any], *, name: str) -> bytes:
+    """The KMZ for a flight. The same flight and name always give the same bytes.
 
-    Raises ValueError, naming the problem, for anything the subset cannot fly, and for a bake
-    with violations (FR-WAY-08): a flight file is only ever built from a clean bake. Nothing
-    is produced for a refused bake.
+    Raises ValueError, naming the problem, for anything the subset cannot fly, and for a flight
+    with violations (FR-WAY-08): a flight file is only ever built from a clean flight. Nothing
+    is produced for a refused flight.
     """
-    wayline = _wayline(baked, name)
+    wayline = _wayline(flight, name)
     return _archive(
         ((TEMPLATE_PATH, _template_text(wayline)), (WAYLINES_PATH, _waylines_text(wayline)))
     )
@@ -95,7 +98,7 @@ def fingerprint(kmz: bytes) -> str:
 
 
 def read(kmz: bytes) -> dict[str, Any]:
-    """The bake's fields back from a flight file this module wrote, for the round-trip tests.
+    """The flight's fields back from a flight file this module wrote, for the round-trip tests.
 
     Refuses a DOCTYPE or an entity declaration, and anything not shaped the way the module
     writes it.
@@ -126,13 +129,13 @@ def read(kmz: bytes) -> dict[str, Any]:
     }
 
 
-# --- validation: the bake, refused whole or accepted whole -------------------------------
+# --- validation: the flight, refused whole or accepted whole -------------------------------
 
 
-def _wayline(baked: Mapping[str, Any], name: str) -> _Wayline:
-    _clean(_field(baked, "violations"))
-    speed = _bounded(_field(baked, "speed_ms"), MAX_SPEED_MS, "speed_ms", "m/s")
-    waypoints = _waypoints(_field(baked, "waypoints"))
+def _wayline(flight: Mapping[str, Any], name: str) -> _Wayline:
+    _clean(_field(flight, "violations"))
+    speed = _bounded(_field(flight, "speed_ms"), MAX_SPEED_MS, "speed_ms", "m/s")
+    waypoints = _waypoints(_field(flight, "waypoints"))
     # The file has no speed for the transit into waypoint 0: that leg flies at the wayline's
     # speed. A different speed given for it is refused, not dropped.
     first_speed = waypoints[0].speed_ms
@@ -143,15 +146,15 @@ def _wayline(baked: Mapping[str, Any], name: str) -> _Wayline:
         )
     return _Wayline(
         name=_name(name),
-        reference_point=_position(_field(baked, "reference_point"), "reference_point"),
+        reference_point=_position(_field(flight, "reference_point"), "reference_point"),
         takeoff_security_height_m=_bounded(
-            _field(baked, "takeoff_security_height_m"),
+            _field(flight, "takeoff_security_height_m"),
             MAX_HEIGHT_M,
             "takeoff_security_height_m",
             "m",
         ),
         speed_ms=speed,
-        finish_action=_finish_action(_field(baked, "finish_action")),
+        finish_action=_finish_action(_field(flight, "finish_action")),
         waypoints=waypoints,
     )
 
@@ -161,7 +164,7 @@ def _clean(violations: object) -> None:
         raise ValueError("violations is not a list")
     if violations:
         told = "; ".join(_violation(violation) for violation in violations)
-        raise ValueError(f"the bake breaks {len(violations)} rule(s), so it does not fly: {told}")
+        raise ValueError(f"the flight breaks {len(violations)} rule(s), so it does not fly: {told}")
 
 
 def _violation(violation: object) -> str:
@@ -192,7 +195,7 @@ def _waypoints(value: object) -> tuple[_Waypoint, ...]:
     if not isinstance(value, list | tuple):
         raise ValueError("waypoints is not a list")
     if not value:
-        raise ValueError("the bake has no waypoint: a flight file flies at least one")
+        raise ValueError("the flight has no waypoint: a flight file flies at least one")
     return tuple(_waypoint(raw, position) for position, raw in enumerate(value))
 
 
@@ -222,7 +225,7 @@ def _waypoint(raw: object, position: int) -> _Waypoint:
     )
 
 
-def _field(mapping: Mapping[str, Any], key: str, where: str = "the bake") -> Any:
+def _field(mapping: Mapping[str, Any], key: str, where: str = "the flight") -> Any:
     if key not in mapping:
         raise ValueError(f"{where} has no {key}")
     return mapping[key]
@@ -447,7 +450,7 @@ def _text(parent: ET.Element, tag: str) -> str:
 
 
 def _reference_point(text: str) -> tuple[float, float]:
-    """Latitude, longitude, height in the file; longitude, latitude as the bake holds them."""
+    """Latitude, longitude, height in the file; longitude, latitude as the flight holds them."""
     latitude, longitude, _height = _numbers(text, 3)
     return longitude, latitude
 

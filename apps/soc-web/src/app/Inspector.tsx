@@ -4,6 +4,7 @@ import { lazy, Suspense } from 'react'
 import { Waiting } from '../fleets/Details'
 import { DeviceDetail } from '../fleets/DeviceDetail'
 import { FleetDetail } from '../fleets/FleetDetail'
+import { RegionBoundary } from './RegionBoundary'
 import { useSelect, useSelection } from './router'
 import { CARD, QUIET_BUTTON } from './styles'
 
@@ -13,6 +14,12 @@ const GeofenceDetail = lazy(() =>
 )
 const WaylineDetail = lazy(() =>
   import('../plans/WaylineDetail').then(({ WaylineDetail: detail }) => ({ default: detail })),
+)
+// An operation's detail loads with the operations' queries and the flight planner (NFR-PERF-05).
+const OperationDetail = lazy(() =>
+  import('../operations/OperationDetail').then(({ OperationDetail: detail }) => ({
+    default: detail,
+  })),
 )
 
 /**
@@ -30,7 +37,9 @@ export function Inspector() {
         ? selection.geofenceId
         : selection.kind === 'wayline'
           ? selection.waylineId
-          : `${selection.gatewaySn}/${selection.aircraftSn}`
+          : selection.kind === 'operation'
+            ? selection.operationId
+            : `${selection.gatewaySn}/${selection.aircraftSn}`
   return (
     <aside
       aria-label="Inspector"
@@ -49,19 +58,25 @@ export function Inspector() {
         >
           <X size={16} aria-hidden />
         </button>
-        {selection.kind === 'fleet' ? (
-          <FleetDetail fleetId={selection.fleetId} />
-        ) : selection.kind === 'geofence' ? (
-          <Suspense fallback={<Waiting>Loading the geofence…</Waiting>}>
-            <GeofenceDetail geofenceId={selection.geofenceId} />
-          </Suspense>
-        ) : selection.kind === 'wayline' ? (
-          <Suspense fallback={<Waiting>Loading the wayline…</Waiting>}>
-            <WaylineDetail waylineId={selection.waylineId} />
-          </Suspense>
-        ) : (
-          <DeviceDetail gatewaySn={selection.gatewaySn} aircraftSn={selection.aircraftSn} />
-        )}
+        <RegionBoundary name="inspector">
+          {selection.kind === 'fleet' ? (
+            <FleetDetail fleetId={selection.fleetId} />
+          ) : selection.kind === 'geofence' ? (
+            <Suspense fallback={<Waiting>Loading the geofence…</Waiting>}>
+              <GeofenceDetail geofenceId={selection.geofenceId} />
+            </Suspense>
+          ) : selection.kind === 'wayline' ? (
+            <Suspense fallback={<Waiting>Loading the wayline…</Waiting>}>
+              <WaylineDetail waylineId={selection.waylineId} />
+            </Suspense>
+          ) : selection.kind === 'operation' ? (
+            <Suspense fallback={<Waiting>Loading the operation…</Waiting>}>
+              <OperationDetail operationId={selection.operationId} />
+            </Suspense>
+          ) : (
+            <DeviceDetail gatewaySn={selection.gatewaySn} aircraftSn={selection.aircraftSn} />
+          )}
+        </RegionBoundary>
       </div>
     </aside>
   )

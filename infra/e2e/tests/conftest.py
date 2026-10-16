@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
 
+import asyncpg
 import pytest
 
 from soc_check import Image
@@ -43,3 +44,13 @@ def console_image() -> Iterator[Image]:
         yield image
     finally:
         image.remove()
+
+
+@pytest.fixture
+async def admin(platform: Platform) -> AsyncIterator[asyncpg.Connection]:
+    """A connection as supabase_admin, which the flights' tests read and write through."""
+    connection = await platform.stack.postgres.connect("supabase_admin")
+    try:
+        yield connection
+    finally:
+        await connection.close()

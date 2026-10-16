@@ -66,15 +66,15 @@ def _position(value: Sequence[float]) -> Geodetic:
     return Geodetic(latitude, longitude)
 
 
-def plan_of(baked: Mapping[str, Any]) -> Plan:
-    """A bake (contracts/geometry/design.schema.json) as the envelope judges it."""
+def plan_of(flight: Mapping[str, Any]) -> Plan:
+    """A flight, the design schema's ``$defs.flight``, as the envelope judges it."""
     return Plan(
-        reference_point=_position(baked["reference_point"]),
-        takeoff_security_height_m=baked["takeoff_security_height_m"],
-        speed_ms=baked["speed_ms"],
+        reference_point=_position(flight["reference_point"]),
+        takeoff_security_height_m=flight["takeoff_security_height_m"],
+        speed_ms=flight["speed_ms"],
         waypoints=[
             Waypoint(w["index"], _position(w["position"]), w["height_m"], w.get("speed_ms"))
-            for w in baked["waypoints"]
+            for w in flight["waypoints"]
         ],
     )
 

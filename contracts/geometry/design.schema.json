@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator-client/blob/develop/contracts/geometry/design.schema.json",
-  "title": "A wayline's design and its bake",
-  "description": "What the console's wayline designer saves (FR-WAY-01 to FR-WAY-10) and what its bake turns it into (FR-WAY-07): a takeoff point, drawn primitives and their heights in; one ordered wayline out, carrying what Sky Orchestrator's mission plan needs (contracts/sky-orchestrator/msdk/mission-plan.schema.json). Positions are WGS84 degrees in GeoJSON order, [longitude, latitude], and polygons rings of them, not closed, as the units table says (information requirements, rule 3); DJI's order is translated in one place only, the flight file builder. Heights are metres above the takeoff point (ADR-0014). The TypeScript bake generates it, the Python validators check it (ADR-0009).",
-  "x-version": "1.0.0",
+  "title": "A wayline's design and its bake, and the flight an operation makes of it",
+  "description": "What the console's wayline designer saves (FR-WAY-01 to FR-WAY-09) and what its bake turns it into (FR-WAY-07): a wayline is geometry, a takeoff point, drawn primitives and their heights in, ordered waypoints with their heights and a distance out. Its speed, the climb over the takeoff, what it does at the end and its geofence belong to the operation that flies it (M4), which makes a flight of it, $defs.flight, carrying what Sky Orchestrator's mission plan needs (contracts/sky-orchestrator/msdk/mission-plan.schema.json) and what the flight file builder writes. Positions are WGS84 degrees in GeoJSON order, [longitude, latitude], and polygons rings of them, not closed, as the units table says (information requirements, rule 3); DJI's order is translated in one place only, the flight file builder. Heights are metres above the takeoff point (ADR-0014). The TypeScript generates, the Python validators check (ADR-0009). 2.0.0 (2026-10-12, ADR-0024): the wayline loses its speed, climb and finish action to the operation, and its bake its flight's fields, now $defs.flight. 2.1.0 (2026-10-12): a bake's first waypoint is right above the takeoff, so the aircraft climbs straight up, never on a slant. 2.2.0 (2026-10-12): every leg of a bake is level or straight up or down: going up it climbs where it is, going down it descends where it arrives.",
+  "x-version": "2.2.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -257,15 +257,12 @@
         "schema_version",
         "takeoff",
         "default_height_m",
-        "takeoff_security_height_m",
-        "speed_ms",
-        "finish_action",
         "primitives"
       ],
       "properties": {
         "schema_version": {
           "type": "string",
-          "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+          "pattern": "^2\\.[0-9]+\\.[0-9]+$"
         },
         "takeoff": {
           "description": "Where it takes off from, on the terrain (FR-WAY-01): the plan's reference point.",
@@ -273,23 +270,6 @@
         },
         "default_height_m": {
           "$ref": "#/$defs/height_m"
-        },
-        "takeoff_security_height_m": {
-          "description": "Climbed to before the transit, as Sky Orchestrator's plan.",
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "maximum": 120
-        },
-        "speed_ms": {
-          "description": "The wayline's one speed (FR-WAY-10).",
-          "$ref": "#/$defs/speed_ms"
-        },
-        "finish_action": {
-          "enum": [
-            "return_home",
-            "hold",
-            "land"
-          ]
         },
         "primitives": {
           "type": "array",
@@ -310,7 +290,100 @@
             ]
           }
         }
+      },
+      "description": "A wayline as drawn: where it takes off, its default height, and its primitives (FR-WAY-01 to FR-WAY-06)."
+    },
+    "baked": {
+      "description": "A wayline's bake (FR-WAY-07): its waypoints in the order flown, each with its height above the takeoff point, the first right above the takeoff at the default height, or a point drawn there at its own, every leg level or straight up or down, and the distance from the takeoff through them, in Sky Orchestrator's metric. Saved with the design and loaded as saved, never baked again (FR-WAY-09).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "waypoints",
+        "distance_m"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "pattern": "^2\\.[0-9]+\\.[0-9]+$"
+        },
+        "waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/waypoint"
+          }
+        },
+        "distance_m": {
+          "description": "From the takeoff point through every waypoint, in Sky Orchestrator's metric.",
+          "type": "number",
+          "minimum": 0
+        }
       }
+    },
+    "flight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "takeoff_security_height_m",
+        "reference_point",
+        "speed_ms",
+        "finish_action",
+        "waypoints",
+        "distance_m",
+        "duration_s",
+        "violations"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "description": "This schema's version. The mission plan made of the flight carries Sky Orchestrator's own (contracts/sky-orchestrator/msdk/mission-plan.schema.json, 1.x).",
+          "pattern": "^2\\.[0-9]+\\.[0-9]+$"
+        },
+        "takeoff_security_height_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 120
+        },
+        "reference_point": {
+          "$ref": "#/$defs/position"
+        },
+        "speed_ms": {
+          "$ref": "#/$defs/speed_ms"
+        },
+        "finish_action": {
+          "enum": [
+            "return_home",
+            "hold",
+            "land"
+          ]
+        },
+        "waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/waypoint"
+          }
+        },
+        "distance_m": {
+          "description": "From the reference point through every waypoint, in Sky Orchestrator's metric.",
+          "type": "number",
+          "minimum": 0
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "violations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/violation"
+          }
+        }
+      },
+      "description": "A wayline flown by an operation (M4): its bake's waypoints, a leg longer than the stack's limit split, flown from the reference point after climbing to the takeoff security height, at the operation's speed, finishing as it says; its distance and duration in Sky Orchestrator's metric, and every limit of the stack's envelope it breaks (FR-WAY-08). What the flight file builder takes (FR-WAY-11)."
     },
     "waypoint": {
       "type": "object",
@@ -361,68 +434,6 @@
         "waypoint_index": {
           "type": "integer",
           "minimum": 0
-        }
-      }
-    },
-    "baked": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "takeoff_security_height_m",
-        "reference_point",
-        "speed_ms",
-        "finish_action",
-        "waypoints",
-        "distance_m",
-        "duration_s",
-        "violations"
-      ],
-      "properties": {
-        "schema_version": {
-          "type": "string",
-          "pattern": "^1\\.[0-9]+\\.[0-9]+$"
-        },
-        "takeoff_security_height_m": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "maximum": 120
-        },
-        "reference_point": {
-          "$ref": "#/$defs/position"
-        },
-        "speed_ms": {
-          "$ref": "#/$defs/speed_ms"
-        },
-        "finish_action": {
-          "enum": [
-            "return_home",
-            "hold",
-            "land"
-          ]
-        },
-        "waypoints": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 200,
-          "items": {
-            "$ref": "#/$defs/waypoint"
-          }
-        },
-        "distance_m": {
-          "description": "From the reference point through every waypoint, in Sky Orchestrator's metric.",
-          "type": "number",
-          "minimum": 0
-        },
-        "duration_s": {
-          "type": "number",
-          "minimum": 0
-        },
-        "violations": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/violation"
-          }
         }
       }
     }

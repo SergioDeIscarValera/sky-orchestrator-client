@@ -1,0 +1,48 @@
+# Topic ACLs (NFR-SEC-02). Anything not granted here is refused: a publish is
+# dropped with "not authorised", a subscription is refused, a message is not
+# delivered.
+#
+# ADR-0003: so-gateway is the only service on thing/ and sys/. Every other
+# service is confined to so/internal/. The one outside client is the Cloud API
+# client (FR-DEV-06), which reads the dock's side and writes only the topics a
+# cloud platform sends on.
+#
+# tools/tests/test_infra.py holds this file to those rules, and
+# infra/tests/test_stack.py attempts every forbidden publish against the broker.
+
+user so-gateway
+topic readwrite thing/#
+topic readwrite sys/#
+topic readwrite so/internal/#
+# The broker's log, where FR-DEV-06's takeover shows up: Mosquitto logs
+# "Client cloud-client already connected, closing old connection." at error
+# level, and who took over at notice level ("New client connected from
+# <address> as cloud-client"). infra/tests/test_stack.py holds both levels.
+topic read $SYS/broker/log/E
+topic read $SYS/broker/log/N
+
+user so-fleet
+topic readwrite so/internal/#
+
+user so-wayline
+topic readwrite so/internal/#
+
+user so-bridge
+topic readwrite so/internal/#
+
+# DJI Cloud API topic directions, cloud to dock. The client reads everything the
+# dock publishes and writes nothing the dock would.
+user cloud-client
+topic read thing/#
+topic read sys/#
+topic write thing/product/+/services
+topic write thing/product/+/property/set
+topic write thing/product/+/events_reply
+topic write thing/product/+/requests_reply
+topic write thing/product/+/drc/down
+topic write sys/product/+/status_reply
+
+# The container's own health check. Its password is random per start and never
+# leaves the container.
+user broker-healthcheck
+topic read $SYS/broker/uptime

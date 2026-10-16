@@ -11,6 +11,7 @@ from typing import Any, cast
 
 import aiomqtt
 import pytest
+from structlog.testing import capture_logs
 
 import soc_config
 from soc_cloud.commands import Commands, Intent
@@ -128,6 +129,9 @@ def _fields(row: Intent) -> dict[str, Any]:
 class Cloud:
     def __init__(self, ttl_s: int = TTL_S) -> None:
         self.store = FakeStore()
+        self.files_kept: list[uuid.UUID] = []
+        self.keeps_files = True
+        self.settled: list[tuple[str, str, int]] = []
         self.clients: list[FakeClient] = []
         self.link = StackLink(
             STACK,
@@ -147,7 +151,17 @@ class Cloud:
             ttl_s=ttl_s,
             reply_timeout_s=REPLY_TIMEOUT_S,
             latencies=self.latencies,
+            on_prepare=self._keep_file,
+            on_settled=lambda intent, result: self.settled.append(
+                (intent.verb, intent.status, result)
+            ),
         )
+
+    async def _keep_file(self, intent: Intent) -> bool:
+        # What the flights' watch does: the file is kept before the prepare goes out.
+        assert self.services() == []
+        self.files_kept.append(intent.id)
+        return self.keeps_files
 
     def _client(self, *arguments: Any, **options: Any) -> aiomqtt.Client:
         made = FakeClient(*arguments, **options)
@@ -161,12 +175,12 @@ class Cloud:
     def services(self) -> list[dict[str, Any]]:
         return [message for topic, message in self.client.published if topic.endswith("/services")]
 
-    def reply(self, intent: uuid.UUID, result: int) -> None:
+    def reply(self, intent: uuid.UUID, result: int, flight: uuid.UUID | None = None) -> None:
         self.client.deliver(
             f"thing/product/{DOCK}/services_reply",
             {
                 "tid": str(intent),
-                "bid": str(self.store.rows[intent].flight_id),
+                "bid": str(flight or self.store.rows[intent].flight_id),
                 "timestamp": int(time.time() * 1000),
                 "method": "return_home",
                 "data": {"result": result},
@@ -318,3 +332,151 @@ async def test_an_unreadable_announcement_is_ignored() -> None:
     async with connected() as cloud:
         await cloud.commands.announced("not-a-uuid")
         assert cloud.services() == []
+
+
+PREPARE = {
+    "flight_id": "3f0e3a2c-1b7d-4c55-9b8e-2a6f1c4d5e60",
+    "task_type": 0,
+    "wayline_type": 0,
+    "file": {"url": "http://soc-cloud:8090/files/" + "0f" * 16 + ".kmz", "fingerprint": "a" * 32},
+    "rth_altitude": 20,
+    "out_of_control_action": 0,
+    "exit_wayline_when_rc_lost": 0,
+    "simulate_mission": {"is_enable": 1, "latitude": 41.6523, "longitude": -4.7245},
+}
+
+
+async def test_a_prepare_goes_out_once_its_flights_file_is_kept() -> None:
+    async with connected() as cloud:
+        intent = cloud.store.request(verb="prepare", payload=PREPARE)
+        await cloud.commands.announced(str(intent))
+        ((message),) = cloud.services()
+    assert cloud.files_kept == [intent]
+    assert message["method"] == "flighttask_prepare"
+    assert cloud.store.status(intent) == "sent"
+
+
+async def test_a_prepare_whose_file_cannot_be_kept_fails_before_the_wire() -> None:
+    async with connected() as cloud:
+        cloud.keeps_files = False
+        intent = cloud.store.request(verb="prepare", payload=PREPARE)
+        await cloud.commands.announced(str(intent))
+        assert cloud.services() == []
+    assert cloud.store.status(intent) == "failed"
+
+
+async def test_only_a_prepare_waits_for_a_file() -> None:
+    async with connected() as cloud:
+        await cloud.commands.announced(str(cloud.store.request(verb="pause")))
+    assert cloud.files_kept == []
+
+
+async def test_each_reply_recorded_is_reported_as_settled() -> None:
+    async with connected() as cloud:
+        accepted, refused = cloud.store.request(verb="pause"), cloud.store.request()
+        for intent in (accepted, refused):
+            await cloud.commands.announced(str(intent))
+        cloud.reply(accepted, 0)
+        cloud.reply(refused, 314010)
+        await until(lambda: len(cloud.settled) == 2)
+        cloud.reply(accepted, 0)
+        await asyncio.sleep(0.01)
+    assert sorted(cloud.settled) == [("pause", "accepted", 0), ("return_home", "refused", 314010)]
+
+
+def sent_by_soc_cloud(cloud: Cloud, intent: uuid.UUID, flight: uuid.UUID) -> None:
+    """The intent as soc.record_geofence_breach inserts it: already sent."""
+    cloud.store.rows[intent] = Intent(
+        id=intent,
+        organization_id=uuid.uuid4(),
+        operation_id=uuid.uuid4(),
+        flight_id=flight,
+        gateway_sn=DOCK,
+        verb="return_home",
+        payload={},
+        status="sent",
+        requested_at=now(),
+        sent_at=now(),
+    )
+
+
+async def test_send_now_puts_the_return_on_the_wire_before_any_record() -> None:
+    flight = uuid.uuid4()
+    async with connected() as cloud:
+        intent = await cloud.commands.send_now(DOCK, flight, "return_home")
+        ((message),) = cloud.services()
+    assert intent is not None
+    assert cloud.store.rows == {}
+    assert message["tid"] == str(intent)
+    assert message["bid"] == str(flight)
+    assert (message["method"], message["data"]) == ("return_home", {})
+
+
+async def test_a_reply_heard_before_the_record_settles_it_once_recorded() -> None:
+    flight = uuid.uuid4()
+    async with connected() as cloud:
+        intent = await cloud.commands.send_now(DOCK, flight, "return_home")
+        assert intent is not None
+        cloud.reply(intent, 0, flight)
+        cloud.reply(intent, 1, flight)
+        await asyncio.sleep(0.01)
+        sent_by_soc_cloud(cloud, intent, flight)
+        assert cloud.store.status(intent) == "sent"
+        cloud.commands.recorded(intent, kept=True)
+        await until(lambda: cloud.store.status(intent) == "accepted")
+        await asyncio.sleep(REPLY_TIMEOUT_S * 2)
+    assert cloud.store.results == {intent: 0}
+    assert cloud.settled == [("return_home", "accepted", 0)]
+    assert cloud.latencies.summary()["command_reply_ms"]["count"] == 1
+
+
+async def test_a_reply_after_the_record_settles_it_as_any_other() -> None:
+    flight = uuid.uuid4()
+    async with connected() as cloud:
+        intent = await cloud.commands.send_now(DOCK, flight, "return_home")
+        assert intent is not None
+        sent_by_soc_cloud(cloud, intent, flight)
+        cloud.commands.recorded(intent, kept=True)
+        cloud.reply(intent, 0, flight)
+        await until(lambda: cloud.store.status(intent) == "accepted")
+
+
+async def test_a_return_recorded_with_no_reply_times_out_from_when_it_was_sent() -> None:
+    flight = uuid.uuid4()
+    async with connected() as cloud:
+        intent = await cloud.commands.send_now(DOCK, flight, "return_home")
+        assert intent is not None
+        await asyncio.sleep(REPLY_TIMEOUT_S * 0.75)
+        sent_by_soc_cloud(cloud, intent, flight)
+        cloud.commands.recorded(intent, kept=True)
+        await asyncio.sleep(REPLY_TIMEOUT_S * 0.5)
+        assert cloud.store.status(intent) == "timed_out"
+
+
+async def test_a_return_never_recorded_lets_its_reply_go() -> None:
+    flight = uuid.uuid4()
+    async with connected() as cloud:
+        intent = await cloud.commands.send_now(DOCK, flight, "return_home")
+        assert intent is not None
+        cloud.reply(intent, 0, flight)
+        await asyncio.sleep(0.01)
+        cloud.commands.recorded(intent, kept=False)
+        await asyncio.sleep(REPLY_TIMEOUT_S * 2)
+    assert cloud.store.results == {}
+    assert cloud.settled == []
+
+
+async def test_send_now_names_why_nothing_went_out() -> None:
+    async with connected(announced=False) as cloud:
+        with capture_logs() as logs:
+            unserved = await cloud.commands.send_now(DOCK, uuid.uuid4(), "return_home")
+        announce(cloud)
+        await until(lambda: cloud.link.serves(DOCK))
+        cloud.client.publish_error = aiomqtt.MqttError("The connection was lost.")
+        with capture_logs() as more:
+            unpublished = await cloud.commands.send_now(DOCK, uuid.uuid4(), "return_home")
+    assert (unserved, unpublished) == (None, None)
+    assert [entry["event"] for entry in logs + more] == [
+        "command_not_published",
+        "command_not_published",
+    ]

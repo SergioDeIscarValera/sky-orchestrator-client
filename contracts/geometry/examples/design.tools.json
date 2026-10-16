@@ -1,14 +1,11 @@
 {
   "design": {
-    "schema_version": "1.0.0",
+    "schema_version": "2.2.0",
     "takeoff": [
       -4.7245,
       41.6523
     ],
     "default_height_m": 30.0,
-    "takeoff_security_height_m": 20.0,
-    "speed_ms": 5.0,
-    "finish_action": "return_home",
     "primitives": [
       {
         "kind": "circle",

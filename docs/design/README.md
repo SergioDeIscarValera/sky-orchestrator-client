@@ -46,7 +46,7 @@ What SOC takes from it:
  navigation rail                          bottom: tables, log, flight controls
 ```
 
-- **Navigation rail** (left): Fleet, Geofences, Waylines, Operations, Settings.
+- **Navigation rail** (left): Fleet, Geofences, Waylines, Operations. Only what exists is on it: no section waits for a later milestone.
 - **Top bar**: organization switcher, search (`/`): the organization's fleets
   and aircraft by name, model or serial, choosing one selects it; a live clock
   with the link state, nothing while the live topics reach the console and a

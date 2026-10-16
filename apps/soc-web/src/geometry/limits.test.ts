@@ -7,29 +7,26 @@ import { distanceM } from './sphere'
 /** A stored position: [longitude, latitude], GeoJSON order. */
 type Position = readonly [number, number]
 
-const BAKED = (
-  JSON.parse(
-    readFileSync(
-      new URL('../../../../contracts/geometry/examples/design.route.json', import.meta.url),
-      'utf8',
-    ),
-  ) as {
-    baked: {
-      reference_point: Position
-      takeoff_security_height_m: number
-      speed_ms: number
-      waypoints: { index: number; position: Position; height_m: number }[]
-    }
-  }
-).baked
+/** contracts/flight-files' route, a wayline flown by an operation (FR-WAY-11). */
+const FLIGHT = JSON.parse(
+  readFileSync(
+    new URL('../../../../contracts/flight-files/route-return-home/flight.json', import.meta.url),
+    'utf8',
+  ),
+) as {
+  reference_point: Position
+  takeoff_security_height_m: number
+  speed_ms: number
+  waypoints: { index: number; position: Position; height_m: number }[]
+}
 
 const geodetic = ([longitudeDeg, latitudeDeg]: Position) => ({ latitudeDeg, longitudeDeg })
 
 const PLAN: Plan = {
-  referencePoint: geodetic(BAKED.reference_point),
-  takeoffSecurityHeightM: BAKED.takeoff_security_height_m,
-  speedMs: BAKED.speed_ms,
-  waypoints: BAKED.waypoints.map((w) => ({
+  referencePoint: geodetic(FLIGHT.reference_point),
+  takeoffSecurityHeightM: FLIGHT.takeoff_security_height_m,
+  speedMs: FLIGHT.speed_ms,
+  waypoints: FLIGHT.waypoints.map((w) => ({
     index: w.index,
     position: geodetic(w.position),
     heightM: w.height_m,
@@ -58,16 +55,26 @@ describe("Sky Orchestrator's envelope, as libs/soc-geo checks it (FR-WAY-08)", (
 
   it.each([
     ['max_waypoints', { maxWaypoints: 3 }, [['too_many_waypoints', undefined]]],
-    ['max_height_m', { maxHeightM: 32 }, [['height_above_max', 2]]],
+    [
+      'max_height_m',
+      { maxHeightM: 32 },
+      // Up to 35 m above the second point, at the third, and level above the fourth.
+      [
+        ['height_above_max', 3],
+        ['height_above_max', 4],
+        ['height_above_max', 5],
+      ],
+    ],
     [
       'geofence',
       { geofenceRadiusM: 30 },
       [
-        ['outside_geofence', 1],
         ['outside_geofence', 2],
+        ['outside_geofence', 3],
+        ['outside_geofence', 4],
       ],
     ],
-    ['max_leg_m', { maxLegM: 30 }, [['leg_too_long', 1]]],
+    ['max_leg_m', { maxLegM: 30 }, [['leg_too_long', 2]]],
     ['max_total_distance_m', { maxTotalDistanceM: 100 }, [['total_distance_too_long', undefined]]],
     ['max_horizontal_speed_ms', { maxHorizontalSpeedMs: 4 }, [['speed_above_max', undefined]]],
   ] as const)('%s: refused with its code and waypoint', (_name, limits, expected) => {

@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/SergioDeIscarValera/sky-orchestrator/blob/develop/contracts/msdk/mission-plan.schema.json",
   "title": "Normalised mission plan",
-  "description": "What so-wayline hands the aircraft application for one wayline (FR-WAY-08). WPML is parsed in Python, never in Kotlin. Positions are WGS84; every height is metres above the takeoff point, because the MVP accepts relativeToStartPoint waylines only (ADR-0017). The aircraft takes off wherever it is, climbs to takeoff_security_height_m, flies straight to the point above reference_point, and flies the waypoints from there (FR-BRG-12).",
-  "x-version": "1.0.0",
+  "description": "What so-wayline hands the aircraft application for one wayline (FR-WAY-08). WPML is parsed in Python, never in Kotlin. Positions are WGS84; every height is metres above the takeoff point, because the MVP accepts relativeToStartPoint waylines only (ADR-0017). The aircraft takes off wherever it is, climbs to takeoff_security_height_m, flies straight to the point above reference_point, and flies the waypoints from there (FR-BRG-12). 1.1.0: the task's return height, return_height_m, which so-fleet sets from the cloud's prepare (ADR-0042); so-wayline never writes it.",
+  "x-version": "1.1.0",
   "x-constraints": [
     "waypoints[i].index == i",
     "the aircraft application refuses at load any plan whose waypoints, transit or legs break its own envelope (FR-SAF-01)"
@@ -67,6 +67,12 @@
       "items": {
         "$ref": "#/$defs/waypoint"
       }
+    },
+    "return_height_m": {
+      "type": "integer",
+      "minimum": 20,
+      "maximum": 1500,
+      "description": "The task's return height, metres above the takeoff point, as the cloud's flighttask_prepare asked for it, within DJI's range for that field. so-fleet sets it; so-wayline never does. The application holds it, bounded to its envelope's max_height_m, on the aircraft before the mission starts. Absent, the return height is max_height_m. Added in 1.1.0."
     }
   },
   "$defs": {

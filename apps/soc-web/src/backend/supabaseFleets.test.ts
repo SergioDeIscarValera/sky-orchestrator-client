@@ -3,7 +3,7 @@ import { ADDRESS, EMAIL, FakeSupabase } from '../test/fakeSupabase'
 import { jwtFor, PASSWORD_FOR_TESTS } from '../test/keys'
 import { FieldRefusedError, type Backend, type StateEvent } from './backend'
 import { supabaseBackend } from './supabase'
-import type { StateChannel } from './supabaseFleets'
+import { JOIN_SETTLE_MS, type StateChannel } from './supabaseFleets'
 
 const ORGANIZATION = '11111111-1111-4111-8111-111111111111'
 const FLEET_ID = '33333333-3333-4333-8333-333333333333'
@@ -241,6 +241,28 @@ describe('the catalogue, the devices and the fleets through PostgREST', () => {
     )
   })
 
+  it('says an aircraft that flies keeps its wire identity, which the trigger refuses to move (FR-FLE-05)', async () => {
+    const { backend, supabase } = await signedIn()
+    supabase.answers.set('PATCH /rest/v1/fleets', {
+      status: 400,
+      body: {
+        code: '23514',
+        message: `fleet ${FLEET_ID}: its aircraft is flying`,
+        details: null,
+        hint: null,
+      },
+    })
+    const refused = await backend
+      .changeFleet(FLEET_ID, { aircraftSn: 'SOTESTUAV002' })
+      .catch((error: unknown) => error)
+    expect(refused).toBeInstanceOf(FieldRefusedError)
+    expect(refused).toMatchObject({
+      field: null,
+      code: '23514',
+      message: 'This aircraft is flying: its wire identity stays until its flight ends.',
+    })
+  })
+
   it.each([
     [
       400,
@@ -307,6 +329,12 @@ describe("the organization's state topic", () => {
       'command_intent',
       'geofence',
       'wayline',
+      'operation',
+      'flight',
+      'flight_state',
+      'operation_event',
+      'transition_request',
+      'operation_check',
     ])
     channel?.handlers.get('device')?.({ event: 'device', payload: { online: false } })
     expect(seen).toEqual([{ kind: 'device', payload: { online: false } }])
@@ -343,11 +371,68 @@ describe("the organization's state topic", () => {
   it('says so on every join, since what was broadcast while away is lost', async () => {
     const { backend, channels } = await signedIn()
     const seen: StateEvent['kind'][] = []
-    backend.onState(ORGANIZATION, ({ kind }) => seen.push(kind))
+    const stop = backend.onState(ORGANIZATION, ({ kind }) => seen.push(kind))
     const joined = channels.get(`org:${ORGANIZATION}:soc:state`)?.joined
     for (const status of ['SUBSCRIBED', 'CHANNEL_ERROR', 'TIMED_OUT', 'SUBSCRIBED'])
       joined?.(status)
     expect(seen).toEqual(['joined', 'joined'])
+    stop()
+  })
+
+  describe('after a join, before Realtime is known to deliver to it', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    async function joinedOnce() {
+      const { backend, channels } = await signedIn()
+      const seen: StateEvent['kind'][] = []
+      const stop = backend.onState(ORGANIZATION, ({ kind }) => seen.push(kind))
+      const channel = channels.get(`org:${ORGANIZATION}:soc:state`)
+      channel?.joined?.('SUBSCRIBED')
+      const broadcast = (kind: string) => {
+        channel?.handlers.get(kind)?.({ event: kind, payload: {} })
+      }
+      return { seen, stop, broadcast, rejoin: () => channel?.joined?.('SUBSCRIBED') }
+    }
+
+    it('reads everything once more with the first broadcast, and not with the next', async () => {
+      const { seen, stop, broadcast } = await joinedOnce()
+      broadcast('stack')
+      broadcast('operation')
+      expect(seen).toEqual(['joined', 'stack', 'joined', 'operation'])
+      vi.advanceTimersByTime(JOIN_SETTLE_MS)
+      expect(seen).toEqual(['joined', 'stack', 'joined', 'operation'])
+      stop()
+    })
+
+    it('reads everything once more when no broadcast comes, and again with the first one', async () => {
+      const { seen, stop, broadcast } = await joinedOnce()
+      vi.advanceTimersByTime(JOIN_SETTLE_MS - 1)
+      expect(seen).toEqual(['joined'])
+      vi.advanceTimersByTime(1)
+      expect(seen).toEqual(['joined', 'joined'])
+      broadcast('operation')
+      broadcast('operation')
+      expect(seen).toEqual(['joined', 'joined', 'operation', 'joined', 'operation'])
+      stop()
+    })
+
+    it('starts over on a rejoin, and reads nothing more once stopped', async () => {
+      const { seen, stop, broadcast, rejoin } = await joinedOnce()
+      broadcast('stack')
+      rejoin()
+      broadcast('stack')
+      expect(seen).toEqual(['joined', 'stack', 'joined', 'joined', 'stack', 'joined'])
+      rejoin()
+      stop()
+      vi.advanceTimersByTime(JOIN_SETTLE_MS)
+      expect(seen.at(-1)).toBe('joined')
+      expect(seen).toHaveLength(7)
+    })
   })
 
   it('tells the console its link is down while the browser is offline (NFR-REL-07)', async () => {

@@ -29,6 +29,11 @@ RELATIONS = (
         lambda v: v["telemetry_stale_after_ms"] < v["telemetry_lost_after_ms"],
     ),
     Relation(
+        "stack_status_poll_ms < telemetry_stale_after_ms",
+        frozenset({"stack_status_poll_ms", "telemetry_stale_after_ms"}),
+        lambda v: v["stack_status_poll_ms"] < v["telemetry_stale_after_ms"],
+    ),
+    Relation(
         "stacks[].name are distinct",
         frozenset({"stacks"}),
         lambda v: distinct(stack["name"] for stack in v["stacks"]),

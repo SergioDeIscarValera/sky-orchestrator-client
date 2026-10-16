@@ -21,7 +21,11 @@ jobs:
     # The rulesets require this exact name; renaming it drops the requirement.
     name: Gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
+    # Read Sky Orchestrator's released images for the end to end against them.
+    permissions:
+      contents: read
+      packages: read
     steps:
       - id: checkout
         uses: actions/checkout@v7
@@ -186,7 +190,7 @@ jobs:
           if [ -n "$BASE_REF" ]; then
             changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
           fi
-          if [ -z "$BASE_REF" ] || grep -qE '^(database/|infra/(check|compose|e2e|migrate)/|libs/|services/|contracts/(broadcast|catalogue|config|flight-files|geometry|recordings|sky-orchestrator)/|apps/soc-web/(Dockerfile|nginx/|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)|\.dockerignore$|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)' <<< "$changed"; then
+          if [ -z "$BASE_REF" ] || grep -qE '^(database/|infra/(check|compose|e2e|migrate)/|libs/|services/|contracts/(broadcast|catalogue|config|events|flight-files|geometry|operations|recordings|results|sky-orchestrator)/|apps/soc-web/(Dockerfile|nginx/|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)|\.dockerignore$|pyproject\.toml$|uv\.lock$|\.github/workflows/ci\.yml$)' <<< "$changed"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -217,7 +221,7 @@ jobs:
           if [ -n "$BASE_REF" ]; then
             changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
           fi
-          if [ -z "$BASE_REF" ] || grep -qE '^(apps/soc-web/|contracts/(config|broadcast|geometry|recordings|site|sky-orchestrator)/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
+          if [ -z "$BASE_REF" ] || grep -qE '^(apps/soc-web/|contracts/(config|broadcast|events|flight-files|geometry|operations|recordings|results|site|sky-orchestrator)/|database/migrations/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -275,7 +279,27 @@ jobs:
           set -euo pipefail
           corepack enable
           (cd apps/soc-web && pnpm install --frozen-lockfile)
-          uv run --frozen pytest infra/e2e/tests -m lane
+          uv run --frozen pytest infra/e2e/tests -m "lane and not sky_orchestrator"
+
+      # M4's end to end against Sky Orchestrator's released stack (infra/e2e): its images,
+      # pinned by the vendored release, read from GHCR with this run's token, the fake bridge
+      # standing in for the phone. An operation flown in the simulator, paused and resumed
+      # 50 times (NFR-PERF-02), held from a real launch while the simulator runs, and flown
+      # again through a restart of each service (NFR-REL-01). The same flight worked in
+      # Chrome through the console: 50 pauses and resumes, each reply shown within 1 s at p95.
+      # Node runs whenever the lane's changes do (the node step), so it is there for this one.
+      - name: End to end against Sky Orchestrator
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' && steps.lane-changes.outputs.changed == 'true' }}
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOC_E2E_SOFTWARE_GL: "1"
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          corepack enable
+          (cd apps/soc-web && pnpm install --frozen-lockfile)
+          uv run --frozen pytest infra/e2e/tests -m "lane and sky_orchestrator"
 
       # The binary, not the action: the action needs a licence on organization
       # accounts, and a scan that stops the day the repository moves is no gate.

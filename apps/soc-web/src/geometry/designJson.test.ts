@@ -10,7 +10,11 @@ import {
   designFromJson,
   designToJson,
   envelopeFromSkyOrchestrator,
+  envelopeFromStackRead,
+  flightFromJson,
+  flightToJson,
 } from './designJson'
+import { planFlight, type FinishAction } from './flight'
 
 /** The golden bakes libs/soc-geo checks, and the two design examples the schema is shown with. */
 const VECTORS = new URL('../../../../contracts/geometry/bake.json', import.meta.url)
@@ -30,7 +34,14 @@ interface Vector {
   readonly name: string
   readonly design: Json
   readonly envelope: Json
+  /** The wayline's bake; null for a design with nothing drawn. */
   readonly baked: Json
+  readonly operation: {
+    readonly takeoff_security_height_m: number
+    readonly speed_ms: number
+    readonly finish_action: FinishAction
+  }
+  readonly flight: Json
 }
 
 interface VectorFile {
@@ -62,20 +73,28 @@ function caseNamed(name: string): Vector {
   return found
 }
 
-const settingsOf = (vector: Vector): BakeSettings => ({
-  origin: ORIGIN,
-  maxArcSpacingM: FILE.max_arc_spacing_m,
-  envelope: envelopeFromSkyOrchestrator(vector.envelope),
-})
+const settingsOf = (): BakeSettings => ({ origin: ORIGIN, maxArcSpacingM: FILE.max_arc_spacing_m })
+
+/** The flight a golden case's operation makes of its wayline, against its envelope. */
+const flightOf = (vector: Vector) => {
+  const design = designFromJson(vector.design)
+  return planFlight(design.takeoff, bake(design, settingsOf()), {
+    origin: ORIGIN,
+    takeoffSecurityHeightM: vector.operation.takeoff_security_height_m,
+    speedMs: vector.operation.speed_ms,
+    finishAction: vector.operation.finish_action,
+    envelope: envelopeFromSkyOrchestrator(vector.envelope),
+  })
+}
+
+/** A flight the schema accepts: the first golden case's. */
+const FLIGHT = (FILE.cases[0] as Vector).flight
 
 /** A design the schema accepts, with every kind of primitive and every optional key in it. */
 const DESIGN: { [key: string]: Json } = {
-  schema_version: '1.0.0',
+  schema_version: '2.2.0',
   takeoff: [-4.7245, 41.6523],
   default_height_m: 30,
-  takeoff_security_height_m: 20,
-  speed_ms: 5,
-  finish_action: 'return_home',
   primitives: [
     {
       kind: 'route',
@@ -122,17 +141,11 @@ const SKY_ORCHESTRATOR_ENVELOPE: Json = {
   max_horizontal_speed_ms: 15,
 }
 
-const DESIGN_KEYS = [
-  'schema_version',
-  'takeoff',
-  'default_height_m',
-  'takeoff_security_height_m',
-  'speed_ms',
-  'finish_action',
-  'primitives',
-] as const
+const DESIGN_KEYS = ['schema_version', 'takeoff', 'default_height_m', 'primitives'] as const
 
-const BAKED_KEYS = [
+const BAKED_KEYS = ['schema_version', 'waypoints', 'distance_m'] as const
+
+const FLIGHT_KEYS = [
   'schema_version',
   'takeoff_security_height_m',
   'reference_point',
@@ -198,7 +211,7 @@ function refusalOf(read: () => unknown): string {
   throw new Error('the read was not refused')
 }
 
-type Document = 'design' | 'baked' | 'envelope'
+type Document = 'design' | 'baked' | 'flight' | 'envelope'
 
 /** An edit of a valid document, which the reader must refuse with a message naming `names`. */
 interface Refusal {
@@ -221,6 +234,7 @@ const DOCUMENTS: {
 } = {
   design: { base: DESIGN, read: (raw) => designFromJson(raw) },
   baked: { base: ROUTE.baked, read: (raw) => bakedFromJson(raw) },
+  flight: { base: FLIGHT, read: (raw) => flightFromJson(raw) },
   envelope: { base: SKY_ORCHESTRATOR_ENVELOPE, read: (raw) => envelopeFromSkyOrchestrator(raw) },
 }
 
@@ -280,18 +294,27 @@ const MISSING_KEY: readonly Case[] = [
       names: 'design.primitives[0].points',
     },
   ]),
-  ...of('baked', [
-    ...BAKED_KEYS.map((key): Refusal => ({
+  ...of(
+    'baked',
+    BAKED_KEYS.map((key): Refusal => ({
       title: key,
       path: [key],
       value: MISSING,
       names: `baked.${key}`,
     })),
+  ),
+  ...of('flight', [
+    ...FLIGHT_KEYS.map((key): Refusal => ({
+      title: key,
+      path: [key],
+      value: MISSING,
+      names: `flight.${key}`,
+    })),
     {
       title: "a violation's message",
       path: ['violations'],
       value: [{ rule: 'no_waypoints' }],
-      names: 'baked.violations[0].message',
+      names: 'flight.violations[0].message',
     },
   ]),
   ...of(
@@ -315,13 +338,6 @@ const WRONG_KIND: readonly Case[] = [
       value: '30',
       names: 'design.default_height_m',
     },
-    {
-      title: 'takeoff_security_height_m',
-      path: ['takeoff_security_height_m'],
-      value: null,
-      names: 'design.takeoff_security_height_m',
-    },
-    { title: 'speed_ms', path: ['speed_ms'], value: true, names: 'design.speed_ms' },
     { title: 'primitives', path: ['primitives'], value: {}, names: 'design.primitives' },
     { title: 'a primitive', path: ['primitives', 0], value: null, names: 'design.primitives[0]' },
     {
@@ -355,29 +371,29 @@ const WRONG_KIND: readonly Case[] = [
       names: 'design.primitives[3].angle_deg',
     },
   ]),
-  ...of('baked', [
-    { title: 'schema_version', path: ['schema_version'], value: 1, names: 'baked.schema_version' },
+  ...of('flight', [
+    { title: 'schema_version', path: ['schema_version'], value: 1, names: 'flight.schema_version' },
     {
       title: 'takeoff_security_height_m',
       path: ['takeoff_security_height_m'],
       value: '20',
-      names: 'baked.takeoff_security_height_m',
+      names: 'flight.takeoff_security_height_m',
     },
-    { title: 'speed_ms', path: ['speed_ms'], value: null, names: 'baked.speed_ms' },
-    { title: 'waypoints', path: ['waypoints'], value: 'x', names: 'baked.waypoints' },
+    { title: 'speed_ms', path: ['speed_ms'], value: null, names: 'flight.speed_ms' },
+    { title: 'waypoints', path: ['waypoints'], value: 'x', names: 'flight.waypoints' },
     {
       title: 'a waypoint index',
       path: ['waypoints', 0, 'index'],
       value: '0',
-      names: 'baked.waypoints[0].index',
+      names: 'flight.waypoints[0].index',
     },
     {
       title: 'a waypoint height',
       path: ['waypoints', 0, 'height_m'],
       value: '30',
-      names: 'baked.waypoints[0].height_m',
+      names: 'flight.waypoints[0].height_m',
     },
-    { title: 'violations', path: ['violations'], value: {}, names: 'baked.violations' },
+    { title: 'violations', path: ['violations'], value: {}, names: 'flight.violations' },
   ]),
   ...of('envelope', [
     {
@@ -502,18 +518,18 @@ const POSITION: readonly Case[] = [
       names: 'design.primitives[3].area[2]',
     },
   ]),
-  ...of('baked', [
+  ...of('flight', [
     {
       title: 'a reference point of three numbers',
       path: ['reference_point'],
       value: [-4.7245, 41.6523, 0],
-      names: 'baked.reference_point',
+      names: 'flight.reference_point',
     },
     {
       title: 'a waypoint latitude past 90',
       path: ['waypoints', 0, 'position'],
       value: [-4.7245, 91],
-      names: 'baked.waypoints[0].position',
+      names: 'flight.waypoints[0].position',
     },
   ]),
   ...of('envelope', [
@@ -553,13 +569,6 @@ const HEIGHT: readonly Case[] = [
       value: -5,
       names: 'design.default_height_m',
     },
-    {
-      title: 'a takeoff security height of zero',
-      path: ['takeoff_security_height_m'],
-      value: 0,
-      names: 'design.takeoff_security_height_m',
-    },
-    { title: 'a speed of zero', path: ['speed_ms'], value: 0, names: 'design.speed_ms' },
     {
       title: 'a point height of zero',
       path: ['primitives', 0, 'points', 2, 'height_m'],
@@ -603,20 +612,20 @@ const HEIGHT: readonly Case[] = [
       names: 'design.primitives[3].point_spacing_m',
     },
   ]),
-  ...of('baked', [
+  ...of('flight', [
     {
       title: 'a waypoint height of zero',
       path: ['waypoints', 0, 'height_m'],
       value: 0,
-      names: 'baked.waypoints[0].height_m',
+      names: 'flight.waypoints[0].height_m',
     },
     {
       title: 'a takeoff security height of zero',
       path: ['takeoff_security_height_m'],
       value: 0,
-      names: 'baked.takeoff_security_height_m',
+      names: 'flight.takeoff_security_height_m',
     },
-    { title: 'a speed of zero', path: ['speed_ms'], value: 0, names: 'baked.speed_ms' },
+    { title: 'a speed of zero', path: ['speed_ms'], value: 0, names: 'flight.speed_ms' },
   ]),
   ...of('envelope', [
     {
@@ -665,7 +674,7 @@ const OTHER: readonly Case[] = [
     {
       title: 'a schema_version of another major version',
       path: ['schema_version'],
-      value: '2.0.0',
+      value: '1.0.0',
       names: 'design.schema_version',
     },
     {
@@ -679,18 +688,6 @@ const OTHER: readonly Case[] = [
       path: ['schema_version'],
       value: 'v1.0.0',
       names: 'design.schema_version',
-    },
-    {
-      title: 'a finish action the schema does not know',
-      path: ['finish_action'],
-      value: 'crash',
-      names: 'design.finish_action',
-    },
-    {
-      title: 'a takeoff security height past 120',
-      path: ['takeoff_security_height_m'],
-      value: 121,
-      names: 'design.takeoff_security_height_m',
     },
     {
       title: 'a route of one point',
@@ -756,12 +753,12 @@ const OTHER: readonly Case[] = [
     { title: 'a design that is null', path: [], value: null, names: 'design' },
     { title: 'a design that is text', path: [], value: 'design', names: 'design' },
   ]),
-  ...of('baked', [
+  ...of('flight', [
     {
       title: 'a bake with no waypoint, as nothing drawn gives: never a plan',
       path: ['waypoints'],
       value: [],
-      names: 'baked.waypoints',
+      names: 'flight.waypoints',
     },
     {
       title: 'a bake of 201 waypoints',
@@ -771,78 +768,102 @@ const OTHER: readonly Case[] = [
         position: [-4.7245, 41.6523],
         height_m: 30,
       })),
-      names: 'baked.waypoints',
+      names: 'flight.waypoints',
     },
     {
       title: 'a violation rule in capitals',
       path: ['violations'],
       value: [{ rule: 'NoWaypoints', message: 'nothing is drawn to fly' }],
-      names: 'baked.violations[0].rule',
+      names: 'flight.violations[0].rule',
     },
     {
       title: 'a violation waypoint index below zero',
       path: ['violations'],
       value: [{ rule: 'height_above_max', message: 'x', waypoint_index: -1 }],
-      names: 'baked.violations[0].waypoint_index',
+      names: 'flight.violations[0].waypoint_index',
     },
     {
       title: 'a waypoint index below zero',
       path: ['waypoints', 0, 'index'],
       value: -1,
-      names: 'baked.waypoints[0].index',
+      names: 'flight.waypoints[0].index',
     },
     {
       title: 'a waypoint index that is not whole',
       path: ['waypoints', 1, 'index'],
       value: 1.5,
-      names: 'baked.waypoints[1].index',
+      names: 'flight.waypoints[1].index',
     },
     {
       title: 'a waypoint with its own speed, which a wayline does not have',
       path: ['waypoints', 0, 'speed_ms'],
       value: 3,
-      names: 'baked.waypoints[0].speed_ms',
+      names: 'flight.waypoints[0].speed_ms',
       says: 'FR-WAY-10',
     },
     {
       title: 'a waypoint with actions, which the schema reserves',
       path: ['waypoints', 0, 'actions'],
       value: [],
-      names: 'baked.waypoints[0].actions',
+      names: 'flight.waypoints[0].actions',
       says: 'FR-WAY-12',
     },
-    { title: 'a distance below zero', path: ['distance_m'], value: -1, names: 'baked.distance_m' },
+    { title: 'a distance below zero', path: ['distance_m'], value: -1, names: 'flight.distance_m' },
     {
       title: 'a duration below zero',
       path: ['duration_s'],
       value: -0.5,
-      names: 'baked.duration_s',
+      names: 'flight.duration_s',
     },
     {
       title: 'a takeoff security height past 120',
       path: ['takeoff_security_height_m'],
       value: 121,
-      names: 'baked.takeoff_security_height_m',
+      names: 'flight.takeoff_security_height_m',
     },
     {
       title: 'a finish action the schema does not know',
       path: ['finish_action'],
       value: 'land2',
-      names: 'baked.finish_action',
+      names: 'flight.finish_action',
     },
     {
       title: 'a schema_version of another major version',
       path: ['schema_version'],
-      value: '2.0.0',
-      names: 'baked.schema_version',
+      value: '1.0.0',
+      names: 'flight.schema_version',
     },
     {
       title: 'a key the schema does not allow',
       path: ['extra'],
       value: 1,
+      names: 'flight',
+      says: 'Unrecognized key',
+    },
+    { title: 'a flight that is an array', path: [], value: [], names: 'flight' },
+  ]),
+  ...of('baked', [
+    {
+      title: 'a schema_version of another major version',
+      path: ['schema_version'],
+      value: '1.0.0',
+      names: 'baked.schema_version',
+    },
+    {
+      title: "a flight's key, which a wayline's bake does not have",
+      path: ['speed_ms'],
+      value: 5,
       names: 'baked',
       says: 'Unrecognized key',
     },
+    { title: 'no waypoint', path: ['waypoints'], value: [], names: 'baked.waypoints' },
+    {
+      title: 'a waypoint of no height',
+      path: ['waypoints', 0, 'height_m'],
+      value: 0,
+      names: 'baked.waypoints[0].height_m',
+    },
+    { title: 'a negative distance', path: ['distance_m'], value: -1, names: 'baked.distance_m' },
     { title: 'a bake that is an array', path: [], value: [], names: 'baked' },
   ]),
   ...of('envelope', [
@@ -917,17 +938,29 @@ describe('a design as design.schema.json writes it (FR-WAY-09)', () => {
     })
   })
 
-  it('reads a document at any 1.x.y, which it writes back as 1.0.0', () => {
-    expect(designFromJson({ ...DESIGN, schema_version: '1.4.2' })).toStrictEqual(
+  it('reads a document at any 2.x.y, which it writes back as 2.0.0, and refuses a 1.x.y', () => {
+    expect(designFromJson({ ...DESIGN, schema_version: '2.4.2' })).toStrictEqual(
       designFromJson(DESIGN),
     )
+    expect(refusalOf(() => designFromJson({ ...DESIGN, schema_version: '1.0.0' }))).toMatch(
+      naming('design.schema_version'),
+    )
+  })
+
+  it("refuses the flight fields a design no longer has: they are the operation's (M4)", () => {
+    for (const [key, value] of [
+      ['speed_ms', 5],
+      ['takeoff_security_height_m', 20],
+      ['finish_action', 'return_home'],
+    ] as const) {
+      expect(refusalOf(() => designFromJson({ ...DESIGN, [key]: value }))).toMatch(/design/)
+    }
   })
 
   it('reads the limits of every range the schema allows', () => {
     const design = designFromJson({
       ...DESIGN,
       takeoff: [180, -90],
-      takeoff_security_height_m: 120,
       primitives: [
         {
           kind: 'circle',
@@ -950,7 +983,6 @@ describe('a design as design.schema.json writes it (FR-WAY-09)', () => {
       ],
     })
     expect(design.takeoff).toStrictEqual({ latitudeDeg: -90, longitudeDeg: 180 })
-    expect(design.takeoffSecurityHeightM).toBe(120)
     expect(designFromJson(designToJson(design))).toStrictEqual(design)
   })
 
@@ -968,9 +1000,9 @@ describe('a design as design.schema.json writes it (FR-WAY-09)', () => {
   })
 })
 
-describe('a bake as design.schema.json writes it (FR-WAY-07, FR-WAY-09)', () => {
-  it.each(FILE.cases)('writes the bake of $name key for key as the file has it', (vector) => {
-    const baked = bake(designFromJson(vector.design), settingsOf(vector))
+describe("a wayline's bake as design.schema.json writes it (FR-WAY-07, FR-WAY-09)", () => {
+  it.each(DRAWN)('writes the bake of $name key for key as the file has it', (vector) => {
+    const baked = bake(designFromJson(vector.design), settingsOf())
     expect(bakedToJson(baked)).toStrictEqual(vector.baked)
   })
 
@@ -980,9 +1012,10 @@ describe('a bake as design.schema.json writes it (FR-WAY-07, FR-WAY-09)', () => 
     expect(bakedFromJson(bakedToJson(baked))).toStrictEqual(baked)
   })
 
-  it('refuses the bake of nothing drawn: a wayline needs a waypoint, so the schema does', () => {
-    const message = refusalOf(() => bakedFromJson(caseNamed(NOTHING_DRAWN).baked))
-    expect(message).toMatch(naming('baked.waypoints'))
+  it('keeps no bake for nothing drawn: a wayline needs a waypoint, so the schema does', () => {
+    expect(caseNamed(NOTHING_DRAWN).baked).toBeNull()
+    const nothing = bakedToJson(bake(designFromJson(caseNamed(NOTHING_DRAWN).design), settingsOf()))
+    expect(refusalOf(() => bakedFromJson(nothing))).toMatch(naming('baked.waypoints'))
   })
 
   it('reads the route example bake back as saved', () => {
@@ -994,6 +1027,23 @@ describe('a bake as design.schema.json writes it (FR-WAY-07, FR-WAY-09)', () => 
   it('reads the tools example, whose bake is null until it is baked, as a design only', () => {
     expect(TOOLS.baked).toBeNull()
     expect(refusalOf(() => bakedFromJson(TOOLS.baked))).toMatch(naming('baked'))
+  })
+})
+
+describe('a flight as design.schema.json writes it (FR-WAY-08, FR-WAY-11)', () => {
+  it.each(FILE.cases)('writes the flight of $name key for key as the file has it', (vector) => {
+    expect(flightToJson(flightOf(vector))).toStrictEqual(vector.flight)
+  })
+
+  it.each(DRAWN)('reads the flight of $name back, and writes it again', (vector) => {
+    const flight = flightFromJson(vector.flight)
+    expect(flightToJson(flight)).toStrictEqual(vector.flight)
+    expect(flightFromJson(flightToJson(flight))).toStrictEqual(flight)
+  })
+
+  it('refuses the flight of nothing drawn: a plan needs a waypoint, so the schema does', () => {
+    const message = refusalOf(() => flightFromJson(caseNamed(NOTHING_DRAWN).flight))
+    expect(message).toMatch(naming('flight.waypoints'))
   })
 })
 
@@ -1014,6 +1064,27 @@ describe("Sky Orchestrator's envelope (FR-WAY-11)", () => {
 
   it.each(FILE.cases)('reads the envelope of $name', (vector) => {
     expect(() => envelopeFromSkyOrchestrator(vector.envelope)).not.toThrow()
+  })
+
+  /** A whole answer of GET /v1/envelope (the openapi's EnvelopeRead), as soc.stacks holds it. */
+  const READ = {
+    envelope: SKY_ORCHESTRATOR_ENVELOPE,
+    envelope_fingerprint: 'e'.repeat(64),
+    config_fingerprint: 'c'.repeat(64),
+    application_in_force: null,
+  }
+
+  it('reads the limits from a whole answer of GET /v1/envelope, as a stack records it', () => {
+    expect(envelopeFromStackRead(READ)).toStrictEqual(
+      envelopeFromSkyOrchestrator(SKY_ORCHESTRATOR_ENVELOPE),
+    )
+  })
+
+  it('refuses the limits alone as a stack read, naming what is missing', () => {
+    expect(() => envelopeFromStackRead(SKY_ORCHESTRATOR_ENVELOPE)).toThrow(
+      /envelope read\.envelope_fingerprint/,
+    )
+    expect(() => envelopeFromStackRead({ ...READ, envelope: undefined })).toThrow(/^envelope: /)
   })
 })
 

@@ -143,7 +143,7 @@ def test_sky_orchestrator_accepting_what_soc_refuses_fails(
     root = checkout(tmp_path, ACCEPTS_ALL)
     assert so_acceptance.main(["--so-root", str(root), "--so-python", sys.executable]) == 1
     told = capsys.readouterr().err
-    assert "route-return-home/so_defaults: SOC predicts [('height_above_max', 2)" in told
+    assert "route-return-home/so_defaults: SOC predicts [('height_above_max', 3)" in told
     assert "route-return-home/permissive" not in told
 
 
