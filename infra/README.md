@@ -49,6 +49,8 @@ MiB at rest.
 
 ## Deploying on the mini-PC
 
+The whole deployment beside Virtual Origen and Sky Orchestrator, in order, is [`docs/mini-pc-deployment.md`](../docs/mini-pc-deployment.md). This section is SOC's part on its own.
+
 Bake each organization's site model first, from the repository root. A model is optional: an organization without one gets a flat ground (ADR-0018).
 
 1. Fetch IGN's elevation and imagery for the organization's area; this step needs the internet: `uv run soc-site fetch --latitude <latitude> --longitude <longitude> --half-size-m 1000 --sources site/sources`.
