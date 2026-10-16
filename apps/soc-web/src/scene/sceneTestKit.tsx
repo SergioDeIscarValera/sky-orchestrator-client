@@ -46,7 +46,7 @@ const BAKED = bake(DESIGN, { origin: FARM, maxArcSpacingM: 10 })
 const FENCE = [at(-200, -200), at(200, -200), at(200, 200), at(-200, 200)]
 
 /** The flight an assignment stores: from the takeoff, up to 30 m, then the corridor at 10 m/s. */
-const PLANNED = planFlight(DESIGN.takeoff, BAKED, {
+export const PLANNED = planFlight(DESIGN.takeoff, BAKED, {
   origin: FARM,
   takeoffSecurityHeightM: 30,
   speedMs: 10,

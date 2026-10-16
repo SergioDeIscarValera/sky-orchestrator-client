@@ -1,12 +1,15 @@
 import { useMemo } from 'react'
 
-import type { Assignment, Flight } from '../backend/backend'
+import type { Assignment, Flight, Wayline } from '../backend/backend'
 import type { Geodetic } from '../geometry/projection'
+import { useWaylines } from '../plans/data'
 import { FlightPath } from './FlightPath'
 import { FlightTrack } from './FlightTrack'
-import { plannedPath, takeoffOf } from './plannedFlight'
+import { assignedPath, takeoffOf } from './plannedFlight'
 import { usePalette } from './palette'
 import type { Site } from './site'
+
+const NO_WAYLINES: readonly Wayline[] = []
 
 interface PlannedProps {
   readonly assignments: readonly Assignment[]
@@ -17,17 +20,18 @@ interface PlannedProps {
 /**
  * The planned flights of assignments, each from its stored flight as it flies (FR-OPS-07): drawn as a
  * selected wayline's path is, in the accent colour, over the terrain. An assignment with no flight the
- * console reads draws none.
+ * console reads draws its wayline as designed (`assignedPath`), and none while that is not read.
  */
 export function PlannedFlights({ assignments, origin, site }: PlannedProps) {
   const palette = usePalette()
+  const waylines = useWaylines()
   const planned = useMemo(
     () =>
       assignments.flatMap((assignment) => {
-        const path = plannedPath(assignment, origin, site)
+        const path = assignedPath(assignment, waylines.data ?? NO_WAYLINES, origin, site)
         return path === null ? [] : [{ id: assignment.id, path }]
       }),
-    [assignments, origin, site],
+    [assignments, waylines.data, origin, site],
   )
   return (
     <>

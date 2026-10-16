@@ -5,13 +5,13 @@ import { useFleets } from '../fleets/data'
 import type { Geodetic } from '../geometry/projection'
 import { useAssignments, useOperation } from '../operations/data'
 import { aircraftKeysOf, fleetIdsOf } from '../operations/involvement'
-import { useGeofences } from '../plans/data'
+import { useGeofences, useWaylines } from '../plans/data'
 import { useTelemetryStore } from '../telemetry/context'
 import { drawnAt } from './aircraft'
 import { useCameraCommands, type ScenePoint } from './commands'
 import { boundingBox } from './focus'
 import { flatOf } from './groundTool'
-import { plannedPath } from './plannedFlight'
+import { assignedPath } from './plannedFlight'
 import type { Site } from './site'
 
 interface Props {
@@ -23,8 +23,9 @@ interface Props {
 
 /**
  * The selected operation framed as a whole (FR-SCN-05), once: when it is selected and its data has
- * loaded, the camera is sent the box of its geofence ring, its planned flights and the positions its
- * aircraft hold then. A refetch does not refit the view; selecting another operation does.
+ * loaded, the camera is sent the box of its geofence ring, its planned flights (or, until one is
+ * stored, its waylines as designed) and the positions its aircraft hold then. A refetch does not
+ * refit the view; selecting another operation does.
  */
 export function OperationFocus({ operationId, site, origin }: Props) {
   if (operationId === null) return null
@@ -44,6 +45,7 @@ function FocusOn({
   const operation = useOperation(operationId)
   const assignments = useAssignments(operationId)
   const geofences = useGeofences()
+  const waylines = useWaylines()
   const fleets = useFleets()
   const tracks = useTelemetryStore()
   const settings = useSettings()
@@ -55,6 +57,7 @@ function FocusOn({
     operation.data !== undefined &&
     !assignments.isPending &&
     !geofences.isPending &&
+    !waylines.isPending &&
     !fleets.isPending
 
   useEffect(() => {
@@ -68,7 +71,7 @@ function FocusOn({
       points.push({ x, y: site.ground(x, z), z })
     }
     for (const assignment of assigned) {
-      const path = plannedPath(assignment, origin, site)
+      const path = assignedPath(assignment, waylines.data ?? [], origin, site)
       if (path !== null) for (const [x, y, z] of path.points) points.push({ x, y, z })
     }
     // An aircraft lost to the telemetry is not where it is now, so it does not frame the operation.
@@ -92,6 +95,7 @@ function FocusOn({
     geofenceId,
     assignments.data,
     geofences.data,
+    waylines.data,
     fleets.data,
     origin,
     site,

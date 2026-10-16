@@ -1,4 +1,4 @@
-import type { Assignment } from '../backend/backend'
+import type { Assignment, Wayline } from '../backend/backend'
 import type { Geodetic } from '../geometry/projection'
 import { storedFlight } from '../operations/definition'
 import type { Site } from './site'
@@ -26,6 +26,39 @@ export function plannedPath(
     origin,
     site,
   )
+}
+
+/**
+ * A saved wayline as it flies by its design (FR-WAY-09): from its takeoff straight to its waypoints,
+ * with no climb of an operation's before them.
+ */
+export function designedPath(wayline: Wayline, origin: Geodetic, site: Site): FlownPath {
+  return flownPath(
+    {
+      referencePoint: wayline.takeoff,
+      takeoffSecurityHeightM: null,
+      waypoints: wayline.waypoints.map(({ position, heightM }) => ({ ...position, heightM })),
+    },
+    origin,
+    site,
+  )
+}
+
+/**
+ * Where an assignment's fleet flies, as the scene draws it (FR-SCN-04): the planned flight it stores,
+ * or, until it stores one the console reads, its wayline as designed, so an operation still being
+ * defined shows its route. Null when neither is known: a wayline that is not read, or not there.
+ */
+export function assignedPath(
+  assignment: Assignment,
+  waylines: readonly Wayline[],
+  origin: Geodetic,
+  site: Site,
+): FlownPath | null {
+  const planned = plannedPath(assignment, origin, site)
+  if (planned !== null) return planned
+  const wayline = waylines.find(({ id }) => id === assignment.waylineId)
+  return wayline === undefined ? null : designedPath(wayline, origin, site)
 }
 
 /**

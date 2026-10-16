@@ -1,9 +1,12 @@
 import { act, waitFor } from '@testing-library/react'
 import type { Line2 } from 'three/addons/lines/Line2.js'
 
-import { FakeBackend, PILOT } from '../test/FakeBackend'
+import { flightToJson } from '../geometry/designJson'
+import { FakeBackend, NORTH, PILOT } from '../test/FakeBackend'
+import { quietQueryClient } from '../test/render'
 import { createTelemetryStore } from '../telemetry/store'
 import { OperationDrawing } from './OperationDrawing'
+import { designedPath } from './plannedFlight'
 import { FLAT_SITE } from './site'
 import {
   DESIGN,
@@ -12,6 +15,7 @@ import {
   flightOf,
   live,
   mountScene,
+  PLANNED,
   stored,
   verticesOf,
 } from './sceneTestKit'
@@ -31,6 +35,48 @@ describe('the selected operation in the scene (FR-SCN-04, FR-OPS-07)', () => {
     expect(mounted.scene().getObjectByName('geofence North fence')).toBeUndefined()
     expect(mounted.scene().getObjectByName('planned flight')).toBeUndefined()
     expect(mounted.scene().getObjectByName('flight track')).toBeUndefined()
+    mounted.unmount()
+  })
+
+  it('draws an operation still being defined along its wayline as designed, then its stored flight once saved', async () => {
+    const backend = new FakeBackend(PILOT)
+    const { fleet, operation, wayline } = await farmWithOperation(backend)
+    const defining = await backend.createOperation(NORTH.id, {
+      name: 'Defining',
+      geofenceId: operation.geofenceId,
+      takeoffSecurityHeightM: 30,
+    })
+    const assignment = await backend.assign(defining.id, NORTH.id, {
+      waylineId: wayline.id,
+      fleetId: fleet.id,
+      speedMs: null,
+      flight: null,
+    })
+    const queryClient = quietQueryClient()
+    const mounted = await mountScene({ backend, store: createTelemetryStore(), queryClient })
+    mounted.render(<OperationDrawing operationId={defining.id} site={FLAT_SITE} origin={FARM} />)
+    const planned = () => mounted.scene().getObjectByName('planned flight') as Line2 | undefined
+    // The design runs from its takeoff to its waypoints; the stored flight climbs over it first.
+    const designed = designedPath(wayline, FARM, FLAT_SITE).points
+    await waitFor(() => {
+      const line = planned()
+      expect(line).toBeDefined()
+      expect(line === undefined ? [] : verticesOf(line)).toHaveLength(designed.length)
+    })
+    for (const [index, point] of designed.entries()) {
+      for (const [axis, value] of point.entries()) {
+        expect(verticesOf(planned() as Line2)[index]?.[axis]).toBeCloseTo(value, 4)
+      }
+    }
+    // Saved: the definition writes the flight, and the console reads the assignments again.
+    await backend.changeAssignment(assignment.id, { flight: flightToJson(PLANNED) })
+    await act(async () => {
+      await queryClient.invalidateQueries()
+    })
+    await waitFor(() => {
+      const line = planned()
+      expect(line === undefined ? [] : verticesOf(line)).toHaveLength(designed.length + 1)
+    })
     mounted.unmount()
   })
 
