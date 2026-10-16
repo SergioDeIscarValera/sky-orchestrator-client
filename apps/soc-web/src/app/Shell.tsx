@@ -34,7 +34,9 @@ export function Shell() {
   const selected = useSelection() !== null
   useEscapeStepsBack()
   return (
-    <div className="bg-page relative h-dvh w-dvw overflow-hidden">
+    // Clipped, not hidden: a hidden box still scrolls when something inside asks to be seen, and a
+    // panel's screen-reader text, placed against this box, reaches below the window.
+    <div className="bg-page relative h-dvh w-dvw overflow-clip">
       {/* Every region fails alone (FR-CMD-07): the others, and the safety controls, keep working. */}
       <RegionBoundary name="scene" className="absolute inset-0 grid place-items-center p-8">
         <SceneRegion />
