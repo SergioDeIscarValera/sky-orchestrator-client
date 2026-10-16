@@ -76,6 +76,7 @@ Check:
 0.3. **Packages and tools.** SO's and SOC's images are private on GHCR:
 - Create a classic GitHub token with `read:packages` only.
 - Log in once with `docker login ghcr.io -u SergioDeIscarValera`, the token as the password.
+- Cloning the two private repositories needs a second token: a fine-grained one with Contents read-only, limited to `sky-orchestrator` and `sky-orchestrator-client`. Type it as the password at `git clone`. Never put it in the remote URL.
 - Install adb for SO's phone link: `sudo apt install android-tools-adb` (**sudo**).
 - git and python3 must be on the mini-PC.
 
@@ -90,63 +91,88 @@ Check: the attributes are `Create role, Create DB, Replication, Bypass RLS`. `po
 0.5. **The clocks.**
 - On the mini-PC, `timedatectl` must say `System clock synchronized: yes`.
 - On the phone, set the date and time to automatic.
-- Why it matters:
-  - SO refuses a start that arrives more than 3 s late;
-  - on 2026-10-11 the phone ran about 510 ms behind the server;
-  - SOC's PF-CLOCK check shows the offset.
+- Why it matters: so-bridge measures the phone's offset and sets its deadlines in the phone's clock, so an unsynchronized clock does not cause refusals. Synchronized clocks make SO's records, the phone's and SOC's logs line up. On 2026-10-11 the phone ran about 510 ms behind the server. SOC's PF-CLOCK check shows the offset.
 
 0.6. **The tunnel publishes only VO2's API.** In Cloudflare Zero Trust, open Tunnels, then Public Hostnames. Check there is exactly one entry: `api.virtualorigen.dpdns.org` → `http://kong:8000`. Once Phase 2 exposes schema `soc`, SOC's tables are reachable through it, guarded by row-level security, as VO2's are.
 
 ## Phase 1: Sky Orchestrator v0.4.4
 
-1.1. **The checkout at the tag.**
+1.1. **The checkout at the tag, and a helper for its compose.**
 
 ```bash
 sudo mkdir -p /srv/sky-orchestrator && sudo chown "$USER": /srv/sky-orchestrator   # sudo
 git clone https://github.com/SergioDeIscarValera/sky-orchestrator.git /srv/sky-orchestrator
 git -C /srv/sky-orchestrator checkout v0.4.4
+dc() { SO_VERSION=v0.4.4 docker compose -f /srv/sky-orchestrator/infra/compose/compose.yaml \
+  -f /srv/sky-orchestrator/infra/compose/compose.release.yaml "$@"; }
 ```
 
-1.2. **Configuration.** Copy the laptop's files: `infra/compose/.env` and `infra/config/*.json`. They already carry `SO_BRIDGE_SECRET`, which must equal the phone's, and so-fleet's real dock and aircraft identities.
+Every SO compose command on the mini-PC goes through `dc`. It needs both files and the version: without the release file, compose tries to build `:local` images, and the mini-PC has none.
 
-The laptop's `.env` secrets were printed into a local research transcript on 2026-10-16. Generate new ones for the mini-PC, keeping `SO_BRIDGE_SECRET` unless the phone is set up again with a new one:
-- the MQTT passwords, including `SO_MQTT_PASSWORD_CLOUD_CLIENT`;
+1.2. **Configuration.** Start from SO's examples:
+- `cp infra/compose/.env.example infra/compose/.env`;
+- fill each of the four `infra/config/*.json` with `python3 tools/device_config.py template --consumer <service>`;
+- copy so-fleet's real dock and aircraft identities from the laptop's `so-fleet.json`.
+
+Nothing secret comes from the laptop: its secrets were printed into a local research transcript on 2026-10-16, and the phone is set up again in 1.3. Generate every secret fresh, each 32 or more letters and digits (`openssl rand -hex 24`):
+- `SO_MQTT_PASSWORD_SO_GATEWAY`, `SO_MQTT_PASSWORD_SO_FLEET`, `SO_MQTT_PASSWORD_SO_WAYLINE`, `SO_MQTT_PASSWORD_SO_BRIDGE` and `SO_MQTT_PASSWORD_CLOUD_CLIENT`;
 - `SO_WAYLINE_API_TOKEN`.
 
-Then change these values:
+`SO_BRIDGE_SECRET` is set by 1.3.
 
 | File | Setting |
 | --- | --- |
-| `infra/compose/.env` | `COMPOSE_PROFILES=phone` (never `builtin-cloud`), `SO_BIND=127.0.0.1`, `SO_MQTT_PORT=1884`, `SO_WAYLINE_PORT=8091`, `SO_PHONE_ADB_TARGET=<phone IP>:5555`, `SO_PHONE_ADB_KEY_DIR=/home/<user>/.android`, `SO_PHONE_ADB_USER=<uid>:<gid>` |
+| `infra/compose/.env` | `COMPOSE_PROFILES=phone` (never `builtin-cloud`), `SO_BIND=127.0.0.1`, `SO_MQTT_PORT=1884`, `SO_WAYLINE_PORT=8091`, `SO_BRIDGE_URL=http://phone-link:8765`, `SO_PHONE_ADB_TARGET=<phone IP>:5555`, `SO_PHONE_ADB_KEY_DIR=/home/<user>/.android`, `SO_PHONE_ADB_USER=$(id -u):$(id -g)` of the operator |
 | `so-gateway.json`, `so-fleet.json`, `so-wayline.json` | `"cloud_role": "external"` |
 | `so-wayline.json` | the envelope: `geofence_center` at the site, `geofence_radius_m` 50, `max_height_m` 30, `max_horizontal_speed_ms` 3.0 |
 | `so-bridge.json` | `simulator_mode` true |
+| `so-bridge.real.json`, a copy of `so-bridge.json` | `simulator_mode` false: real mode, for A2 at the desk and for Part B at the site |
 
 Run `chmod 600 infra/compose/.env`. The checkout, `.env` and `infra/config/` belong to the operator's user.
 
-1.3. **The phone.**
-- Install the APK built from the v0.4.4 tag; SO builds it on the laptop.
-- In the phone's own site configuration, set the same values as so-wayline.json: the centre at the site, 50 m and 30 m. Nothing compares the two files, so check both by eye.
-- Connect the phone by USB once and accept the mini-PC's adb key on its screen. Then:
+To rotate a secret later on a running stack, edit `.env`, then run `dc up -d`. Compose recreates mosquitto and every service whose environment changed. Then give soc-cloud its new values and recreate it.
 
-```bash
-adb -s <usb serial> tcpip 5555 && adb connect <phone IP>:5555
-```
+1.3. **The phone, in this order.** The phone and the mini-PC must be on the same Wi-Fi with client isolation off. Give the phone a DHCP reservation.
 
-The phone and the mini-PC must be on the same Wi-Fi, with client isolation off. Keep the phone's address fixed with a DHCP reservation. A phone restart turns adb's TCP mode off: plug the phone in again and repeat the two commands.
+1. **adb.** Plug the phone in by USB once and accept the mini-PC's key on its screen. Then:
+   ```bash
+   adb -s <usb serial> tcpip 5555 && adb connect <phone IP>:5555
+   ```
+   A phone restart turns adb's TCP mode off: plug the phone in again and repeat.
+2. **The application.** Install the debug APK that SO builds on the laptop from the v0.4.4 tag. It must be a debug build, because session.sh and the clearance write through `run-as`:
+   ```bash
+   adb -s <phone IP>:5555 install -r <apk>
+   ```
+3. **The site configuration**, from `/srv/sky-orchestrator`:
+   ```bash
+   python3 tools/device_config.py template > so-config.json    # then add "geofence_center" at the site
+   adb push so-config.json /data/local/tmp/so-config.json
+   adb shell run-as io.github.sergiodeiscarvalera.skyorchestrator.msdkv4 cp /data/local/tmp/so-config.json files/so-config.json
+   adb shell rm /data/local/tmp/so-config.json
+   ```
+   The defaults are already 50 m, 30 m and 3.0 m/s. The file holds a location, so it never goes into git. It must be final before 4.2, because it sets the phone's `config_fingerprint`. Nothing compares it with `so-wayline.json`, so check both by eye.
+4. **The bridge secret:**
+   ```bash
+   ADB_TARGET=<phone IP>:5555 apps/so-msdk-v4/scripts/bridge.sh secret
+   ```
+   This puts a new secret on the phone and keeps it in `apps/so-msdk-v4/scripts/.bridge-secret`. Copy that value into `.env`'s `SO_BRIDGE_SECRET`.
+5. **Start the application only after the controller is cabled.** A running application does not see the product arrive.
 
 1.4. **Up.**
 
 ```bash
-cd /srv/sky-orchestrator
-SO_VERSION=v0.4.4 docker compose -f infra/compose/compose.yaml -f infra/compose/compose.release.yaml up -d
-SO_VERSION=v0.4.4 docker compose -f infra/compose/compose.yaml -f infra/compose/compose.release.yaml ps
+dc up -d
+dc ps
+TOKEN=$(grep '^SO_WAYLINE_API_TOKEN=' /srv/sky-orchestrator/infra/compose/.env | cut -d= -f2)
+curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8091/v1/status
+curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8091/v1/envelope
+dc logs phone-link | tail -3        # "connected to"
 ```
 
 Check:
-- every service is healthy;
+- every service is healthy. phone-link is healthy only while the phone is connected, which is why 1.3 comes first;
 - `docker network ls` lists `sky-orchestrator_default`;
-- SO's runbook curl answers on `127.0.0.1:8091/v1/status`;
+- `/v1/status` says `simulator_mode` true and the link up, and `aircraft_online` true once the aircraft and controller are on;
 - `/v1/envelope` returns the four values of step 1.2.
 
 1.5. **What SOC needs from SO.** Note three values for Phase 2:
@@ -160,7 +186,7 @@ Check:
 
 ```bash
 sudo mkdir -p /srv/sky-orchestrator-client && sudo chown "$USER": /srv/sky-orchestrator-client   # sudo
-git clone https://github.com/SergioDeIscarValera/sky-orchestrator-client.git /srv/sky-orchestrator-client
+git clone https://github.com/SergioDeIscarValera/sky-orchestrator-client.git /srv/sky-orchestrator-client   # the fine-grained token of 0.3
 git -C /srv/sky-orchestrator-client checkout <SOC tag>
 cd /srv/sky-orchestrator-client/infra/compose
 ```
@@ -296,9 +322,19 @@ docker restart supabase-kong          # otherwise /auth/v1 answers 502 and every
 
 ## Phase 3: checks on the mini-PC
 
+SO's session commands run from `/srv/sky-orchestrator`, with `S` defined once:
+
+```bash
+cd /srv/sky-orchestrator
+export ADB_TARGET=<phone IP>:5555
+S=apps/so-msdk-v4/scripts/session.sh
+```
+
 3.1. **Register the fleet** in the console: the dock and the aircraft that SO's so-fleet announces.
 
-3.2. **Live telemetry.** With the phone in DJI's simulator, the aircraft shows Live in the console. Then run `docker restart realtime-dev.supabase-realtime`. Check: the console reconnects on its own and the aircraft is Live again (`NFR-REL-06`).
+3.2. **Live telemetry.** Run `$S sim_start`. The aircraft shows Live in the console.
+
+Then run `docker restart realtime-dev.supabase-realtime`. Check: the console reconnects on its own, and the aircraft is Live again (`NFR-REL-06`). Finish with `$S sim_stop`.
 
 VO2's Realtime clients drop for a moment too. Its backend resubscribes within about 15 to 30 s, and its web reconnects on its own. If nothing reconnects within a minute and Kong logs 502 on `/realtime`, run `docker restart supabase-kong`: the Realtime container may have a new IP.
 
@@ -306,38 +342,64 @@ VO2's Realtime clients drop for a moment too. Its backend resubscribes within ab
 
 ## Phase 4: the first operation, in the simulator, on the mini-PC
 
-This phase is SO's `docs/first-real-flight.md` Part A, flown by SOC. A simulated completion counts only when this deployment's so-fleet holds it (SO's NFR-SAF-07). Do it in this order:
+This phase is SO's `docs/first-real-flight.md` Part A, flown by SOC. A simulated completion counts only while this deployment's so-fleet holds it (SO's NFR-SAF-07), in its volume `so-fleet-data`. Do it in this order.
 
-4.1. **Define it in the console.**
+4.1. **Define the operation in the console.**
 - A geofence inside SO's 50 m circle, its ceiling at most 30 m.
 - A wayline inside the geofence.
 - The operation's height at most 30 m.
 - Leave the speed blank: it takes the stack's 3 m/s.
 
-4.2. **Plan, Prepare, Simulate.** The 16 checks pass, then the simulated flight ends ok. **Do not change the definition afterwards.** The real flight must fly the same bytes (the KMZ's MD5), and any change makes a new file. The operation waits in `simulated`.
+4.2. **Plan, Prepare, Simulate.**
+1. Plan, then Prepare. The 16 checks pass.
+2. Start the simulator and arm, just before simulating: the arming has a time limit. The simulator starts at the geofence centre.
+   ```bash
+   $S sim_start && $S arm
+   ```
+3. Simulate. The simulated flight ends ok, and the operation waits in `simulated`.
+4. Stop the simulator: `$S sim_stop`.
 
-4.3. **SO's clearance.** Follow SO's Part A:
-- run `tools/clearance.py` over the phone's flight records;
-- write `so-clearance.json` to the phone;
-- run `$S sim_stop` before every application restart (otherwise diagnostic 8012);
-- restart the application. Check: `$S status` says `build_cleared=true`.
+**Do not change the definition afterwards.** The real flight must fly the same bytes (the KMZ's MD5), and any change makes a new file.
+
+4.3. **SO's clearance** (its A1), from `/srv/sky-orchestrator`:
+
+```bash
+pkg=io.github.sergiodeiscarvalera.skyorchestrator.msdkv4
+mkdir -p records && for f in $(adb -s $ADB_TARGET shell "run-as $pkg ls files/flight-records/" | tr -d '\r'); do
+  adb -s $ADB_TARGET shell "run-as $pkg cat files/flight-records/$f" > records/$f; done
+python3 tools/clearance.py records/*.jsonl > so-clearance.json
+adb -s $ADB_TARGET shell "run-as $pkg sh -c 'cat > files/so-clearance.json.tmp && mv files/so-clearance.json.tmp files/so-clearance.json'" < so-clearance.json
+```
+
+Check: `clearance.py` exits 0 and lists the commit of `git -C /srv/sky-orchestrator rev-parse 'v0.4.4^{commit}'`.
+
+Then restart the application. The simulator is already stopped, which is required: a restart with it running makes the aircraft demand a restart (diagnostic 8012). Check: `$S status` says `build_cleared=true`.
 
 4.4. **SO's refusals again (A2), propellers off.** SOC's Launch drives the execute rows. A refused launch returns the operation to `ready` with SO's meaning shown, and the pilot can launch again.
 
-| Row | Expected |
-| --- | --- |
-| so-bridge real, phone simulator on | Refused `316010` (simulator in real mode). If a SOC check holds the launch back first, record that SOC refused it and go on. |
-| Simulator off, no confirmation | Refused `314010` (real flight not confirmed, not armed) |
-| `$S takeoff` | Refused |
-| The key turns; a restart takes it away | As SO's runbook says |
+Start: `SO_BRIDGE_CONFIG=../config/so-bridge.real.json dc up -d so-bridge`. Then check that `/v1/status` says `simulator_mode` false.
 
-A2 ends with so-bridge back in simulator mode. The operation returns to `simulated` and waits there. Never arm in real mode at the desk.
+| Row | First | Expected |
+| --- | --- | --- |
+| so-bridge real, phone simulator on | `$S sim_start` | The launch is refused with `316010` (simulator in real mode). If a SOC check holds the launch back first, record that SOC refused it and go on. |
+| Simulator off, no confirmation | `$S sim_stop` | The launch is refused with `314010` (real flight not confirmed, not armed). If a SOC check holds it back first, such as the arming, read `$S status` instead: its preflight must name `real_flight_not_confirmed` and `not_armed`. |
+| `$S takeoff` | | `refused: console flying is for the simulator only` |
+| The key | | Tap Enable REAL flight… on the phone and confirm. `$S status` says `real_flight=confirmed build_cleared=true`. Restart the application: `$S status` says `real_flight=off`. |
 
-4.5. **Part B is M5 itself, at the site with propellers on:**
-- set `simulator_mode` false and restart so-bridge;
-- the operator confirms real flight on the phone and arms it;
-- the operation moves to `ready`;
-- the pilot launches from the console.
+End: run `dc up -d so-bridge`, which puts so-bridge back in simulator mode. The operation returns to `simulated` and waits there. Never arm in real mode at the desk.
+
+4.5. **Part B is M5 itself.** Follow SO's `docs/first-real-flight.md` Part B in full: it is the authority for the flight. Its outline:
+- **Before leaving:** the weather, the batteries, and both envelopes checked.
+- **On the site:**
+  1. A ping first.
+  2. Propellers on, the aircraft at the geofence centre.
+  3. `SO_BRIDGE_CONFIG=../config/so-bridge.real.json dc up -d so-bridge`, then check `/v1/status`.
+  4. Restart the application with the simulator off, after the controller is cabled.
+  5. The operator confirms real flight on the phone.
+  6. The arming, on the site, which sets the home point. The operation moves to `ready`.
+  7. The console's Launch: Part B's step 7.
+- **Taking over:** the selector to Sport or Tripod takes the aircraft back.
+- **After:** as Part B says.
 
 ## Rules while the three run
 
