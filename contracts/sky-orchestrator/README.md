@@ -15,7 +15,10 @@ repository at one commit, and held there:
 | `vendored.json` | Where the files came from: the repository, the commit, its `git describe` and date |
 | `vendored.sha256` | The SHA-256 of every file, in `sha256sum`'s format: `sha256sum -c vendored.sha256` checks them |
 
-Pinned at Sky Orchestrator's **v0.4.3** (2026-10-14, `3477c38`). Like v0.4.2 it
+Pinned at Sky Orchestrator's **v0.4.4** (2026-10-16, `fe6b57f`): v0.4.3 with
+`flighttask_progress` 1.2.0, whose `current_waypoint_index` never goes back within
+an execution and holds the last waypoint through the finish action's return (SO
+#135), `wayline_mission_state` 9 saying when the route is over. Like v0.4.2 it
 publishes what SOC builds on: `simulate_mission` (`DEP-02`), the stack's status,
 envelope and validations (`DEP-01`, `DEP-03`, `DEP-04`), the break reason
 (`DEP-05`), the fake bridge image (`DEP-06`), real flight behind two keys and a

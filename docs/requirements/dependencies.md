@@ -11,10 +11,10 @@ Sources: the integration exchange with both projects' maintainers on
 
 SOC vendors Sky Orchestrator's wire contracts at a pinned commit,
 [`contracts/sky-orchestrator/`](../../contracts/sky-orchestrator/README.md),
-pinned to Sky Orchestrator's v0.4.3 tag, the release that publishes `DEP-01` to
+pinned to Sky Orchestrator's v0.4.4 tag, which with v0.4.3 publishes `DEP-01` to
 `DEP-06`, `DEP-12`, `DEP-13`, `DEP-27` to `DEP-29`, and the real-flight keys of
 SO's ADR-0040. Its images are the ones SOC's end to end runs
-(`SO_VERSION=v0.4.3`), once SOC can read Sky Orchestrator's packages on GHCR.
+(`SO_VERSION=v0.4.4`), read from GHCR, and the ones the mini-PC runs.
 
 | ID | SO item | SO milestone | What it gives SOC | SOC requirements waiting on it | Status |
 | --- | --- | --- | --- | --- | --- |
