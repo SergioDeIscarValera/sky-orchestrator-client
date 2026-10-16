@@ -189,10 +189,12 @@ class ContinuousIntegration(unittest.TestCase):
             "tools/catalogue_migration.py --check",
             "-size +512k",
             "unittest discover -s tools/tests",
+            "unittest discover -s infra/deploy/tests",
             "uv sync --frozen --all-packages",
             "uv run --frozen ruff check\n",
             "uv run --frozen ruff format --check\n",
             "mypy --python-version 3.12 tools",
+            "mypy --python-version 3.12 infra/deploy",
             "pytest infra/migrate/tests",
             "pytest database/tests",
             "gitleaks detect",
@@ -578,6 +580,26 @@ class PythonUnits(unittest.TestCase):
             with self.subTest(unit=unit):
                 for selection in selections:
                     self.assertIn(f"uv run --frozen pytest {unit}/tests{selection}\n", lane)
+
+
+class DeployCommand(unittest.TestCase):
+    def setUp(self) -> None:
+        self.hooks = (REPOSITORY / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+
+    def test_a_change_to_the_deploy_command_runs_its_tests_and_types(self) -> None:
+        for hook in ("deploy-gate-tests", "deploy-types"):
+            files = hook_files(self.hooks, hook)
+            if files is None:
+                self.fail(f"the pre-commit configuration has no {hook} hook")
+            for path in ("infra/deploy/deploy.py", "infra/deploy/tests/test_deploy.py"):
+                with self.subTest(hook=hook, path=path):
+                    self.assertRegex(path, files)
+
+    def test_a_change_to_the_migration_it_reads_runs_its_tests(self) -> None:
+        files = hook_files(self.hooks, "deploy-gate-tests")
+        if files is None:
+            self.fail("the pre-commit configuration has no deploy-gate-tests hook")
+        self.assertRegex("database/migrations/0010-operations.sql", files)
 
 
 class DockerfileCopies(unittest.TestCase):
