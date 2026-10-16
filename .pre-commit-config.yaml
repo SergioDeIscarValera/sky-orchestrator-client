@@ -100,6 +100,13 @@ repos:
         pass_filenames: false
         files: ^(tools/.*\.py|pyproject\.toml)$
 
+      - id: deploy-types
+        name: deploy command types
+        entry: uv run --frozen mypy --python-version 3.12 infra/deploy
+        language: system
+        pass_filenames: false
+        files: ^(infra/deploy/.*\.py|pyproject\.toml)$
+
       - id: database-types
         name: database types
         entry: uv run --frozen mypy database
@@ -207,3 +214,11 @@ repos:
         language: system
         pass_filenames: false
         files: ^(tools/|\.github/|docs/requirements/)
+
+      - id: deploy-gate-tests
+        name: deploy command gate tests
+        entry: python3 -m unittest discover -s infra/deploy/tests
+        language: system
+        pass_filenames: false
+        # The tests read the flight and operation columns from the migration that declares them.
+        files: ^(infra/deploy/|database/migrations/)

@@ -147,6 +147,7 @@ pre-commit install --install-hooks
 pre-commit install --hook-type commit-msg
 
 python3 -m unittest discover -s tools/tests
+python3 -m unittest discover -s infra/deploy/tests
 
 uv sync --frozen --all-packages              # the Python workspace, CPython 3.14
 uv run --frozen mypy libs/soc-config         # a unit's gate: its types,

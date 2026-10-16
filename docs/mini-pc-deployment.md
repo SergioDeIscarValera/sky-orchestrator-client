@@ -408,6 +408,7 @@ End: run `dc up -d so-bridge`, which puts so-bridge back in simulator mode. The 
 
 ## Rules while the three run
 
+- **Upgrading SOC** goes through `python3 infra/deploy/deploy.py <version>`, run from the checkout at that tag. It refuses, changing nothing, while any flight is unfinished, then pulls, migrates and starts the version (`FR-DEP-06`; [upgrading on the mini-PC](../infra/README.md#upgrading-on-the-mini-pc)). Phase 2 is the first install and stays as written.
 - **Never during a flight:**
   - deploy, restart or update SO or SOC;
   - migrate either database;
