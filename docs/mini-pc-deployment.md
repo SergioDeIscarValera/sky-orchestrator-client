@@ -53,15 +53,25 @@ Check: VO2's containers run its released version (v0.0.41 on 2026-10-16), and th
 
 The console's URL and the browser's Supabase address both name `192.168.1.201`, so give the mini-PC a DHCP reservation in the farm's router, and the phone one too (step 1.3).
 
-0.2. **A backup of the database.** No automated backup exists for VO2 or SOC (SOC's RISK-08, VO2's ADR 0052). Take one before SOC's migrations change the database:
+0.2. **A backup of the database.** No automated backup exists for VO2 or SOC (SOC's RISK-08, VO2's ADR 0052). Take one before SOC's migrations change the database.
+
+The dump takes only shared locks, so the farm keeps reading and writing. Before starting it, check two things:
+- no VO2 release is in progress (step 2.6's command);
+- VO2's retention is not about to drop partitions: `docker logs vo-retention --since 15m | grep -i purga` must print nothing. A purge queued behind the dump would hold up new samples until the dump ends.
 
 ```bash
 sudo mkdir -p /srv/backups && sudo chown "$USER": /srv/backups         # sudo
 docker exec supabase-db pg_dumpall -U postgres --globals-only > /srv/backups/globals-$(date +%F).sql
 docker exec supabase-db pg_dump -U postgres -Fc postgres > /srv/backups/postgres-$(date +%F).dump
+chmod 600 /srv/backups/*                     # every user's and role's password hash is inside
+docker exec -i supabase-db pg_restore --list < /srv/backups/postgres-$(date +%F).dump | head
 ```
 
-Check: both files are larger than zero.
+Never add `-t` to these `docker exec` commands: a TTY corrupts the binary dump.
+
+Check:
+- `pg_restore --list` prints the archive's table of contents;
+- both files are copied off the mini-PC, to the laptop. That is the only offsite copy there will be.
 
 0.3. **Packages and tools.** SO's and SOC's images are private on GHCR:
 - Create a classic GitHub token with `read:packages` only.
@@ -75,7 +85,7 @@ Check: both files are larger than zero.
 docker exec supabase-db psql -U postgres -c '\du postgres'
 ```
 
-Check: the attributes include `Create role`. SOC's container lane does this on the same image, `supabase/postgres:17.6.1.136`.
+Check: the attributes are `Create role, Create DB, Replication, Bypass RLS`. `postgres` is not a superuser on this image, `supabase/postgres:17.6.1.136`, and SOC's container lane creates its roles there with these rights.
 
 0.5. **The clocks.**
 - On the mini-PC, `timedatectl` must say `System clock synchronized: yes`.
@@ -157,20 +167,20 @@ cd /srv/sky-orchestrator-client/infra/compose
 
 The tag is SOC's release for the mini-PC (see "Before the first deploy"). Every file below lives in `infra/compose`, mode 600, owned by the operator's user, and git ignores it.
 
-2.2. **The farm's organization.** SOC acts for the farm's VO2 organization only:
+2.2. **The farm's organization.** SOC acts for the farm's VO2 organization only: **Origen**, `70458d25-9fb9-4ae8-8b43-7adf7ba95ee2`. Confirm it on the box. The list also holds the personal organizations VO2 creates at every sign-up, named "Finca de <name>":
 
 ```bash
 docker exec supabase-db psql -U postgres -Atc \
   "select id, name from public.organizations where deleted_at is null"
 ```
 
-2.3. **Environment files.** Copy each `*.example` to its name without `.example`, then fill it. VO2's values come from `/srv/virtual-origen/repo/infra/supabase-local/.env`. That file is root's: read it with `sudo cat` (**sudo**).
+2.3. **Environment files.** Copy each `*.example` to its name without `.example`, then fill it. VO2's values come from `/srv/virtual-origen/repo/infra/supabase-local/.env`. Read it with sudo if your user cannot.
 
 | File | Values |
 | --- | --- |
 | `.env` | `SOC_VERSION=<SOC tag>`; the network names and `SOC_WEB_PORT=8088` as in the example |
 | `migrate.env` | `SOC_MIGRATE_DSN=postgresql://postgres:<POSTGRES_PASSWORD, percent-encoded>@db:5432/postgres`; `SOC_DB_PASSWORD_SOC_CLOUD` and `SOC_DB_PASSWORD_SOC_OPERATIONS`, each from `openssl rand -hex 24` |
-| `soc-cloud.env` | `SOC_DB_PASSWORD_SOC_CLOUD` as in migrate.env; `SOC_SUPABASE_URL=http://kong:8000`; `SOC_SUPABASE_SERVICE_ROLE_KEY` = the service role key VO2's services use (`SERVICE_ROLE_KEY`, or `SERVICE_ROLE_KEY_ASYMMETRIC` once VO2 signs with ES256); `SOC_MQTT_PASSWORD_FARM` = SO's `SO_MQTT_PASSWORD_CLOUD_CLIENT`; `SOC_SO_API_TOKEN_FARM` = SO's `SO_WAYLINE_API_TOKEN` |
+| `soc-cloud.env` | `SOC_DB_PASSWORD_SOC_CLOUD` as in migrate.env; `SOC_SUPABASE_URL=http://kong:8000`; `SOC_SUPABASE_SERVICE_ROLE_KEY` = VO2's `SERVICE_ROLE_KEY`; `SOC_MQTT_PASSWORD_FARM` = SO's `SO_MQTT_PASSWORD_CLOUD_CLIENT`; `SOC_SO_API_TOKEN_FARM` = SO's `SO_WAYLINE_API_TOKEN` |
 | `soc-operations.env` | `SOC_DB_PASSWORD_SOC_OPERATIONS` as in migrate.env |
 | `soc-web.env` | `SOC_WEB_SUPABASE_URL=http://192.168.1.201:8000`; `SOC_WEB_SUPABASE_KEY` = VO2's `ANON_KEY`, the public key VO2's own web is built with; the service role key is refused |
 
@@ -223,21 +233,31 @@ The files must be world-readable. Create the folder before `docker compose up`, 
 
 2.6. **Migrations.** Never migrate while a VO2 release runs: until both runners hold the shared lock, nothing else stops them overlapping.
 
+VO2's releases start on their own when a VO2 release pull request is merged into main (VO2's ADR 0057), so merge none while SOC migrates.
+
 ```bash
-gh run list --repo SergioDeIscarValera/virtual-origen-v2 --workflow release.yml --limit 1   # not in progress
+gh run list --repo SergioDeIscarValera/virtual-origen-v2 --workflow release.yml --limit 1 \
+  --json status,conclusion,createdAt          # status must not be in_progress or queued
 docker compose run --rm soc-migrate
 docker exec supabase-db psql -U postgres -Atc "select count(*) from soc_migrations.applied"
 ```
 
 Check: the count equals the number of files in `database/migrations` at the tag (10 at v0.5.0).
 
-2.7. **PostgREST serves `soc` (DEP-21).** In `/srv/virtual-origen/repo/infra/supabase-local/.env` (root's file: edit it with `sudoedit`, **sudo**), append `,soc` to `PGRST_DB_SCHEMAS` and keep the schemas already listed. VO2's releases never overwrite this file. Then:
+2.7. **PostgREST serves `soc` (DEP-21).** In `/srv/virtual-origen/repo/infra/supabase-local/.env`, append `,soc` to `PGRST_DB_SCHEMAS` and keep the schemas already listed. Use sudo if your user cannot write the file. VO2's releases never overwrite it. Then:
 
 ```bash
 cd /srv/virtual-origen/repo/infra/supabase-local
-docker compose up -d rest studio
+docker compose up -d --dry-run --no-deps rest studio   # must not mention supabase-db
+docker compose up -d --no-deps rest studio
 docker restart supabase-kong          # otherwise Kong answers 502 to the old rest
 ```
+
+`--no-deps` keeps compose from recreating a dependency whose configuration drifted; `db` drifted once. The Kong restart cuts VO2's web, MCP and Realtime for about 5 s.
+
+Check both sides:
+- SOC: `curl -s -H "apikey: <ANON_KEY>" -H 'Accept-Profile: soc' 'http://192.168.1.201:8000/rest/v1/stacks?limit=1'` answers without `PGRST106` (schema must be one of). A permission error is expected, since the anonymous key may read nothing of `soc`: only `PGRST106` means the schema is not served.
+- VO2: `curl -s http://192.168.1.201:8080/health/data-layer` is still OK, and VO2's web loads.
 
 This comes after the migrations because PostgREST must find schema `soc` when it starts.
 
@@ -267,13 +287,20 @@ docker exec supabase-db psql -U postgres -Atc \
 
 Check: `connected`, `t`, `t`.
 
-2.10. **Password reset links (DEP-22), optional.** Sign-in by password works without it. For email links that land on the console, append `,http://192.168.1.201:8088` to `ADDITIONAL_REDIRECT_URLS` in the same VO2 `.env` (`sudoedit`, **sudo**). Then run `docker compose up -d auth` there.
+2.10. **Password reset links (DEP-22), optional.** Sign-in by password works without it. For email links that land on the console, append `,http://192.168.1.201:8088/**` to `ADDITIONAL_REDIRECT_URLS` in the same VO2 `.env`. The glob is there because reset links carry a path; GoTrue v2.189.0's matching is untested, so try a reset once. Then, in VO2's directory:
+
+```bash
+docker compose up -d --no-deps auth
+docker restart supabase-kong          # otherwise /auth/v1 answers 502 and every login fails, VO2's too
+```
 
 ## Phase 3: checks on the mini-PC
 
 3.1. **Register the fleet** in the console: the dock and the aircraft that SO's so-fleet announces.
 
 3.2. **Live telemetry.** With the phone in DJI's simulator, the aircraft shows Live in the console. Then run `docker restart realtime-dev.supabase-realtime`. Check: the console reconnects on its own and the aircraft is Live again (`NFR-REL-06`).
+
+VO2's Realtime clients drop for a moment too. Its backend resubscribes within about 15 to 30 s, and its web reconnects on its own. If nothing reconnects within a minute and Kong logs 502 on `/realtime`, run `docker restart supabase-kong`: the Realtime container may have a new IP.
 
 3.3. **Broadcast latency on the mini-PC** (M1's open criterion, `DEP-23`): p95 ≤ 150 ms from soc-cloud to a member's browser. SOC's measurement for the mini-PC is listed under "Before the first deploy".
 
@@ -317,7 +344,9 @@ A2 ends with so-bridge back in simulator mode. The operation returns to `simulat
 - **Never during a flight:**
   - deploy, restart or update SO or SOC;
   - migrate either database;
-  - run `docker compose down` on any of the three.
+  - run `docker compose down` on any of the three;
+  - merge a VO2 release pull request. It deploys on its own, and `sync-stack.sh` may restart Kong and recreate Supabase services, cutting the console's REST, sign-in and Realtime.
+- **VO2's `JWT_SECRET` rotation** (pending in VO2) changes `ANON_KEY` and `SERVICE_ROLE_KEY`. On the same day, put the new values in `soc-web.env` and `soc-cloud.env` and run `docker compose up -d --force-recreate soc-web soc-cloud`.
 - **Never run `down -v` on SO.** Its volume `so-fleet-data` holds the simulated completion that clears the real flight.
 - **Stopping and restarting:**
   - stop SOC before SO or VO2;
