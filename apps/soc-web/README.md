@@ -142,6 +142,12 @@ The console: one persistent 3D scene of the farm with floating panels
   past the database's row cap is whole. While the flight has not ended the track is
   read again every 5 s, and the latest live samples after its last stored one reach
   the aircraft, never past its newest sample.
+- **An operation in focus** (`FR-SCN-04`, `FR-SCN-05`): with an operation selected the
+  scene draws nothing else but its geofence, its planned flights, their tracks and the
+  aircraft of its fleets; the camera frames them once, when it is selected, and not again
+  as they refresh. A selected aircraft, or its fleet, whose fleet is in an underway
+  operation (preparing to returning) shows that operation's planned flight and track,
+  and no other operation's.
 - **The organization kept live** (ADR-0007): while an organization is open,
   the console listens on its private topic `org:<id>:soc:state`, where the
   database's triggers announce each change to a stack, a device, a fleet or a

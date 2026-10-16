@@ -22,6 +22,8 @@ import {
   clearPolarAngle,
   coveredBy,
   configureControls,
+  fitDistanceM,
+  fitPose,
   flyTo,
   follow,
   framePose,
@@ -367,5 +369,102 @@ describe('following a pinned aircraft (FR-SCN-05)', () => {
     expect(unpinsOn(ACTION.TRUCK)).toBe(true)
     expect(unpinsOn(ACTION.SCREEN_PAN)).toBe(true)
     expect(unpinsOn(ACTION.TOUCH_DOLLY_TRUCK)).toBe(true)
+  })
+})
+
+/** A box of the scene, from its least corner to its greatest. */
+function boxOf(min: [number, number, number], max: [number, number, number]) {
+  return {
+    min: { x: min[0], y: min[1], z: min[2] },
+    max: { x: max[0], y: max[1], z: max[2] },
+  }
+}
+
+/** The eight corners of a box, as scene points. */
+function cornersOf(box: ReturnType<typeof boxOf>): Vector3[] {
+  const { min, max } = box
+  return [min.x, max.x].flatMap((x) =>
+    [min.y, max.y].flatMap((y) => [min.z, max.z].map((z) => new Vector3(x, y, z))),
+  )
+}
+
+describe('fitting an operation in view (FR-SCN-05)', () => {
+  // About a kilometre across and 90 m high: an operation's geofence, its flight and its aircraft.
+  const OPERATION = boxOf([-260, 0, -180], [240, 90, 210])
+
+  it('frames every corner of the box in the view the cards leave free', () => {
+    const [controls, camera] = lensOver(VIEWPORT)
+    const covered = coveredBy(true)
+    const pose = fitPose(
+      OPERATION,
+      {
+        position: controls.getPosition(new Vector3()),
+        target: controls.getTarget(new Vector3()),
+      },
+      VIEWPORT,
+      covered,
+    )
+    void flyTo(controls, pose, FLAT_SITE, false)
+    controls.update(0)
+    const left = covered.leftPx
+    const right = VIEWPORT.width - covered.rightPx
+    for (const corner of cornersOf(OPERATION)) {
+      const seen = onScreen(corner, camera, VIEWPORT)
+      expect(seen.x, corner.toArray().join(' ')).toBeGreaterThanOrEqual(left)
+      expect(seen.x, corner.toArray().join(' ')).toBeLessThanOrEqual(right)
+      expect(seen.y, corner.toArray().join(' ')).toBeGreaterThanOrEqual(0)
+      expect(seen.y, corner.toArray().join(' ')).toBeLessThanOrEqual(VIEWPORT.height)
+    }
+  })
+
+  it('centres the box on its centre, and keeps the angle the user chose', () => {
+    const [controls] = lensOver(VIEWPORT)
+    const chosen = controls
+      .getPosition(new Vector3())
+      .sub(controls.getTarget(new Vector3()))
+      .normalize()
+    const pose = fitPose(
+      OPERATION,
+      {
+        position: controls.getPosition(new Vector3()),
+        target: controls.getTarget(new Vector3()),
+      },
+      VIEWPORT,
+    )
+    expect(pose.target.toArray()).toEqual([-10, 45, 15])
+    const kept = pose.position.clone().sub(pose.target).normalize()
+    expect(kept.distanceTo(chosen)).toBeLessThan(1e-9)
+  })
+
+  it('stands farther from a bigger box, and never closer than FRAME_DISTANCE_M', () => {
+    const [controls] = lensOver(VIEWPORT)
+    const camera = {
+      position: controls.getPosition(new Vector3()),
+      target: controls.getTarget(new Vector3()),
+    }
+    const distanceTo = (box: ReturnType<typeof boxOf>) => {
+      const pose = fitPose(box, camera, VIEWPORT)
+      return pose.position.distanceTo(pose.target)
+    }
+    const around = (half: number) => boxOf([-half, 0, -half], [half, 0, half])
+    expect(distanceTo(around(100))).toBeLessThan(distanceTo(around(400)))
+    expect(distanceTo(around(0.5))).toBeCloseTo(FRAME_DISTANCE_M, 6)
+    expect(distanceTo(around(0))).toBeCloseTo(FRAME_DISTANCE_M, 6)
+  })
+
+  it('holds the box in its bounding sphere, seen at the camera vertical field of view', () => {
+    const radius = 300
+    const halfAngle = (FIELD_OF_VIEW_DEG / 2) * (Math.PI / 180)
+    // A view as wide as it is high, free of the cards: the vertical half-angle is the narrower one.
+    expect(fitDistanceM(radius, VIEWPORT, coveredBy(false))).toBeCloseTo(
+      radius / Math.sin(halfAngle),
+      6,
+    )
+  })
+
+  it('fits a narrower free view from farther away, by its aspect', () => {
+    const wide = fitDistanceM(300, VIEWPORT)
+    const tall = fitDistanceM(300, { width: 600, height: 900 })
+    expect(tall).toBeGreaterThan(wide)
   })
 })

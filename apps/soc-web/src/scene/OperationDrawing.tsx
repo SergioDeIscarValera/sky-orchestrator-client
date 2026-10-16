@@ -1,13 +1,9 @@
-import { useMemo } from 'react'
-
+import type { Assignment, Flight } from '../backend/backend'
 import type { Geodetic } from '../geometry/projection'
 import { useAssignments, useFlights, useOperation } from '../operations/data'
 import { useGeofences } from '../plans/data'
-import { FlightPath } from './FlightPath'
-import { FlightTrack } from './FlightTrack'
+import { FlightTracks, PlannedFlights } from './OperationFlights'
 import { GeofenceOutline } from './GeofenceOutline'
-import { plannedPath, takeoffOf } from './plannedFlight'
-import { usePalette } from './palette'
 import type { Site } from './site'
 
 interface Props {
@@ -16,6 +12,9 @@ interface Props {
   readonly site: Site
   readonly origin: Geodetic
 }
+
+const NO_ASSIGNMENTS: readonly Assignment[] = []
+const NO_FLIGHTS: readonly Flight[] = []
 
 /**
  * The selected operation in the scene (FR-SCN-04): its geofence, drawn as a chosen one is; its
@@ -40,54 +39,21 @@ function OperationOn({
   const assignments = useAssignments(operationId)
   const flights = useFlights(operationId)
   const geofences = useGeofences()
-  const palette = usePalette()
   const geofence = geofences.data?.find(({ id }) => id === operation.data?.geofenceId)
-  const planned = useMemo(
-    () =>
-      (assignments.data ?? []).flatMap((assignment) => {
-        const path = plannedPath(assignment, origin, site)
-        return path === null ? [] : [{ id: assignment.id, path }]
-      }),
-    [assignments.data, origin, site],
-  )
-  const takeoffs = useMemo(
-    () =>
-      new Map(
-        (flights.data ?? []).map((flight): [string, Geodetic | null] => [
-          flight.id,
-          takeoffOf(flight.fleetId, assignments.data ?? []),
-        ]),
-      ),
-    [flights.data, assignments.data],
-  )
+  const planned = assignments.data ?? NO_ASSIGNMENTS
 
   return (
     <group>
       {geofence !== undefined && (
         <GeofenceOutline geofence={geofence} origin={origin} site={site} chosen />
       )}
-      {planned.map(({ id, path }) => (
-        <FlightPath
-          key={id}
-          name="planned flight"
-          path={path}
-          colour={palette.accent}
-          lineWidth={2.5}
-          renderOrder={9}
-        />
-      ))}
-      {(flights.data ?? []).map((flight) => {
-        const takeoff = takeoffs.get(flight.id) ?? null
-        return takeoff === null ? null : (
-          <FlightTrack
-            key={flight.id}
-            flight={flight}
-            takeoff={takeoff}
-            origin={origin}
-            site={site}
-          />
-        )
-      })}
+      <PlannedFlights assignments={planned} origin={origin} site={site} />
+      <FlightTracks
+        flights={flights.data ?? NO_FLIGHTS}
+        assignments={planned}
+        origin={origin}
+        site={site}
+      />
     </group>
   )
 }
