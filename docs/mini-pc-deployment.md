@@ -51,6 +51,8 @@ docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'
 
 Check: VO2's containers run its released version (v0.0.41 on 2026-10-16), and there is room for about 450 MiB more.
 
+The console's URL and the browser's Supabase address both name `192.168.1.201`, so give the mini-PC a DHCP reservation in the farm's router, and the phone one too (step 1.3).
+
 0.2. **A backup of the database.** No automated backup exists for VO2 or SOC (SOC's RISK-08, VO2's ADR 0052). Take one before SOC's migrations change the database:
 
 ```bash
@@ -75,7 +77,15 @@ docker exec supabase-db psql -U postgres -c '\du postgres'
 
 Check: the attributes include `Create role`. SOC's container lane does this on the same image, `supabase/postgres:17.6.1.136`.
 
-0.5. **The tunnel publishes only VO2's API.** In Cloudflare Zero Trust, open Tunnels, then Public Hostnames. Check there is exactly one entry: `api.virtualorigen.dpdns.org` → `http://kong:8000`. Once Phase 2 exposes schema `soc`, SOC's tables are reachable through it, guarded by row-level security, as VO2's are.
+0.5. **The clocks.**
+- On the mini-PC, `timedatectl` must say `System clock synchronized: yes`.
+- On the phone, set the date and time to automatic.
+- Why it matters:
+  - SO refuses a start that arrives more than 3 s late;
+  - on 2026-10-11 the phone ran about 510 ms behind the server;
+  - SOC's PF-CLOCK check shows the offset.
+
+0.6. **The tunnel publishes only VO2's API.** In Cloudflare Zero Trust, open Tunnels, then Public Hostnames. Check there is exactly one entry: `api.virtualorigen.dpdns.org` → `http://kong:8000`. Once Phase 2 exposes schema `soc`, SOC's tables are reachable through it, guarded by row-level security, as VO2's are.
 
 ## Phase 1: Sky Orchestrator v0.4.4
 
@@ -87,7 +97,13 @@ git clone https://github.com/SergioDeIscarValera/sky-orchestrator.git /srv/sky-o
 git -C /srv/sky-orchestrator checkout v0.4.4
 ```
 
-1.2. **Configuration.** Copy the laptop's files: `infra/compose/.env` and `infra/config/*.json`. They already carry `SO_BRIDGE_SECRET`, which must equal the phone's, and so-fleet's real dock and aircraft identities. Then change these values:
+1.2. **Configuration.** Copy the laptop's files: `infra/compose/.env` and `infra/config/*.json`. They already carry `SO_BRIDGE_SECRET`, which must equal the phone's, and so-fleet's real dock and aircraft identities.
+
+The laptop's `.env` secrets were printed into a local research transcript on 2026-10-16. Generate new ones for the mini-PC, keeping `SO_BRIDGE_SECRET` unless the phone is set up again with a new one:
+- the MQTT passwords, including `SO_MQTT_PASSWORD_CLOUD_CLIENT`;
+- `SO_WAYLINE_API_TOKEN`.
+
+Then change these values:
 
 | File | Setting |
 | --- | --- |
@@ -107,7 +123,7 @@ Run `chmod 600 infra/compose/.env`. The checkout, `.env` and `infra/config/` bel
 adb -s <usb serial> tcpip 5555 && adb connect <phone IP>:5555
 ```
 
-The phone and the mini-PC must be on the same Wi-Fi, with client isolation off.
+The phone and the mini-PC must be on the same Wi-Fi, with client isolation off. Keep the phone's address fixed with a DHCP reservation. A phone restart turns adb's TCP mode off: plug the phone in again and repeat the two commands.
 
 1.4. **Up.**
 
