@@ -19,6 +19,13 @@ describe('the shell', () => {
     expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull()
   })
 
+  it('never scrolls as a whole: what reaches past the window is clipped, not scrolled to', async () => {
+    await renderShell()
+    const shell = screen.getByRole('main', { name: 'Scene' }).closest('.h-dvh')
+    expect(shell).toHaveClass('overflow-clip')
+    expect(shell).not.toHaveClass('overflow-hidden')
+  })
+
   it('steps back with Escape: the selection first, then the panel (NFR-UX-04)', async () => {
     window.history.replaceState(
       null,
@@ -56,7 +63,6 @@ describe('the shell', () => {
       'Geofences',
       'Waylines',
       'Operations',
-      'Settings',
     ])
     for (const { label } of DESTINATIONS) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()

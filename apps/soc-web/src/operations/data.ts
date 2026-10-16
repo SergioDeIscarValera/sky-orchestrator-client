@@ -90,12 +90,14 @@ export function useMembers() {
   })
 }
 
-export function useChecks(operationId: string) {
+/** An operation's checks; `enabled` false reads none, for a state that shows none (checksShown). */
+export function useChecks(operationId: string, enabled = true) {
   const backend = useBackend()
   const { organization } = useOrganization()
   return useQuery({
     queryKey: organizationKey(organization.id, CHECKS, operationId),
     queryFn: () => backend.checks(operationId),
+    enabled,
   })
 }
 

@@ -19,17 +19,19 @@ import { FlightConsole } from './FlightConsole'
 import { OperationActions } from './OperationActions'
 import { OperationChecks } from './OperationChecks'
 import { OperationDefinition } from './OperationDefinition'
-import { OperationFlight } from './OperationFlight'
+import { OperationDrones } from './OperationDrones'
 import { OperationLog } from './OperationLog'
 import { OperationOperators } from './OperationOperators'
 import { STATE_TONE, STATE_WORDS } from './format'
 import { CONSOLE_STATES } from './moves'
 import { OperationPill } from './OperationPill'
+import { OperationSteps } from './OperationSteps'
 
 /**
- * An operation in the inspector (M4): its state, its definition and the flight its assignment
- * stores, its operators, and the preparation's three slots (checks, transitions, log) that
- * another branch fills. The definition may change only while its state is open (FR-OPS-07).
+ * An operation in the inspector (M4), what matters now first: its state and its steps, the move to
+ * the next step, the flight console while it flies, the checks, and the drones it flies with their
+ * live values; then its definition, folded once it may no longer change (FR-OPS-07), its operators
+ * and its log.
  */
 export function OperationDetail({ operationId }: { readonly operationId: string }) {
   const { organization } = useOrganization()
@@ -91,27 +93,30 @@ export function OperationDetail({ operationId }: { readonly operationId: string 
         </h3>
         <OperationPill tone={STATE_TONE[current.state]}>{STATE_WORDS[current.state]}</OperationPill>
       </div>
+      <OperationSteps state={current.state} />
+      <OperationActions operationId={operationId} />
       {CONSOLE_STATES.includes(current.state) && (
         <FlightConsole
           operation={current}
           waypoints={flight === null ? null : flight.waypoints.length}
         />
       )}
+      <OperationChecks operationId={operationId} />
+      <OperationDrones
+        assignment={assignment}
+        flight={flight}
+        problems={problems}
+        error={stored.ok ? null : stored.message}
+        outdated={flightOutdated(current, assignment, choices)}
+        choices={choices}
+      />
       <OperationDefinition
         operation={current}
         assignment={assignment}
         choices={choices}
         editable={editable}
       />
-      <OperationFlight
-        flight={flight}
-        problems={problems}
-        error={stored.ok ? null : stored.message}
-        outdated={flightOutdated(current, assignment, choices)}
-      />
       <OperationOperators operationId={operationId} state={current.state} />
-      <OperationChecks operationId={operationId} />
-      <OperationActions operationId={operationId} />
       <OperationLog operationId={operationId} />
     </article>
   )

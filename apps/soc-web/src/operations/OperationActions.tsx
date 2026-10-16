@@ -5,33 +5,48 @@ import { ALERT, DANGER_BUTTON, PRIMARY_BUTTON, QUIET_BUTTON, UNAVAILABLE } from 
 import type { Operation, OperationState, Transition } from '../backend/backend'
 import { Waiting } from '../fleets/Details'
 import { useOrganization } from '../organizations/context'
-import { useOperation, useOperators, useRequests, useRequestTransition } from './data'
+import { checksShown, shownChecks, type ShownCheck } from './checks'
+import { useChecks, useOperation, useOperators, useRequests, useRequestTransition } from './data'
 import { Failure } from './Failure'
-import { REQUEST_TONE, REQUEST_WORDS, TRANSITION_WORDS } from './format'
+import { asSentence, REQUEST_TONE, REQUEST_WORDS, TRANSITION_WORDS } from './format'
+import { holdingBack, nextMove, otherMoves } from './journey'
 import { OperationPill } from './OperationPill'
-import { OFFERED, isFlightMove, reasonsOf, undecided, withheldBy, type FlightMove } from './moves'
+import { reasonsOf, undecided, withheldBy } from './moves'
 import { uuidV4 } from './uuid'
 
-/** What a pilot confirms before a flight move is asked: what it does, and the button that asks it (FR-OPS-09). */
+/** The moves a member confirms before they are asked: what each does, and the button that asks it. */
+type Confirmed = 'simulate' | 'launch' | 'cancel'
+
 const CONFIRMATION: Readonly<
-  Record<FlightMove, { readonly prompt: string; readonly confirm: string; readonly style: string }>
+  Record<Confirmed, { readonly prompt: string; readonly confirm: string; readonly style: string }>
 > = {
   simulate: { prompt: 'Fly in the simulator', confirm: 'Simulate', style: PRIMARY_BUTTON },
   launch: { prompt: 'Fly for real', confirm: 'Launch', style: DANGER_BUTTON },
-  stop: { prompt: 'Every aircraft returns home', confirm: 'Stop', style: DANGER_BUTTON },
+  cancel: { prompt: 'Cancel for good', confirm: 'Cancel operation', style: DANGER_BUTTON },
 }
 
-const MOVE = `${QUIET_BUTTON} ${UNAVAILABLE} disabled:cursor-wait disabled:opacity-70`
+function confirmed(transition: Transition): transition is Confirmed {
+  return transition in CONFIRMATION
+}
 
-/** A flight move asked, and the state it was asked in: a state that has since moved asks again. */
+/** The next step's button: the launch in the danger fill, since it flies for real; the others primary. */
+function nextStyle(move: Transition): string {
+  return `${move === 'launch' ? DANGER_BUTTON : PRIMARY_BUTTON} ${UNAVAILABLE}`
+}
+
+const OTHER = `${QUIET_BUTTON} ${UNAVAILABLE} disabled:cursor-wait disabled:opacity-70`
+
+/** A confirmed move asked for, and the state it was asked in: a state that has since moved asks again. */
 interface Asking {
-  readonly move: FlightMove
+  readonly move: Confirmed
   readonly state: OperationState
 }
 
 /**
- * The moves a member may ask an operation now, as buttons, and the latest request with its outcome
- * (FR-OPS-02, FR-OPS-09). A move the member may not ask stays shown, disabled, with its reason.
+ * The operation's moves (FR-OPS-02, FR-OPS-09): the one that takes it to its next step as the main
+ * button, held back by the blocking checks that do not pass and saying how many; beside it, going
+ * back or cancelling. A move the member may not ask stays shown, disabled, with its reason. The
+ * latest request shows with its outcome, and a refusal with its reasons.
  */
 export function OperationActions({ operationId }: { readonly operationId: string }) {
   const operation = useOperation(operationId)
@@ -62,11 +77,15 @@ function Moves({ operation }: { readonly operation: Operation }) {
   const pilot = operators.data.some(
     ({ profileId, role }) => profileId === account.userId && role === 'pilot',
   )
+  const member = { role: organization.role, pilot }
   const latest = requests.data[0]
   const busy = ask.isPending || undecided(latest)
-  const offered = OFFERED[operation.state]
+  const next = nextMove(operation.state)
+  const others = otherMoves(operation.state)
   const confirming =
-    asking !== null && asking.state === operation.state && offered.includes(asking.move)
+    asking !== null &&
+    asking.state === operation.state &&
+    (asking.move === next || others.includes(asking.move))
       ? asking
       : null
   const reasons = reasonsOf(latest)
@@ -74,9 +93,13 @@ function Moves({ operation }: { readonly operation: Operation }) {
   const send = (transition: Transition) => {
     ask.mutate({ operationId: operation.id, transition, clientRequestId: uuidV4() })
   }
+  const press = (transition: Transition) => {
+    if (confirmed(transition)) setAsking({ move: transition, state: operation.state })
+    else send(transition)
+  }
 
   return (
-    <div className="mt-3">
+    <div className="mt-4">
       {confirming !== null ? (
         <div
           role="group"
@@ -97,7 +120,7 @@ function Moves({ operation }: { readonly operation: Operation }) {
           >
             {CONFIRMATION[confirming.move].confirm}
           </button>
-          {/* The safe answer takes the focus: the move buttons it replaces would otherwise lose it. */}
+          {/* The safe answer takes the focus: the buttons it replaces would otherwise lose it. */}
           <button
             type="button"
             className={QUIET_BUTTON}
@@ -106,35 +129,45 @@ function Moves({ operation }: { readonly operation: Operation }) {
               setAsking(null)
             }}
           >
-            Cancel
+            Back
           </button>
         </div>
       ) : (
-        <div className="-ml-3 flex flex-wrap items-center gap-1">
-          {offered.map((transition) => {
-            const withheld = withheldBy(transition, { role: organization.role, pilot })
-            return (
-              <button
-                key={transition}
-                type="button"
-                className={MOVE}
-                aria-disabled={withheld !== null}
-                disabled={withheld === null && busy}
-                title={withheld ?? undefined}
-                onClick={() => {
-                  if (withheld !== null) return
-                  if (isFlightMove(transition)) {
-                    setAsking({ move: transition, state: operation.state })
-                  } else {
-                    send(transition)
-                  }
-                }}
-              >
-                {TRANSITION_WORDS[transition]}
-              </button>
-            )
-          })}
-        </div>
+        (next !== null || others.length > 0) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {next !== null && (
+              <NextMove
+                operation={operation}
+                move={next}
+                withheld={withheldBy(next, member)}
+                busy={busy}
+                onPress={press}
+              />
+            )}
+            {others.length > 0 && (
+              <div className="ml-auto flex flex-wrap items-center gap-1">
+                {others.map((transition) => {
+                  const withheld = withheldBy(transition, member)
+                  return (
+                    <button
+                      key={transition}
+                      type="button"
+                      className={OTHER}
+                      aria-disabled={withheld !== null}
+                      disabled={withheld === null && busy}
+                      title={withheld ?? undefined}
+                      onClick={() => {
+                        if (withheld === null) press(transition)
+                      }}
+                    >
+                      {TRANSITION_WORDS[transition]}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
       )}
       {latest !== undefined && (
         <p role="status" className="mt-3 flex items-center gap-2 text-sm">
@@ -148,7 +181,7 @@ function Moves({ operation }: { readonly operation: Operation }) {
         <div role="alert" className={`${ALERT} mt-3`}>
           <ul className="flex flex-col gap-1">
             {reasons.map((reason, index) => (
-              <li key={index}>{reason}</li>
+              <li key={index}>{asSentence(reason)}</li>
             ))}
           </ul>
         </div>
@@ -157,6 +190,52 @@ function Moves({ operation }: { readonly operation: Operation }) {
         <p role="alert" className={`${ALERT} mt-3`}>
           {ask.error.message}
         </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The next step's button. A simulation or a launch waits for every blocking check: while any does not
+ * pass, the button stays disabled and says how many hold it back; the checks below name them.
+ */
+function NextMove({
+  operation,
+  move,
+  withheld,
+  busy,
+  onPress,
+}: {
+  readonly operation: Operation
+  readonly move: Transition
+  readonly withheld: string | null
+  readonly busy: boolean
+  readonly onPress: (move: Transition) => void
+}) {
+  const checks = useChecks(operation.id, checksShown(operation.state))
+  const held: ShownCheck[] =
+    checks.data === undefined ? [] : holdingBack(move, shownChecks(checks.data))
+  const gatedAndUnread = checksShown(operation.state) && checks.data === undefined
+  const blocked = withheld !== null || held.length > 0
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        className={nextStyle(move)}
+        aria-disabled={blocked}
+        aria-describedby={held.length > 0 ? `${operation.id}-held` : undefined}
+        disabled={!blocked && (busy || gatedAndUnread)}
+        title={withheld ?? undefined}
+        onClick={() => {
+          if (!blocked) onPress(move)
+        }}
+      >
+        {TRANSITION_WORDS[move]}
+      </button>
+      {held.length > 0 && (
+        <span id={`${operation.id}-held`} className="text-muted text-sm">
+          {held.length === 1 ? '1 check not passing' : `${String(held.length)} checks not passing`}
+        </span>
       )}
     </div>
   )
