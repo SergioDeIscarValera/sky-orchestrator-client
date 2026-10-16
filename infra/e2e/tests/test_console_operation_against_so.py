@@ -68,7 +68,7 @@ COMPLETED_WITHIN_S = 900
 
 #: The console's words for the operation's states (apps/soc-web/src/operations/format.ts).
 WORDS = {
-    "draft": "Draft",
+    "draft": "Defining",
     "planned": "Planned",
     "preparing": "Preparing",
     "simulating": "Simulating",
@@ -95,7 +95,7 @@ MOVES = [
     ("in_flight", "returning"),
     ("returning", "completed"),
 ]
-#: Each move as the log's entry reads once the console has shown it: "State changed · Draft to
+#: Each move as the log's entry reads once the console has shown it: "State changed · Defining to
 #: Planned", less its prefix.
 SHOWN = [f"{WORDS[before]} to {WORDS[after]}" for before, after in MOVES]
 

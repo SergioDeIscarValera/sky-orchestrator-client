@@ -163,11 +163,15 @@ function stateIs(wanted) {
   return pill?.textContent === wanted
 }
 
+/**
+ * The rows of the inspector's checks: those not passing, in view, and those passing, folded away
+ * beneath the count; both are in the page, so both are read.
+ */
+const CHECK_ROWS = '[aria-label="Checks not passing"] > li, [aria-label="Checks passing"] > li'
+
 /** Runs in the page: whether every blocking check the inspector lists reads Pass. */
-function blockingChecksPass() {
-  const rows = Array.from(
-    globalThis.document.querySelectorAll('[aria-label="Preflight checks"] > li'),
-  )
+function blockingChecksPass(rowsOf) {
+  const rows = Array.from(globalThis.document.querySelectorAll(rowsOf))
   return (
     rows.length > 0 &&
     rows.every(
@@ -181,8 +185,8 @@ function blockingChecksPass() {
  * Runs in the page: the blocking checks not passing, each row's words (its name, what it measured,
  * its detail and its state), for a failure's message.
  */
-function blockingFailures() {
-  return Array.from(globalThis.document.querySelectorAll('[aria-label="Preflight checks"] > li'))
+function blockingFailures(rowsOf) {
+  return Array.from(globalThis.document.querySelectorAll(rowsOf))
     .filter(
       (row) =>
         !row.textContent.includes('Not blocking') && row.lastElementChild?.textContent !== 'Pass',
@@ -251,9 +255,9 @@ async function stateShown(page, words, within = WAIT_MS) {
 /** Waits for every blocking check to pass, or names the ones that do not. */
 async function blockingChecksPassed(page) {
   try {
-    await page.waitForFunction(blockingChecksPass, null, { timeout: CHECKS_MS })
+    await page.waitForFunction(blockingChecksPass, CHECK_ROWS, { timeout: CHECKS_MS })
   } catch {
-    const failing = await page.evaluate(blockingFailures)
+    const failing = await page.evaluate(blockingFailures, CHECK_ROWS)
     throw new Error(`the blocking checks did not all pass: ${failing.join(', ') || 'none judged'}`)
   }
 }
@@ -442,7 +446,8 @@ async function main() {
     await page.getByLabel('Email').fill(required('SOC_E2E_EMAIL'))
     await page.getByLabel('Password').fill(required('SOC_E2E_PASSWORD'))
     await page.getByRole('button', { name: 'Sign in' }).click()
-    await stateShown(page, 'Draft')
+    // A draft reads Defining: the operation is still being defined.
+    await stateShown(page, 'Defining')
     // The first move waits only for the state channel's join (see watchStateChannel).
     const join = await Promise.race([stateChannel.joined, timeout(WAIT_MS)])
     if (join === null) {
