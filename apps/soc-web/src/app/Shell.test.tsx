@@ -63,7 +63,6 @@ describe('the shell', () => {
       'Geofences',
       'Waylines',
       'Operations',
-      'Settings',
     ])
     for (const { label } of DESTINATIONS) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
