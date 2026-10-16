@@ -148,7 +148,7 @@ docker exec supabase-db psql -U postgres -Atc \
   "select id, name from public.organizations where deleted_at is null"
 ```
 
-2.3. **Environment files.** Copy each `*.example` to its name without `.example`, then fill it. VO2's values come from `/srv/virtual-origen/repo/infra/supabase-local/.env`.
+2.3. **Environment files.** Copy each `*.example` to its name without `.example`, then fill it. VO2's values come from `/srv/virtual-origen/repo/infra/supabase-local/.env`. That file is root's: read it with `sudo cat` (**sudo**).
 
 | File | Values |
 | --- | --- |
@@ -156,7 +156,7 @@ docker exec supabase-db psql -U postgres -Atc \
 | `migrate.env` | `SOC_MIGRATE_DSN=postgresql://postgres:<POSTGRES_PASSWORD, percent-encoded>@db:5432/postgres`; `SOC_DB_PASSWORD_SOC_CLOUD` and `SOC_DB_PASSWORD_SOC_OPERATIONS`, each from `openssl rand -hex 24` |
 | `soc-cloud.env` | `SOC_DB_PASSWORD_SOC_CLOUD` as in migrate.env; `SOC_SUPABASE_URL=http://kong:8000`; `SOC_SUPABASE_SERVICE_ROLE_KEY` = the service role key VO2's services use (`SERVICE_ROLE_KEY`, or `SERVICE_ROLE_KEY_ASYMMETRIC` once VO2 signs with ES256); `SOC_MQTT_PASSWORD_FARM` = SO's `SO_MQTT_PASSWORD_CLOUD_CLIENT`; `SOC_SO_API_TOKEN_FARM` = SO's `SO_WAYLINE_API_TOKEN` |
 | `soc-operations.env` | `SOC_DB_PASSWORD_SOC_OPERATIONS` as in migrate.env |
-| `soc-web.env` | `SOC_WEB_SUPABASE_URL=http://192.168.1.201:8000`; `SOC_WEB_SUPABASE_KEY` = the public key VO2's web uses (`ANON_KEY`, `ANON_KEY_ASYMMETRIC` or `SUPABASE_PUBLISHABLE_KEY`); the service role key is refused |
+| `soc-web.env` | `SOC_WEB_SUPABASE_URL=http://192.168.1.201:8000`; `SOC_WEB_SUPABASE_KEY` = VO2's `ANON_KEY`, the public key VO2's own web is built with; the service role key is refused |
 
 Percent-encode the Postgres password. An unencoded special character once broke VO2's URL parsing and leaked the password into a log.
 
@@ -215,7 +215,7 @@ docker exec supabase-db psql -U postgres -Atc "select count(*) from soc_migratio
 
 Check: the count equals the number of files in `database/migrations` at the tag (10 at v0.5.0).
 
-2.7. **PostgREST serves `soc` (DEP-21).** In `/srv/virtual-origen/repo/infra/supabase-local/.env`, append `,soc` to `PGRST_DB_SCHEMAS` and keep the schemas already listed. VO2's releases never overwrite this file. Then:
+2.7. **PostgREST serves `soc` (DEP-21).** In `/srv/virtual-origen/repo/infra/supabase-local/.env` (root's file: edit it with `sudoedit`, **sudo**), append `,soc` to `PGRST_DB_SCHEMAS` and keep the schemas already listed. VO2's releases never overwrite this file. Then:
 
 ```bash
 cd /srv/virtual-origen/repo/infra/supabase-local
@@ -251,7 +251,7 @@ docker exec supabase-db psql -U postgres -Atc \
 
 Check: `connected`, `t`, `t`.
 
-2.10. **Password reset links (DEP-22), optional.** Sign-in by password works without it. For email links that land on the console, append `,http://192.168.1.201:8088` to `ADDITIONAL_REDIRECT_URLS` in the same VO2 `.env`. Then run `docker compose up -d auth` there.
+2.10. **Password reset links (DEP-22), optional.** Sign-in by password works without it. For email links that land on the console, append `,http://192.168.1.201:8088` to `ADDITIONAL_REDIRECT_URLS` in the same VO2 `.env` (`sudoedit`, **sudo**). Then run `docker compose up -d auth` there.
 
 ## Phase 3: checks on the mini-PC
 
