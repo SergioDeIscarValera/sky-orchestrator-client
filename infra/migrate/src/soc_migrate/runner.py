@@ -11,6 +11,10 @@ from soc_migrate.plan import AppliedMigration, Plan, plan
 from soc_migrate.roles import ServiceCredential
 
 LOCK_KEY = "soc-migrations"
+#: The key every runner that migrates the mini-PC's one database takes (ADR-0005), agreed with
+#: Virtual Origen on 2026-10-16: its runner takes it per migration transaction, this one for its
+#: whole run, so neither applies a migration while the other is applying one.
+HOST_LOCK_KEY = "minipc-schema-migrations"
 LEDGER_DDL = """
 create schema if not exists soc_migrations;
 revoke all on schema soc_migrations from public;
@@ -48,11 +52,15 @@ class Runner:
 
     @asynccontextmanager
     async def _exclusive(self) -> AsyncIterator[None]:
-        await self._connection.execute("select pg_advisory_lock(hashtext($1))", LOCK_KEY)
+        # The host's key first, then SOC's own: Virtual Origen's runner takes only the host's, so
+        # no order of the two runners can deadlock.
+        for key in (HOST_LOCK_KEY, LOCK_KEY):
+            await self._connection.execute("select pg_advisory_lock(hashtext($1))", key)
         try:
             yield
         finally:
-            await self._connection.execute("select pg_advisory_unlock(hashtext($1))", LOCK_KEY)
+            for key in (LOCK_KEY, HOST_LOCK_KEY):
+                await self._connection.execute("select pg_advisory_unlock(hashtext($1))", key)
 
     async def _applied(self) -> list[AppliedMigration]:
         rows = await self._connection.fetch(
