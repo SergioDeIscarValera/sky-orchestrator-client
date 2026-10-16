@@ -7,8 +7,8 @@ import { useWaylines } from '../plans/data'
 import { useWaylineDesigner } from '../plans/waylineDesigner'
 import { FlightPath } from './FlightPath'
 import { usePalette } from './palette'
+import { designedPath } from './plannedFlight'
 import type { Site } from './site'
-import { flownPath } from './waylinePath'
 
 interface Props {
   readonly site: Site
@@ -40,18 +40,7 @@ export function Waylines({ site, origin }: Props) {
         <FlightPath
           key={wayline.id}
           name={`wayline ${wayline.name}`}
-          path={flownPath(
-            {
-              referencePoint: wayline.takeoff,
-              takeoffSecurityHeightM: null,
-              waypoints: wayline.waypoints.map(({ position, heightM }) => ({
-                ...position,
-                heightM,
-              })),
-            },
-            origin,
-            site,
-          )}
+          path={designedPath(wayline, origin, site)}
           colour={palette.accent}
           lineWidth={2.5}
           renderOrder={9}

@@ -16,7 +16,8 @@ interface Props {
 /**
  * The organization's saved geofences on the terrain (FR-GEO-02): every one while the geofence panel is
  * open, the selected one always, in the accent colour with its volume up to its ceiling; a click on one
- * selects it. The geofence open in the editor is the editor's to draw.
+ * selects it. The geofence open in the editor is the editor's to draw. While an operation is selected the
+ * scene shows its own geofence alone, which OperationDrawing draws (FR-SCN-04): none of these.
  */
 export function Geofences({ site, origin }: Props) {
   const geofences = useGeofences()
@@ -26,9 +27,12 @@ export function Geofences({ site, origin }: Props) {
   const editedId = useGeofenceEditor((state) => state.editing?.geofenceId)
   const invalidate = useThree((state) => state.invalidate)
   const selectedId = selection?.kind === 'geofence' ? selection.geofenceId : null
-  const shown = (geofences.data ?? []).filter(
-    ({ id }) => id !== editedId && (panel === 'geofences' || id === selectedId),
-  )
+  const shown =
+    selection?.kind === 'operation'
+      ? []
+      : (geofences.data ?? []).filter(
+          ({ id }) => id !== editedId && (panel === 'geofences' || id === selectedId),
+        )
 
   useEffect(() => {
     invalidate()

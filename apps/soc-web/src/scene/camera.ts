@@ -1,6 +1,7 @@
 import CameraControls from 'camera-controls'
 import { Box3, MathUtils, Spherical, Vector3 } from 'three'
 
+import type { SceneBox } from './commands'
 import type { Site } from './site'
 
 const { ACTION } = CameraControls
@@ -222,6 +223,67 @@ export function framePose(
     target: subject.clone(),
     position: subject.clone().addScaledVector(direction, FRAME_DISTANCE_M),
     sideM: sideShiftM(FRAME_DISTANCE_M, viewportPx, covered),
+  }
+}
+
+/** The width the cards leave free, in pixels: the whole view when it is too narrow to leave any room. */
+function freeWidthPx(
+  viewportPx: { readonly width: number; readonly height: number },
+  covered: Covered,
+): number {
+  const free = viewportPx.width - covered.leftPx - covered.rightPx
+  return free >= SMALLEST_FREE_PX ? free : viewportPx.width
+}
+
+/**
+ * The half-angle, in radians, of the view the cards leave free: the camera's vertical half-angle, or
+ * its horizontal one at the free width's aspect where that is narrower. Never zero, so a view with no
+ * size still has a finite distance to fit from; flyTo then holds the pose within the camera's limits.
+ */
+function freeHalfAngleRad(
+  viewportPx: { readonly width: number; readonly height: number },
+  covered: Covered,
+): number {
+  const vertical = MathUtils.degToRad(FIELD_OF_VIEW_DEG / 2)
+  const aspect = freeWidthPx(viewportPx, covered) / Math.max(1, viewportPx.height)
+  return Math.max(MathUtils.degToRad(1), Math.min(vertical, Math.atan(Math.tan(vertical) * aspect)))
+}
+
+/**
+ * How far the camera stands from the centre of a bounding sphere of `radiusM` for the whole sphere to lie
+ * in the view the cards leave free (FR-SCN-05): the radius over the sine of that view's narrower
+ * half-angle, and never closer than FRAME_DISTANCE_M.
+ */
+export function fitDistanceM(
+  radiusM: number,
+  viewportPx: { readonly width: number; readonly height: number },
+  covered: Covered = coveredBy(false),
+): number {
+  return Math.max(FRAME_DISTANCE_M, radiusM / Math.sin(freeHalfAngleRad(viewportPx, covered)))
+}
+
+/**
+ * The pose that fits a box in the view the cards leave free (FR-SCN-05): the camera keeps the angle the
+ * user chose and stands `fitDistanceM` from the box's centre, which it orbits, with the view shifted aside
+ * as `framePose` shifts it. The view holds the box's bounding sphere, so it holds each corner of the box.
+ */
+export function fitPose(
+  box: SceneBox,
+  camera: { readonly position: Vector3; readonly target: Vector3 },
+  viewportPx: { readonly width: number; readonly height: number },
+  covered: Covered = coveredBy(false),
+): Pose {
+  const min = new Vector3(box.min.x, box.min.y, box.min.z)
+  const max = new Vector3(box.max.x, box.max.y, box.max.z)
+  const centre = min.clone().add(max).multiplyScalar(0.5)
+  const distanceM = fitDistanceM(max.distanceTo(min) / 2, viewportPx, covered)
+  const direction = camera.position.clone().sub(camera.target)
+  if (direction.lengthSq() === 0) direction.set(0, 1, 1)
+  direction.normalize()
+  return {
+    target: centre,
+    position: centre.clone().addScaledVector(direction, distanceM),
+    sideM: sideShiftM(distanceM, viewportPx, covered),
   }
 }
 

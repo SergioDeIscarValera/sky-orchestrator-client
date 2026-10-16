@@ -11,8 +11,10 @@ import type { Site } from './site'
 import { CANVAS_SETTINGS } from './canvas'
 import { Controls } from './Controls'
 import { GeofenceEditing } from './GeofenceEditing'
+import { FleetOperation } from './FleetOperation'
 import { Geofences } from './Geofences'
 import { OperationDrawing } from './OperationDrawing'
+import { OperationFocus } from './OperationFocus'
 import { WaylineDesigning } from './WaylineDesigning'
 import { Waylines } from './Waylines'
 import { useGroundTool } from './groundTool'
@@ -38,6 +40,8 @@ export default function Scene({ site, organizationId, origin, terrain }: Props) 
   const selection = useSelection()
   const { panel } = useView()
   const operationId = selection?.kind === 'operation' ? selection.operationId : null
+  // A selected aircraft, or its fleet, shows its flight when its fleet is in an underway operation.
+  const fleetSelected = selection?.kind === 'fleet' || selection?.kind === 'device'
   return (
     <Canvas
       {...CANVAS_SETTINGS}
@@ -66,6 +70,10 @@ export default function Scene({ site, organizationId, origin, terrain }: Props) 
       {origin !== null && <Waylines site={site} origin={origin} />}
       {origin !== null && (
         <OperationDrawing operationId={operationId} site={site} origin={origin} />
+      )}
+      {origin !== null && <OperationFocus operationId={operationId} site={site} origin={origin} />}
+      {origin !== null && fleetSelected && (
+        <FleetOperation selection={selection} site={site} origin={origin} />
       )}
       {origin !== null && panel === 'waylines' && <WaylineDesigning site={site} origin={origin} />}
       <Controls site={site} organizationId={organizationId} />
