@@ -7,7 +7,7 @@ import pytest
 
 from soc_database.harness import MIGRATIONS, EphemeralPostgres, acting_as
 from soc_migrate.migrations import Migration, MigrationError, discover
-from soc_migrate.runner import LOCK_KEY, Runner
+from soc_migrate.runner import HOST_LOCK_KEY, LOCK_KEY, Runner
 
 
 async def test_every_migration_is_in_the_ledger(session: asyncpg.Connection) -> None:
@@ -38,6 +38,47 @@ async def test_a_runner_waits_for_the_one_holding_the_lock(
             await asyncio.wait_for(Runner(session).run(discover(MIGRATIONS), []), timeout=1)
     finally:
         await holder.close()
+
+
+async def test_a_run_waits_for_a_virtual_origen_migration_then_applies(
+    migrated: EphemeralPostgres, session: asyncpg.Connection
+) -> None:
+    # Virtual Origen's runner holds the host's key for each migration's transaction.
+    virtual_origen = await migrated.connect()
+    try:
+        migrating = virtual_origen.transaction()
+        await migrating.start()
+        await virtual_origen.execute("select pg_advisory_xact_lock(hashtext($1))", HOST_LOCK_KEY)
+        run = asyncio.create_task(Runner(session).run(discover(MIGRATIONS), []))
+        await asyncio.sleep(0.5)
+        assert not run.done()
+        await migrating.commit()
+        result = await asyncio.wait_for(run, timeout=5)
+        assert result.pending == ()
+    finally:
+        await virtual_origen.close()
+
+
+async def test_virtual_origen_cannot_migrate_while_a_run_holds_the_host_key(
+    migrated: EphemeralPostgres, session: asyncpg.Connection
+) -> None:
+    holder = await migrated.connect()
+    virtual_origen = await migrated.connect()
+    try:
+        # A run that takes the host's key, then waits on SOC's own one, held elsewhere.
+        await holder.execute("select pg_advisory_lock(hashtext($1))", LOCK_KEY)
+        run = asyncio.create_task(Runner(session).run(discover(MIGRATIONS), []))
+        await asyncio.sleep(0.5)
+        try_host = "select pg_try_advisory_xact_lock(hashtext($1))"
+        async with virtual_origen.transaction():
+            assert await virtual_origen.fetchval(try_host, HOST_LOCK_KEY) is False
+        await holder.execute("select pg_advisory_unlock(hashtext($1))", LOCK_KEY)
+        await asyncio.wait_for(run, timeout=5)
+        async with virtual_origen.transaction():
+            assert await virtual_origen.fetchval(try_host, HOST_LOCK_KEY) is True
+    finally:
+        await holder.close()
+        await virtual_origen.close()
 
 
 @pytest.mark.parametrize("role", ["soc_cloud", "soc_operations"])
