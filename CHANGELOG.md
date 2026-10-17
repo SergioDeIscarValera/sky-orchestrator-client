@@ -10,6 +10,60 @@ requests it merged.
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-10-17
+
+The mini-PC deploys SOC on every release, as it deploys Virtual Origen and,
+from its v0.5.0, Sky Orchestrator: a runner of SOC's own on the box runs the
+release's deploy job, behind a switch, with no registry credential left on the
+mini-PC.
+
+### Added
+
+- The `deploy` job in `release.yml`, on the mini-PC's runner
+  (`[self-hosted, minipc]`, ADR-0026):
+  - it deploys each release once its images are published;
+  - a dispatch with a tag deploys that tag;
+  - it runs only while `SOC_MINIPC_DEPLOY_ENABLED` is `true`;
+  - it checks the stack's files, their owner and their modes, then the
+    configuration with the tag's `soc-config`;
+  - its token reads packages only and is signed out at the end (#143).
+- `infra/deploy/set_env.py`: sets one value of an env file from stdin, so a
+  secret is never on a command line or a screen (#143).
+- `infra/compose/*.json.example`: the three configuration examples, held
+  equal to `soc-config example` (#143).
+- RISK-17: the runner while the repository is public (#143).
+
+### Changed
+
+- `deploy.py` deploys the first install too: before SOC's first migration
+  there is no `soc.flights`, so no flight is unfinished (#143).
+- The runbook's Phase 2 sets up `soc-runner`, the stack folder
+  `/srv/sky-orchestrator-client/stack` and the runner, and deploys by
+  dispatch. PostgREST serves `soc` after the first deploy (#143).
+- The runbook's Phase 1 deploys Sky Orchestrator v0.5.0 by its own release:
+  `so-runner`, its stack folder, its runner and a dispatch, reviewed by its
+  session (#144).
+- The runbook folds in Virtual Origen's second review: its compose is run from
+  its own directory as `vo-runner`, the clone token is kept, and the runner check
+  no longer matches its own shell (#139, #140, #141, #142).
+
+### Deploy
+
+- No migration since 0.5.0: the ledger still holds 10.
+- On the mini-PC, follow `docs/mini-pc-deployment.md` with this tag and Sky
+  Orchestrator v0.5.0. Phase 2 ends with the first deploy, a dispatch of
+  `release.yml` with `tag=v0.5.2`. Later versions deploy themselves.
+
+### Known limitations
+
+- Virtual Origen does not take the shared migration lock yet: until it does,
+  never migrate while a Virtual Origen release runs (the runbook's step 2.7).
+- The repository is public for now (RISK-17): approve no workflow run from a
+  fork.
+- Broadcast latency on the box (`DEP-23`) is measured by the runbook's step
+  3.3, not yet run there.
+- Nothing backs up the mini-PC's database on its own yet (`RISK-08`).
+
 ## [0.5.1] — 2026-10-17
 
 The release the mini-PC runs, beside Virtual Origen and Sky Orchestrator
