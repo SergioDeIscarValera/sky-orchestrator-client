@@ -168,6 +168,7 @@ sudo -u so-runner grep -nE '=(replace-with.*)?$' "$E" | cut -d= -f1             
 stat -c '%U:%G %a' "$E"                                                                  # so-runner:so-runner 600
 ```
 
+- Replace `<phone IP>` in the sed with the phone's reserved address before running it: SO's deploy does not catch it left as is.
 - The adb key is the operator's: the one the phone trusts after 1.3's first USB connection. `SO_PHONE_ADB_USER` is its owner.
 - `SO_BRIDGE_SECRET` gets its final value in 1.3, from `bridge.sh secret`.
 - The `SO_*_CONFIG` lines keep the example's `../config/<service>.json`: the stack's `config/` folder.
@@ -182,13 +183,16 @@ done
 sudo -u so-runner chmod 644 "$SO_STACK"/config/*.json                                     # sudo
 ```
 
-Then set, as `so-runner`, keeping mode 644:
+Then set, as `so-runner`, keeping mode 644. The template names on stderr what it cannot default; the `tee` does not keep it.
 
 | File | Setting |
 | --- | --- |
 | `so-gateway.json`, `so-fleet.json`, `so-wayline.json` | `"cloud_role": "external"` |
 | `so-wayline.json` | the envelope: `geofence_center` at the site, `geofence_radius_m` 50, `max_height_m` 30, `max_horizontal_speed_ms` 3.0 |
+| `so-fleet.json` | `"dock_identity": {"sn": "SODOCK000001", "domain": 3, "type": 2, "sub_type": 0, "firmware_version": "10.1.0"}` and `"aircraft_identity": {"sn": "SOUAV0000001", "domain": 0, "type": 91, "sub_type": 0, "firmware_version": "10.1.0"}`. The template has no default for them, and so-fleet refuses to start without them |
 | `so-bridge.json` | `simulator_mode` true. Real mode is a change of this file, only in 4.4 and at the site |
+
+The two serials are chosen once and never change: they are the devices SOC registers in 3.1, and a new serial is a new device in every client's history (SO's IR-DEV-01).
 
 1.3. **The phone, in this order.** The phone and the mini-PC must be on the same Wi-Fi with client isolation off. Give the phone a DHCP reservation. The phone must be set up before the first deploy: phone-link's first start mounts the adb key that `.env` names.
 
@@ -207,11 +211,11 @@ Then set, as `so-runner`, keeping mode 644:
 3. **The site configuration**, from `$SO_REPO`:
    ```bash
    python3 tools/device_config.py template > so-config.json    # then add "geofence_center" at the site
-   adb push so-config.json /data/local/tmp/so-config.json
-   adb shell run-as io.github.sergiodeiscarvalera.skyorchestrator.msdkv4 cp /data/local/tmp/so-config.json files/so-config.json
-   adb shell rm /data/local/tmp/so-config.json
+   adb -s <phone IP>:5555 push so-config.json /data/local/tmp/so-config.json
+   adb -s <phone IP>:5555 shell run-as io.github.sergiodeiscarvalera.skyorchestrator.msdkv4 cp /data/local/tmp/so-config.json files/so-config.json
+   adb -s <phone IP>:5555 shell rm /data/local/tmp/so-config.json
    ```
-   The defaults are already 50 m, 30 m and 3.0 m/s. The file holds a location, so it never goes into git. It must be final before 4.2, because it sets the phone's `config_fingerprint`. Nothing compares it with `so-wayline.json`, so check both by eye.
+   After 1.3.1 the phone is listed twice, by its USB serial and by its address, so every adb line names it with `-s`. The defaults are already 50 m, 30 m and 3.0 m/s. The file holds a location, so it never goes into git. It must be final before 4.2, because it sets the phone's `config_fingerprint`. Nothing compares it with `so-wayline.json`, so check both by eye.
 4. **The bridge secret**, from `$SO_REPO`:
    ```bash
    ADB_TARGET=<phone IP>:5555 apps/so-msdk-v4/scripts/bridge.sh secret
@@ -605,6 +609,7 @@ Start, putting so-bridge in real mode. `dc` passes no environment to the stack, 
 
 ```bash
 sudo -u so-runner sed -i 's/"simulator_mode": true/"simulator_mode": false/' /srv/sky-orchestrator/stack/config/so-bridge.json   # sudo
+sudo -u so-runner grep -c '"simulator_mode": false' /srv/sky-orchestrator/stack/config/so-bridge.json   # sudo; must print 1
 dc up -d --force-recreate so-bridge
 ```
 
@@ -621,10 +626,11 @@ End, putting so-bridge back in simulator mode:
 
 ```bash
 sudo -u so-runner sed -i 's/"simulator_mode": false/"simulator_mode": true/' /srv/sky-orchestrator/stack/config/so-bridge.json   # sudo
+sudo -u so-runner grep -c '"simulator_mode": true' /srv/sky-orchestrator/stack/config/so-bridge.json    # sudo; must print 1
 dc up -d --force-recreate so-bridge
 ```
 
-Check that `/v1/status` says `simulator_mode` true. The operation returns to `simulated` and waits there. Never arm in real mode at the desk. A deploy keeps whatever the file says, so never leave it in real mode.
+Check that `/v1/status` says `simulator_mode` true. The operation returns to `simulated` and waits there. Never arm in real mode at the desk. A deploy keeps whatever the file says, so never leave it in real mode. A `grep -c` that prints 0 means the sed changed nothing: stop, and fix the file by hand as `so-runner`.
 
 4.5. **Part B is M5 itself.** Follow SO's `docs/first-real-flight.md` Part B in full: it is the authority for the flight. Its outline:
 - **Before leaving:** the weather, the batteries, and both envelopes checked.
@@ -666,7 +672,7 @@ Check that `/v1/status` says `simulator_mode` true. The operation returns to `si
 
 | Owner | Item | Why |
 | --- | --- | --- |
-| SO | v0.5.0 tagged: v0.4.4 with its deploy on every release (ADR-0043), and its APK built at that tag | The mini-PC runs it; the clearance is per commit |
+| SO | v0.5.0 tagged: v0.4.4 plus the deploy on every release (ADR-0043), and its APK built at that tag | The mini-PC runs it; the clearance is per commit |
 | SOC | v0.5.2, released with:<br>• everything in v0.5.1: the shared migration lock, SO v0.4.4 re-vendored, the deploy command that refuses while a flight is unfinished (`FR-DEP-06`), the Broadcast measurement<br>• the deploy on every release through the mini-PC's runner (ADR-0026)<br>• the configuration examples and `set_env.py` | Phase 2's tag |
 | VO2 | The shared lock in `apply-migrations.sh` | Until then, the rule in 2.7 |
 | VO2 | ADR 0059 and its gate test (`DEP-20`) | The contract SOC reads |
