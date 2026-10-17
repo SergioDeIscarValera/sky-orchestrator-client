@@ -246,11 +246,19 @@ Before it:
 
 In this order:
 
-1. **adb**, as the key's owner (1.2). Plug the phone into the mini-PC by USB. On "Allow USB debugging", tap Allow and tick "Always allow from this computer". Then:
+1. **adb**, as the key's owner (1.2). First without the cable: the phone may still listen on 5555 from an earlier `tcpip`. Its address is its DHCP reservation, or Settings, Wi-Fi, the network's details.
    ```bash
-   adb -s <usb serial> tcpip 5555 && adb connect <phone IP>:5555
+   adb connect <phone IP>:5555; adb devices
    ```
-   Then unplug it from the mini-PC: the phone's only USB port belongs to the controller during the session. A phone restart turns adb's TCP mode off: plug it into the mini-PC again, repeat this step, then cable it to the controller and restart the application. Turning Wi-Fi off and on does not.
+   - `device`: no cable needed.
+   - `unauthorized`: the phone shows "Allow USB debugging" over Wi-Fi. Tap Allow and tick "Always allow from this computer". No cable needed.
+   - `connection refused` or a timeout: the phone has restarted since its last `tcpip`. Plug it into the mini-PC by USB, tap Allow and tick "Always allow from this computer", then:
+     ```bash
+     adb -s <usb serial> tcpip 5555 && adb connect <phone IP>:5555
+     ```
+     Then unplug it from the mini-PC: the phone's only USB port belongs to the controller during the session.
+
+   A phone restart turns adb's TCP mode off: repeat this step, then cable the phone to the controller and restart the application. Turning Wi-Fi off and on does not. Wireless debugging's "Pair with code" also avoids the cable, but it is untested on this phone and its port changes each time: not for these sessions.
 2. **The application.** Install the debug APK that SO built on the laptop from the v0.5.0 tag, on a clean tree. It must be a debug build, because session.sh and the clearance write through `run-as`. Its name carries the commit that clearance.py lists, `git -C "$SO_REPO" rev-parse --short=12 'v0.5.0^{commit}'`.
    - On the laptop: `/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-45119e44a18b-debug.apk`, with its `.sha256` beside it.
    - Its SHA-256 is `1588566c56483ad02fce18d245cae8218cb05762cb4cbe8c49363da8362f7426`, and its commit `45119e44a18b` is v0.5.0's.
