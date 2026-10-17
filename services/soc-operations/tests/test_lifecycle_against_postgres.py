@@ -1,4 +1,4 @@
-"""An operation's whole life against the database, soc-operations running (FR-OPS-02 to FR-OPS-10).
+"""An operation's whole life against the database, soc-operations running (FR-OPS-02 to FR-OPS-13).
 
 soc-cloud's part is played through its own database functions: it replies to each command,
 records the flight's progress and the aircraft's take-off and landing, as it does on the
@@ -319,6 +319,125 @@ async def test_an_operation_flies_from_draft_to_completed(
     assert [row["moved"] for row in moves] == [
         "planned", "preparing", "simulating", "simulated", "ready", "launching", "in_flight",
         "returning", "completed",
+    ]  # fmt: skip
+
+
+async def command(admin: asyncpg.Connection, seeded: Seeded, flight: uuid.UUID, verb: str) -> None:
+    """The pilot commands a flight, as the console's buttons do through their RPC."""
+    async with admin.transaction():
+        await impersonate(admin, seeded.pilot)
+        await admin.execute(
+            "select soc.request_command($1, $2::soc.command_verb, $3)", flight, verb, uuid.uuid4()
+        )
+
+
+async def test_a_launch_in_the_simulator_is_commanded_as_a_flight_and_comes_back_simulated(
+    admin: asyncpg.Connection, running: None
+) -> None:
+    """FR-OPS-13: launched from simulated in simulator mode, the flight is paused, resumed and
+    stopped as a real one is, and on the ground the operation is simulated again, its record
+    neither started nor closed. Then the real launch flies and closes as it always did."""
+    del running
+    seeded = await seed(admin)
+    operation = seeded.operation_id
+    for transition, wanted in (
+        ("plan", "planned"),
+        ("prepare", "preparing"),
+        ("simulate", "simulating"),
+    ):
+        await ask(admin, seeded, transition)
+        await reached(admin, operation, wanted)
+    simulated = await answer(admin, operation, "prepare")
+    await answer(admin, operation, "execute")
+    await admin.execute(
+        "select soc.record_flight_progress($1, 'ok', 0, 100, 6, null, 'completed')", simulated
+    )
+    await reached(admin, operation, "simulated")
+
+    # The launch in the simulator: prepared as a simulation, executed, in flight.
+    await ask(admin, seeded, "launch")
+    await reached(admin, operation, "launching")
+    rehearsal = await answer(admin, operation, "prepare")
+    assert rehearsal != simulated
+    prepared = await admin.fetchval(
+        "select payload from soc.command_intents where flight_id = $1 and verb = 'prepare'",
+        rehearsal,
+    )
+    assert json.loads(prepared)["simulate_mission"]["is_enable"] == 1
+    await answer(admin, operation, "execute")
+    await reached(admin, operation, "in_flight")
+    await admin.execute("select soc.record_flight_moment($1, 'took_off', now(), 4)", rehearsal)
+
+    # Paused and resumed from the console, as a real flight is (FR-CMD).
+    await command(admin, seeded, rehearsal, "pause")
+    await answer(admin, operation, "pause")
+    await admin.execute(
+        "select soc.record_flight_progress($1, 'paused', 0, 40, 3, null)", rehearsal
+    )
+    await reached(admin, operation, "paused")
+    await command(admin, seeded, rehearsal, "recovery")
+    await answer(admin, operation, "recovery")
+    await admin.execute(
+        "select soc.record_flight_progress($1, 'in_progress', 0, 45, 3, null)", rehearsal
+    )
+    await reached(admin, operation, "in_flight")
+
+    # Stopped: home, canceled, landed, and simulated again with nothing closed.
+    await ask(admin, seeded, "stop")
+    await reached(admin, operation, "returning")
+    await answer(admin, operation, "return_home")
+    await admin.execute(
+        "select soc.record_flight_progress($1, 'canceled', 322283, 50, 4, null)", rehearsal
+    )
+    await admin.execute("select soc.record_flight_moment($1, 'landed', now(), 0)", rehearsal)
+    await reached(admin, operation, "simulated")
+    record = await admin.fetchrow(
+        "select started_at, ended_at, end_reason from soc.operations where id = $1", operation
+    )
+    assert record is not None
+    assert dict(record) == {"started_at": None, "ended_at": None, "end_reason": None}
+
+    # The real launch: its stop is not the rehearsal's, so it closes completed.
+    await status(admin, seeded.gateway, simulator_mode=False)
+    await reached(admin, operation, "ready")
+    await ask(admin, seeded, "launch")
+    await reached(admin, operation, "launching")
+    real = await answer(admin, operation, "prepare")
+    await answer(admin, operation, "execute")
+    await reached(admin, operation, "in_flight")
+    await admin.execute("select soc.record_flight_moment($1, 'took_off', now(), 4)", real)
+    await admin.execute(
+        "select soc.record_flight_progress($1, 'ok', 0, 100, 6, null, 'completed')", real
+    )
+    await reached(admin, operation, "returning")
+    await admin.execute("select soc.record_flight_moment($1, 'landed', now(), 0)", real)
+    await reached(admin, operation, "completed")
+
+    closed = await admin.fetchrow(
+        "select started_at, end_reason::text from soc.operations where id = $1", operation
+    )
+    assert closed is not None
+    assert closed["started_at"] is not None
+    assert closed["end_reason"] == "completed"
+    flights = await admin.fetch(
+        "select mode::text, end_reason::text from soc.flights where operation_id = $1"
+        " order by prepared_at",
+        operation,
+    )
+    assert [(row["mode"], row["end_reason"]) for row in flights] == [
+        ("simulated", "completed"),
+        ("simulated", "operator_stop"),
+        ("real", "completed"),
+    ]
+    moves = await admin.fetch(
+        "select payload ->> 'to' as moved from soc.operation_events"
+        " where operation_id = $1 and kind = 'operation_state_changed' order by recorded_at",
+        operation,
+    )
+    assert [row["moved"] for row in moves] == [
+        "planned", "preparing", "simulating", "simulated",
+        "launching", "in_flight", "paused", "in_flight", "returning", "simulated",
+        "ready", "launching", "in_flight", "returning", "completed",
     ]  # fmt: skip
 
 

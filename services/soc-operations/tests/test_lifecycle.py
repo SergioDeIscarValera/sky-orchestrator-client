@@ -1,4 +1,4 @@
-"""The lifecycle's decisions, from a snapshot to actions (FR-OPS-02 to FR-OPS-10, FR-CMD-03/04)."""
+"""The lifecycle's decisions, from a snapshot to actions (FR-OPS-02 to FR-OPS-13, FR-CMD-03/04)."""
 
 from __future__ import annotations
 
@@ -200,6 +200,104 @@ def test_launch_needs_a_simulation_of_this_very_file() -> None:
     assert "this file has not completed a simulation" in decision.reasons
 
 
+# --- A launch in the simulator (FR-OPS-13) -------------------------------------------------
+
+
+def test_a_launch_from_simulated_flies_the_file_in_the_simulator_as_a_launch() -> None:
+    simulated = snapshot("simulated", flights=(simulated_ok(),))
+    decision = on_request(simulated, "launch", PASSING)
+    assert decision.accepted
+    log, prepare, move = decision.actions
+    assert isinstance(log, Log) and log.kind == "checks_at_launch"
+    assert log.payload["mode"] == "simulated"
+    assert isinstance(prepare, PrepareFlight) and prepare.mode == "simulated"
+    assert prepare.payload["simulate_mission"]["is_enable"] == 1
+    assert prepare.payload["file"]["fingerprint"] == FILE.md5
+    assert move == Move("launching", "launch in the simulator")
+
+
+@pytest.mark.parametrize(
+    ("changes", "checks", "named"),
+    [
+        (
+            {"status": status(simulator_mode=False, simulator_active=False)},
+            PASSING,
+            "the stack is in real mode: the operation becomes ready on its own",
+        ),
+        ({"status": None}, PASSING, "the stack's mode is not known"),
+        ({"flights": ()}, PASSING, "this file has not completed a simulation"),
+        ({}, FAILING, "PF-BATTERY: battery 12 % under 30 %"),
+        ({"file": None}, PASSING, "the operation has no flight file: prepare it again"),
+    ],
+)
+def test_a_launch_in_the_simulator_is_refused_naming_why(
+    changes: dict[str, Any], checks: list[Judged], named: str
+) -> None:
+    simulated = snapshot("simulated", **{"flights": (simulated_ok(),), **changes})
+    decision = on_request(simulated, "launch", checks)
+    assert not decision.accepted
+    assert named in decision.reasons
+    assert decision.actions == ()
+
+
+def test_a_launch_in_the_simulator_pauses_resumes_and_comes_back_to_simulated() -> None:
+    """The flight moves as a real one does (FR-CMD-02); on the ground it never closes."""
+    running = flight(state=FlightState("in_progress", None, None), took_off=True)
+    assert moves(on_progress(snapshot("launching", flights=(running,)), running.id)) == [
+        "in_flight"
+    ]
+    paused = dataclasses.replace(running, state=FlightState("paused", 0, None))
+    assert moves(on_progress(snapshot("in_flight", flights=(paused,)), paused.id)) == ["paused"]
+    assert moves(on_progress(snapshot("paused", flights=(running,)), running.id)) == ["in_flight"]
+    done = dataclasses.replace(running, state=FlightState("ok", 0, "completed"))
+    assert moves(on_progress(snapshot("in_flight", flights=(done,)), done.id)) == ["returning"]
+    landed = dataclasses.replace(done, landed=True)
+    decision = on_progress(snapshot("returning", flights=(landed,)), landed.id)
+    assert decision.actions == (
+        EndFlight(landed.id, "completed"),
+        Move("simulated", "on the ground in the simulator after the flight ended ok: completed"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("state", "reason", "stopped"),
+    [
+        ("canceled", "operator_return", False),
+        ("canceled", "operator_return", True),
+        ("failed", "pilot_takeover", False),
+        ("failed", "geofence_breach", False),
+    ],
+)
+def test_a_launch_in_the_simulator_however_it_ended_lands_back_in_simulated(
+    state: str, reason: str, stopped: bool
+) -> None:
+    landed = flight(took_off=True, landed=True, state=FlightState(state, 322283, reason))
+    decision = on_progress(snapshot("returning", flights=(landed,), stopped=stopped), landed.id)
+    told = "operator_stop" if stopped else reason
+    assert decision.actions == (
+        EndFlight(landed.id, told),
+        Move("simulated", f"on the ground in the simulator after the flight ended {state}: {told}"),
+    )
+
+
+def test_a_launch_in_the_simulator_refused_or_ended_before_take_off_is_simulated_again() -> None:
+    current = flight()
+    refused_by_so = on_outcome(
+        snapshot("launching", flights=(current,)), Outcome("prepare", current.id, "refused", 314010)
+    )
+    assert moves(refused_by_so) == ["simulated"]
+    never = flight(state=FlightState("canceled", 0, "cancelled"))
+    decision = on_progress(snapshot("launching", flights=(never,)), never.id)
+    assert moves(decision) == ["simulated"]
+
+
+def test_a_launch_in_the_simulator_keeps_the_pass_that_makes_the_operation_ready() -> None:
+    """A rehearsal stopped after the pass leaves the pass standing for the real launch."""
+    stopped = flight(state=FlightState("canceled", 322283, "operator_stop"), ended=True)
+    later = snapshot("simulated", status=REAL, flights=(stopped, simulated_ok()))
+    assert moves(on_checks(later, PASSING)) == ["ready"]
+
+
 def test_stop_sends_every_aircraft_home_and_returns() -> None:
     """FR-CMD-04: every flight of the operation receives return_home."""
     first, second = flight(mode="real"), flight(mode="real")
@@ -298,12 +396,19 @@ def test_an_execute_with_an_unknown_outcome_waits_for_the_progress() -> None:
 REPLIED = datetime(2026, 10, 13, 10, 0, 0, tzinfo=UTC)
 
 
-@pytest.mark.parametrize(("state", "back"), [("simulating", "preparing"), ("launching", "ready")])
+@pytest.mark.parametrize(
+    ("state", "mode", "back"),
+    [
+        ("simulating", "simulated", "preparing"),
+        ("launching", "real", "ready"),
+        ("launching", "simulated", "simulated"),
+    ],
+)
 def test_an_unknown_outcome_with_no_progress_after_10_s_never_started(
-    state: str, back: str
+    state: str, mode: str, back: str
 ) -> None:
     """DEP-27: the execute's deadline was 3 s on the phone, so silence means it did not fly."""
-    current = flight(outcome_unknown_since=REPLIED)
+    current = flight(mode=mode, outcome_unknown_since=REPLIED)
     waiting = snapshot(state, flights=(current,))
     assert on_tick(waiting, REPLIED + timedelta(seconds=9.9)).actions == ()
     decision = on_tick(waiting, REPLIED + timedelta(seconds=10))

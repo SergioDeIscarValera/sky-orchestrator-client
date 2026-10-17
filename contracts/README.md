@@ -11,7 +11,7 @@ both sides updated in the same pull request (`NFR-MNT-02`).
 | [`sky-orchestrator/`](sky-orchestrator/README.md) | Sky Orchestrator's DJI schemas and examples and so-wayline's OpenAPI, vendored at a pinned commit with their hashes | M1, here, Sky Orchestrator v0.4.2 |
 | `results/` | The meaning shown to the operator for every DJI result code SO can return | M4 |
 | [`events/`](events/events.json) | The closed list of operation event kinds: each one's severity, sources and payload keys (IR-EVT-02) | M4, here, 1.0.0 |
-| [`operations/`](operations/lifecycle.json) | An operation's states and the only moves between them (FR-OPS-02), which the database and soc-operations both hold | M4, here, 1.0.0 |
+| [`operations/`](operations/lifecycle.json) | An operation's states and the only moves between them (FR-OPS-02), which the database and soc-operations both hold | M4, here, 1.1.0 |
 | [`catalogue/`](catalogue/README.md) | The aircraft models supported by Mobile SDK V4, with their sourced specifications | M2, here, 1.0.0 |
 | [`geometry/`](../libs/soc-geo/README.md) | Golden vectors every implementation of SOC's geometry passes, from PROJ, shapely and the other oracles (ADR-0009), and a wayline's design, its bake and the flight an operation makes of it (`design.schema.json`) | M2, here: the local frame; M3, here: the plane's predicates, the design schema (2.2.0: a wayline is geometry, climbing straight up from its takeoff, no leg on a slant), and the console's circles, grids, grown geofences, bakes and flights, each checked by libs/soc-geo |
 | [`site/`](site/site.schema.json) | `site.json`, which `soc-site bake` writes beside a site's elevation grid and imagery, and the console reads (ADR-0018) | M2, here, 1.0.0 |

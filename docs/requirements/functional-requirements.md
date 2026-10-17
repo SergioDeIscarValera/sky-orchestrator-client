@@ -628,6 +628,27 @@ Several waylines and fleets in one operation, each fleet with its own wayline.
 
 **Acceptance**: deferred. The schema already allows several assignments.
 
+### FR-OPS-13 — Launch in the simulator · MUST
+From `simulated`, with the stack in simulator mode and every blocking check
+passing, a pilot may launch the operation in Sky Orchestrator's simulator, after
+explicit confirmation, to rehearse the flight before the real one
+([ADR-0027](../architecture/decisions/0027-a-launch-in-the-simulator-rehearses-the-flight.md)).
+The file of its simulated pass is prepared again with `simulate_mission`
+(`is_enable` 1), then executed, and the flight is commanded as a real one is:
+paused, resumed, sent home, stopped, taken over from the controller (FR-CMD).
+Its operation moves through `launching`, `in_flight`, `paused` and `returning`,
+and once the aircraft stands on the ground it is `simulated` again, however the
+flight ended. A launch in the simulator neither starts nor closes the record:
+`started_at` is set by the launch from `ready` only, the simulated pass that
+made the operation `simulated` still makes it `ready` in real mode, and a stop
+belongs to the flight it stopped. Its wayline, geofence and fleet cannot change
+until it lands.
+
+**Acceptance**: against the database with soc-operations running, a launch in
+the simulator is paused, resumed and stopped, lands back in `simulated` with no
+`started_at`, and the real launch after it closes `completed`; a launch refused,
+or ended before take-off, is `simulated` again.
+
 ---
 
 ## FR-CMD — Commands to aircraft in flight

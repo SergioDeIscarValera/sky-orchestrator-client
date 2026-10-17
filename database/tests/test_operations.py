@@ -331,6 +331,30 @@ async def test_launching_sets_started_at_once_and_keeps_it(
     assert again == first
 
 
+async def test_a_launch_in_the_simulator_never_sets_started_at(
+    admin: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    """FR-OPS-13: started_at is the real flight's; a rehearsal comes back to simulated unstarted."""
+    organization = (await tenancy.member()).organization_id
+    operation = await operation_in(admin, organization)
+    await force(admin, operation, "simulated")
+    for state in ("launching", "in_flight", "paused", "in_flight", "returning", "simulated"):
+        await move(admin, operation, state)
+    await move(admin, operation, "launching")
+    await move(admin, operation, "simulated")
+    rehearsed = await admin.fetchrow(
+        "select state::text, started_at, ended_at from soc.operations where id = $1", operation
+    )
+    assert rehearsed is not None
+    assert dict(rehearsed) == {"state": "simulated", "started_at": None, "ended_at": None}
+    await move(admin, operation, "ready")
+    await move(admin, operation, "launching")
+    assert (
+        await admin.fetchval("select started_at from soc.operations where id = $1", operation)
+        is not None
+    )
+
+
 @pytest.mark.parametrize("state", TERMINAL_STATES)
 async def test_a_closed_operation_refuses_a_change_to_its_row_as_admin_and_as_editor(
     state: str, admin: asyncpg.Connection, session: asyncpg.Connection, tenancy: Tenancy
@@ -716,8 +740,9 @@ async def test_an_edit_to_what_an_operation_names_returns_it_to_planned(
 async def test_an_edit_to_what_an_operation_names_leaves_it_where_it_is(
     state: str, what: str, admin: asyncpg.Connection, session: asyncpg.Connection, tenancy: Tenancy
 ) -> None:
+    """A real flight flies its own file and snapshot: the operation closes on landing."""
     member = await tenancy.member("editor")
-    flown = await Operations(admin).flown(member.organization_id)
+    flown = await Operations(admin).flown(member.organization_id, mode="real")
     await force(admin, flown.operation_id, state)
     async with acting_as(session, member.user_id) as connection:
         await edit_dependent(connection, what, flown)
@@ -732,6 +757,23 @@ async def test_an_edit_to_what_a_simulating_or_launching_operation_names_is_refu
     """A flight of the operation is prepared from its file: the edit is refused."""
     member = await tenancy.member("editor")
     flown = await Operations(admin).flown(member.organization_id)
+    await force(admin, flown.operation_id, state)
+    async with acting_as(session, member.user_id) as connection:
+        with pytest.raises(asyncpg.CheckViolationError) as refusal:
+            async with connection.transaction():
+                await edit_dependent(connection, what, flown)
+        assert refusal.value.constraint_name == "operation_definition_frozen"
+        assert await state_of(connection, flown.operation_id) == state
+
+
+@pytest.mark.parametrize("state", ["in_flight", "paused", "returning"])
+@pytest.mark.parametrize("what", ["wayline", "geofence", "fleet"])
+async def test_an_edit_to_what_a_launch_in_the_simulator_names_is_refused_until_it_lands(
+    state: str, what: str, admin: asyncpg.Connection, session: asyncpg.Connection, tenancy: Tenancy
+) -> None:
+    """FR-OPS-13: the rehearsal comes back to simulated holding its file, so what it names waits."""
+    member = await tenancy.member("editor")
+    flown = await Operations(admin).flown(member.organization_id, mode="simulated")
     await force(admin, flown.operation_id, state)
     async with acting_as(session, member.user_id) as connection:
         with pytest.raises(asyncpg.CheckViolationError) as refusal:

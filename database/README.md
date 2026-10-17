@@ -25,8 +25,9 @@ its migrations and their tests.
 | `0008-geofences-and-waylines` | `soc.geofences`, `soc.waylines` (`IR-GEO`, `IR-WAY`): editors save them, members read their organization's, `soc-cloud` and `soc-operations` read every row; a wayline's design and baked waypoints are saved together and loaded as saved (`IR-WAY-01`); a margin only when a geofence is generated; a ring's simplicity is left to the validators in code (`FR-GEO-04`); retiring is final and timed by the database; every change broadcast on `org:<id>:soc:state` |
 | `0009-waylines-without-flight` | Drops `soc.waylines.speed_ms`, and `metrics` no longer requires a duration: a wayline is geometry (`IR-WAY`, `FR-WAY-09`, `FR-WAY-10`), its speed, climb, finish and duration belong to the operation (`M4`); `metrics` holds the waypoint count and the distance; the grants are stated again without the column; live waylines saved by 0.4.0 move to design schema 2.0.0 (their three operation keys leave the design, `duration_s` leaves `metrics`), retired ones are not touched |
 | `0010-operations` | The operations (`IR-OPS`, `IR-ASG`, `IR-OPR`, `IR-FIL`, `IR-FLT`, `IR-FST`, `IR-EVT`, `IR-TEL`, `IR-TRQ`): the lifecycle, the append-only log, flight files, flights and their progress, telemetry, checks, dry runs and transition requests, with the functions that move and record them; see [Operations](#operations-0010) |
+| `0011-launch-in-the-simulator` | A launch in the simulator (`FR-OPS-13`, ADR-0027): the moves `simulated` to `launching`, and `launching` and `returning` back to `simulated`; `started_at` set by a launch from `ready` only; what a launch in the simulator names fixed until it lands |
 
-## Operations (0010)
+## Operations (0010, 0011)
 
 `operation_moves` and `event_kinds` are written as [`lifecycle.json`](../contracts/operations/lifecycle.json) and [`events.json`](../contracts/events/events.json) list them; `test_operations.py` and `test_operation_log.py` hold each table equal to its file.
 
@@ -61,7 +62,7 @@ its migrations and their tests.
 | Closed is closed: a closed operation takes no change to its row, assignments, operators, checks, flights, flight files, dry runs, requests or log, except the entry of its closing move | `soc.is_open`, `soc.definition_changed`; triggers `operation_changes`, `operator_changes`, `operation_takes_no_more` |
 | A deleted user is forgotten as its creator, open or closed; that is the one change a closed operation's row takes | Foreign key `created_by` on delete set null; trigger `operation_changes` |
 | Frozen from `simulating` on: the operation's geofence, height and assignments cannot change in `simulating`, `launching`, `in_flight`, `paused` or `returning`; its operators cannot change from `launching` on | Triggers `operation_changes`, `assignment_changes`, `operator_changes` |
-| A wayline, geofence or fleet the operation names cannot change while it simulates or launches; in `in_flight`, `paused` or `returning` the flight keeps its own file and snapshot | Trigger `dependents_follow` |
+| A wayline, geofence or fleet the operation names cannot change while it simulates or launches, nor while a launch in the simulator flies (0011); a real flight in `in_flight`, `paused` or `returning` keeps its own file and snapshot | Trigger `dependents_follow` |
 | A change to what flies while `preparing`, `simulated` or `ready` moves the operation back to `planned`, logging `operation_definition_changed` and the move | `soc.definition_changed` |
 | One assignment per operation in the MVP; a wayline or a fleet at most once per operation | Trigger `assignment_changes`; constraints `assignment_wayline_once` and `assignment_fleet_once` |
 | A new operation starts as a draft, created by whoever inserts it | Trigger `operation_starts_as_draft` |
