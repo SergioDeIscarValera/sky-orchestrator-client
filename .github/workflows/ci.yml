@@ -67,6 +67,10 @@ jobs:
         if: ${{ !cancelled() && steps.python.outcome == 'success' }}
         run: python3 -m unittest discover -s tools/tests -v
 
+      - name: Deploy command gate tests
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        run: python3 -m unittest discover -s infra/deploy/tests -v
+
       - id: uv
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: astral-sh/setup-uv@v10.2.0
@@ -95,6 +99,10 @@ jobs:
       - name: Tooling types
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
         run: uv run --frozen mypy --python-version 3.12 tools
+
+      - name: Deploy command types
+        if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}
+        run: uv run --frozen mypy --python-version 3.12 infra/deploy
 
       - name: Database types
         if: ${{ !cancelled() && steps.workspace.outcome == 'success' }}

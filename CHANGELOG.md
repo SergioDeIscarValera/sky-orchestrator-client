@@ -10,6 +10,49 @@ requests it merged.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-10-17
+
+The release the mini-PC runs, beside Virtual Origen and Sky Orchestrator
+v0.4.4: the joint runbook, a migration lock shared with Virtual Origen, a
+deploy command that waits for flights to end, and the Broadcast measurement
+the box still owes M1.
+
+### Added
+
+- `docs/mini-pc-deployment.md`: Virtual Origen, Sky Orchestrator and SOC
+  deployed together on the mini-PC, phase by phase, reviewed by both projects
+  (#133, #134).
+- `infra/deploy/deploy.py <version>`: pulls a version, migrates and starts it,
+  and refuses while a flight is unfinished, read again before migrating and
+  before starting (`FR-DEP-06`, #135).
+- `soc-broadcast-probe` in soc-cloud's image: Broadcast latency from soc-cloud
+  to a member's socket through Kong, a non-member refused before and after the
+  run, the member joined again across a Realtime restart (`DEP-23`, #136).
+
+### Changed
+
+- `soc-migrate` holds the mini-PC's shared lock (`minipc-schema-migrations`)
+  for its whole run, so it never migrates while Virtual Origen does (#132).
+- Sky Orchestrator v0.4.4 vendored: a flight's waypoint index never goes back
+  within an execution and holds the last waypoint through the return home. The
+  end to end holds it over the whole execution (#134).
+
+### Deploy
+
+- No migration since 0.5.0: the ledger still holds 10.
+- On the mini-PC, follow `docs/mini-pc-deployment.md` with this tag. Later
+  versions go through `infra/deploy/deploy.py`.
+
+### Known limitations
+
+- Virtual Origen does not take the shared migration lock yet: until it does,
+  never migrate while a Virtual Origen release runs (the runbook's step 2.6).
+- Broadcast latency on the box (`DEP-23`) is measured by the probe in the
+  runbook's step 3.3, not yet run there.
+- Sky Orchestrator v0.4.4 is not cleared for real flight until its build passes
+  the phone's own simulator session (its NFR-SAF-04).
+- Nothing backs up the mini-PC's database on its own yet (`RISK-08`).
+
 ## [0.5.0] — 2026-10-16
 
 M4 (operations) closed: an operation is planned, prepared, simulated and flown

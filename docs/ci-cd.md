@@ -26,6 +26,7 @@ hand:
 | Sky Orchestrator's vendored contracts equal their manifest | `FR-LNK-10`, `tools/vendor_sky_orchestrator.py` |
 | No file over 512 KB | `NFR-MNT-04` |
 | Tooling gate tests | `NFR-TEST-01` |
+| Deploy command gate tests and strict types at Python 3.12 (`infra/deploy`) | `FR-DEP-06`, `NFR-TEST-01`, `NFR-MNT-06` |
 | Python workspace synced from its lockfile, uv 0.12.23 | `NFR-PORT-02` |
 | Python lint and format over the whole repository | `NFR-MNT-06` |
 | Strict types for `tools/` at Python 3.12, and for `database` | `NFR-MNT-06` |
@@ -87,8 +88,8 @@ run of `Gate` on `develop` is the remedy.
 
 `.pre-commit-config.yaml` runs the same scripts: the commit message linter on
 `commit-msg`; branch name, file hygiene, links, gitleaks at CI's version, Python
-lint, format and types, and the tooling tests on `pre-commit`. Each unit adds its
-gate when it arrives.
+lint, format and types, and the tooling and deploy command tests on `pre-commit`.
+Each unit adds its gate when it arrives.
 
 `--no-verify` is not an escape hatch.
 

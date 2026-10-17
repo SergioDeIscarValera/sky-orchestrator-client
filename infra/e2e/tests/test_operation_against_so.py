@@ -182,13 +182,12 @@ async def test_an_operation_is_simulated_then_flown_real_paused_resumed_and_comp
             with contextlib.suppress(asyncio.CancelledError):
                 await following
         print(f"status and waypoint index through the flight: {followed}")
-        # On its route, in progress or paused, until it reaches the last waypoint: past it, the
-        # finish action's return home reports index 0 (asked of Sky Orchestrator), and it is not
-        # a breakpoint to resume from.
-        indices = [index for status, index in followed if status in ("in_progress", "paused")]
-        route = indices[: indices.index(LAST_WAYPOINT) + 1] if LAST_WAYPOINT in indices else indices
-        assert route == sorted(route)
-        assert route[-1] == LAST_WAYPOINT, "the flight did not reach its last waypoint"
+        # Over the whole execution, the finish action's return home included, the index never
+        # goes back, and it holds the last waypoint once the route is over (flighttask_progress
+        # 1.2.0, Sky Orchestrator v0.4.4).
+        indices = [index for _, index in followed]
+        assert indices == sorted(indices), f"the waypoint index went back: {followed}"
+        assert indices[-1] == LAST_WAYPOINT, "the flight did not end at its last waypoint"
 
         # The stack turned to real mode with the phone's simulator still on: the operation is
         # not ready, PF-SIMULATOR names why, and nothing goes to the wire.
