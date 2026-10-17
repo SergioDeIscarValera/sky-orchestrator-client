@@ -192,11 +192,11 @@ Check:
 ```bash
 sudo mkdir -p /srv/sky-orchestrator-client && sudo chown "$USER": /srv/sky-orchestrator-client   # sudo
 git clone https://github.com/SergioDeIscarValera/sky-orchestrator-client.git /srv/sky-orchestrator-client   # the fine-grained token of 0.3
-git -C /srv/sky-orchestrator-client checkout <SOC tag>
+git -C /srv/sky-orchestrator-client checkout v0.5.1
 cd /srv/sky-orchestrator-client/infra/compose
 ```
 
-The tag is SOC's release for the mini-PC (see "Before the first deploy"). Every file below lives in `infra/compose`, mode 600, owned by the operator's user, and git ignores it.
+v0.5.1 is SOC's release for the mini-PC; later versions go through `infra/deploy/deploy.py`. Every file below lives in `infra/compose`, mode 600, owned by the operator's user, and git ignores it.
 
 2.2. **The farm's organization.** SOC acts for the farm's VO2 organization only: **Origen**, `70458d25-9fb9-4ae8-8b43-7adf7ba95ee2`. Confirm it on the box. The list also holds the personal organizations VO2 creates at every sign-up, named "Finca de <name>":
 
@@ -209,7 +209,7 @@ docker exec supabase-db psql -U postgres -Atc \
 
 | File | Values |
 | --- | --- |
-| `.env` | `SOC_VERSION=<SOC tag>`; the network names and `SOC_WEB_PORT=8088` as in the example |
+| `.env` | `SOC_VERSION=v0.5.1`; the network names and `SOC_WEB_PORT=8088` as in the example |
 | `migrate.env` | `SOC_MIGRATE_DSN=postgresql://postgres:<POSTGRES_PASSWORD, percent-encoded>@db:5432/postgres`; `SOC_DB_PASSWORD_SOC_CLOUD` and `SOC_DB_PASSWORD_SOC_OPERATIONS`, each from `openssl rand -hex 24` |
 | `soc-cloud.env` | `SOC_DB_PASSWORD_SOC_CLOUD` as in migrate.env; `SOC_SUPABASE_URL=http://kong:8000`; `SOC_SUPABASE_SERVICE_ROLE_KEY` = VO2's `SERVICE_ROLE_KEY`; `SOC_MQTT_PASSWORD_FARM` = SO's `SO_MQTT_PASSWORD_CLOUD_CLIENT`; `SOC_SO_API_TOKEN_FARM` = SO's `SO_WAYLINE_API_TOKEN` |
 | `soc-operations.env` | `SOC_DB_PASSWORD_SOC_OPERATIONS` as in migrate.env |
@@ -220,7 +220,7 @@ Percent-encode the Postgres password. An unencoded special character once broke 
 2.4. **Configuration files.** soc-config ships in soc-cloud's image, so the mini-PC needs no Python tooling:
 
 ```bash
-IMAGE=ghcr.io/sergiodeiscarvalera/sky-orchestrator-client/soc-cloud:<SOC tag>
+IMAGE=ghcr.io/sergiodeiscarvalera/sky-orchestrator-client/soc-cloud:v0.5.1
 for unit in soc-cloud soc-operations soc-web; do
   docker run --rm --entrypoint soc-config "$IMAGE" example "$unit" > "$unit.json"
 done
@@ -273,7 +273,7 @@ docker compose run --rm soc-migrate
 docker exec supabase-db psql -U postgres -Atc "select count(*) from soc_migrations.applied"
 ```
 
-Check: the count equals the number of files in `database/migrations` at the tag (10 at v0.5.0).
+Check: the count equals the number of files in `database/migrations` at the tag (10 at v0.5.1).
 
 2.7. **PostgREST serves `soc` (DEP-21).** In `/srv/virtual-origen/repo/infra/supabase-local/.env`, append `,soc` to `PGRST_DB_SCHEMAS` and keep the schemas already listed. Use sudo if your user cannot write the file. VO2's releases never overwrite it. Then:
 
@@ -446,7 +446,7 @@ End: run `dc up -d so-bridge`, which puts so-bridge back in simulator mode. The 
 | Owner | Item | Why |
 | --- | --- | --- |
 | SO | v0.4.4 tagged: v0.4.3 with the waypoint index fixed (#135), its APK and its runbook | The mini-PC runs it |
-| SOC | A release with:<br>• the shared migration lock<br>• SO v0.4.4 re-vendored and the route check over the whole execution<br>• the deploy command that refuses while a flight is unfinished (`FR-DEP-06`)<br>• the Broadcast measurement for the mini-PC | Phase 2's tag |
+| SOC | v0.5.1, released with:<br>• the shared migration lock<br>• SO v0.4.4 re-vendored and the route check over the whole execution<br>• the deploy command that refuses while a flight is unfinished (`FR-DEP-06`)<br>• the Broadcast measurement for the mini-PC | Phase 2's tag |
 | VO2 | The shared lock in `apply-migrations.sh` | Until then, the rule in 2.6 |
 | VO2 | ADR 0059 and its gate test (`DEP-20`) | The contract SOC reads |
 | VO2 and Sergio | Automated backups:<br>• `pg_dumpall --globals-only`<br>• a full `pg_dump`<br>• `infra/supabase-local/volumes/storage`<br>with a tested restore | `RISK-08`; step 0.2 covers the first deploy only |
