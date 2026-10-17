@@ -6,6 +6,7 @@ import {
   type OperationState,
   type TransitionStatus,
 } from '../backend/backend'
+import { DANGER_BUTTON, PRIMARY_BUTTON } from '../app/styles'
 import { FakeBackend, NEIGHBOUR, NORTH, PILOT } from '../test/FakeBackend'
 import { operationIn, renderInOrganization } from '../test/inOrganization'
 import { CHECK_ORDER } from './format'
@@ -56,13 +57,20 @@ type Role = 'owner' | 'editor' | 'viewer'
 function renderMoves(
   operation: Operation,
   backend: FakeBackend,
-  { account = PILOT, role = 'owner' }: { account?: typeof PILOT; role?: Role } = {},
+  {
+    account = PILOT,
+    role = 'owner',
+    simulatorMode = null,
+  }: { account?: typeof PILOT; role?: Role; simulatorMode?: boolean | null } = {},
 ) {
-  return renderInOrganization(<OperationActions operationId={operation.id} />, {
-    backend,
-    account,
-    organization: { ...NORTH, role },
-  })
+  return renderInOrganization(
+    <OperationActions operationId={operation.id} simulatorMode={simulatorMode} />,
+    {
+      backend,
+      account,
+      organization: { ...NORTH, role },
+    },
+  )
 }
 
 /** The panel read: its waiting line gone, with its moves, or with none. */
@@ -284,6 +292,71 @@ describe('the moves a member may ask an operation (FR-OPS-02, FR-OPS-09)', () =>
       expect(asks).toHaveBeenCalledOnce()
     })
     expect(asks.mock.calls[0]?.[1]).toBe('launch')
+  })
+
+  it('launches a simulated operation in the simulator while its stack is in simulator mode (FR-OPS-13)', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await operationIn(backend, 'simulated', [PILOT.userId])
+    judge(backend, operation)
+    const asks = vi.spyOn(backend, 'requestTransition')
+    const { user } = renderMoves(operation, backend, { simulatorMode: true })
+    await loaded()
+    expect(moves()).toEqual(['Launch', 'Cancel operation'])
+    await waitFor(() => {
+      expect(move('Launch')).toHaveAttribute('aria-disabled', 'false')
+    })
+    // It flies in the simulator: the primary fill, not the real launch's danger.
+    expect(move('Launch').className.startsWith(PRIMARY_BUTTON)).toBe(true)
+    await user.click(move('Launch'))
+    const asking = screen.getByRole('group', { name: 'Launch in the simulator' })
+    expect(screen.queryByRole('group', { name: 'Fly for real' })).toBeNull()
+    expect(within(asking).getByRole('button', { name: 'Launch' }).className).toBe(PRIMARY_BUTTON)
+    expect(asks).not.toHaveBeenCalled()
+    await user.click(within(asking).getByRole('button', { name: 'Launch' }))
+    await waitFor(() => {
+      expect(asks).toHaveBeenCalledOnce()
+    })
+    expect(asks.mock.calls[0]?.[1]).toBe('launch')
+  })
+
+  it.each([false, null])(
+    'leaves a simulated operation to become ready on its own while its stack says %s',
+    async (simulatorMode) => {
+      const backend = new FakeBackend(PILOT)
+      const operation = await operationIn(backend, 'simulated', [PILOT.userId])
+      judge(backend, operation)
+      renderMoves(operation, backend, { simulatorMode })
+      await loaded()
+      expect(moves()).toEqual(['Cancel operation'])
+    },
+  )
+
+  it('holds a launch in the simulator back while a blocking check does not pass', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await operationIn(backend, 'simulated', [PILOT.userId])
+    judge(backend, operation, 'pass', { 'PF-ARMED': 'fail' })
+    const asks = vi.spyOn(backend, 'requestTransition')
+    const { user } = renderMoves(operation, backend, { simulatorMode: true })
+    await loaded()
+    expect(await screen.findByText('1 check not passing')).toBeVisible()
+    expect(move('Launch')).toHaveAttribute('aria-disabled', 'true')
+    await user.click(move('Launch'))
+    expect(screen.queryByRole('group')).toBeNull()
+    expect(asks).not.toHaveBeenCalled()
+  })
+
+  it('keeps the danger fill for a real launch, whatever mode its stack last said', async () => {
+    const backend = new FakeBackend(PILOT)
+    const operation = await operationIn(backend, 'ready', [PILOT.userId])
+    judge(backend, operation)
+    const { user } = renderMoves(operation, backend, { simulatorMode: true })
+    await loaded()
+    await waitFor(() => {
+      expect(move('Launch')).toHaveAttribute('aria-disabled', 'false')
+    })
+    expect(move('Launch').className.startsWith(DANGER_BUTTON)).toBe(true)
+    await user.click(move('Launch'))
+    expect(screen.getByRole('group', { name: 'Fly for real' })).toBeVisible()
   })
 
   it('confirms a cancel before it is asked, since a cancelled operation is closed for good', async () => {

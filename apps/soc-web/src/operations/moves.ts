@@ -1,13 +1,16 @@
 import type { OperationState, Role, Transition, TransitionRequest } from '../backend/backend'
 import { changesFleets } from '../fleets/form'
 
-/** The moves a member may ask each state (FR-OPS-02): none while a state runs, none once it is closed. */
+/**
+ * The moves a member may ask each state (FR-OPS-02): none while a state runs, none once it is closed.
+ * A simulated operation launches in the simulator only while its stack is in simulator mode (FR-OPS-13).
+ */
 export const OFFERED: Readonly<Record<OperationState, readonly Transition[]>> = {
   draft: ['plan', 'cancel'],
   planned: ['prepare', 'cancel'],
   preparing: ['simulate', 'unprepare', 'cancel'],
   simulating: [],
-  simulated: ['cancel'],
+  simulated: ['launch', 'cancel'],
   ready: ['launch', 'cancel'],
   launching: [],
   in_flight: ['stop'],

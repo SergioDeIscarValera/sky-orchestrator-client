@@ -9,8 +9,10 @@ import { useGeofences, useWaylines } from '../plans/data'
 import { useSiteFrame } from '../scene/siteFrame'
 import { useAssignments, useOperation, useStacks } from './data'
 import {
+  currentFlight,
   definitionOpen,
   fenceProblems,
+  fleetStack,
   flightOutdated,
   storedFlight,
   type Choices,
@@ -73,8 +75,6 @@ export function OperationDetail({ operationId }: { readonly operationId: string 
   const stored = storedFlight(assignment?.flight ?? null)
   const flight = stored.ok ? stored.flight : null
   const geofence = geofences.data?.find(({ id }) => id === current.geofenceId)
-  const problems =
-    flight === null ? [] : [...flight.violations, ...fenceProblems(flight, geofence, origin)]
   const choices: Choices = {
     waylines: waylines.data ?? [],
     fleets: fleets.data ?? [],
@@ -83,6 +83,14 @@ export function OperationDetail({ operationId }: { readonly operationId: string 
     models: models.data ?? [],
     origin,
   }
+  const outdated = flightOutdated(current, assignment, choices)
+  // The stored flight's own problems were judged at Save: once it is out of date, the flight the
+  // definition makes now is judged instead, as Save and soc-operations would judge it.
+  const fresh = outdated ? storedFlight(currentFlight(current, assignment, choices)) : stored
+  const judged = fresh.ok ? fresh.flight : flight
+  const problems =
+    judged === null ? [] : [...judged.violations, ...fenceProblems(judged, geofence, origin)]
+  const simulatorMode = fleetStack(assignment?.fleetId, choices)?.simulatorMode ?? null
   const editable = changesFleets(organization.role) && definitionOpen(current.state)
 
   return (
@@ -94,7 +102,7 @@ export function OperationDetail({ operationId }: { readonly operationId: string 
         <OperationPill tone={STATE_TONE[current.state]}>{STATE_WORDS[current.state]}</OperationPill>
       </div>
       <OperationSteps state={current.state} />
-      <OperationActions operationId={operationId} />
+      <OperationActions operationId={operationId} simulatorMode={simulatorMode} />
       {CONSOLE_STATES.includes(current.state) && (
         <FlightConsole
           operation={current}
@@ -107,7 +115,7 @@ export function OperationDetail({ operationId }: { readonly operationId: string 
         flight={flight}
         problems={problems}
         error={stored.ok ? null : stored.message}
-        outdated={flightOutdated(current, assignment, choices)}
+        outdated={outdated}
         choices={choices}
       />
       <OperationDefinition

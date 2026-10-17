@@ -433,6 +433,7 @@ describe('the operations through PostgREST (IR-OPS, IR-ASG, IR-OPR)', () => {
           link_state: 'connected',
           envelope: ENVELOPE,
           envelope_read_at: STAMP,
+          status: { simulator_mode: true, simulator_active: true },
         },
       ],
     })
@@ -443,11 +444,36 @@ describe('the operations through PostgREST (IR-OPS, IR-ASG, IR-OPR)', () => {
         linkState: 'connected',
         envelope: ENVELOPE,
         envelopeReadAt: STAMP,
+        simulatorMode: true,
       },
     ])
     expect(last(supabase).url.searchParams.get('select')).toBe(
-      'gateway_sn,name,link_state,envelope,envelope_read_at',
+      'gateway_sn,name,link_state,envelope,envelope_read_at,status',
     )
+  })
+
+  it("reads a stack's mode as not said while its status is missing or names no boolean mode", async () => {
+    const { backend, supabase } = await signedIn()
+    const row = {
+      gateway_sn: 'SOTESTDOCK01',
+      name: 'lab',
+      link_state: 'connected',
+      envelope: null,
+      envelope_read_at: null,
+    }
+    supabase.answers.set('GET /rest/v1/stacks', {
+      status: 200,
+      body: [
+        { ...row, status: null },
+        { ...row, gateway_sn: 'SOTESTDOCK02', status: { simulator_mode: 'on' } },
+        { ...row, gateway_sn: 'SOTESTDOCK03', status: { simulator_mode: false } },
+      ],
+    })
+    expect((await backend.stacks(ORGANIZATION)).map(({ simulatorMode }) => simulatorMode)).toEqual([
+      null,
+      null,
+      false,
+    ])
   })
 
   it('reads a flight with its breach time, a column SOC does not read is no reason to refuse it', async () => {

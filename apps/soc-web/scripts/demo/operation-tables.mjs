@@ -294,7 +294,9 @@ export function createOperationTables({
         state: to,
         end_reason: endReason,
         ended_at: ends ? at : null,
-        started_at: to === 'launching' ? (row.started_at ?? at) : row.started_at,
+        // A launch from ready starts the record; one in the simulator does not (0011, FR-OPS-13).
+        started_at:
+          to === 'launching' && from === 'ready' ? (row.started_at ?? at) : row.started_at,
         updated_at: at,
       })
       log(

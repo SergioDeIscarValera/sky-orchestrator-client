@@ -9,7 +9,9 @@ import { draftOf } from '../plans/waylines'
 import {
   bakedOf,
   definitionFieldOf,
+  currentFlight,
   draftFlight,
+  fleetStack,
   flightOutdated,
   sameJson,
   type Choices,
@@ -107,6 +109,7 @@ const STACK: StackView = {
   linkState: 'connected',
   envelope: ENVELOPE_READ,
   envelopeReadAt: T,
+  simulatorMode: true,
 }
 
 function operationOf(overrides: Partial<Operation> = {}): Operation {
@@ -608,6 +611,18 @@ describe("the speed limits of a definition's fleet (FR-WAY-10)", () => {
   })
 })
 
+describe("the stack a definition's fleet flies on (FR-OPS-13)", () => {
+  const lists = { fleets: [FLEET_RECORD], stacks: [STACK] }
+
+  it("finds the stack by the fleet's gateway, and none for a fleet or a gateway it does not know", () => {
+    expect(fleetStack(FLEET, lists)).toBe(STACK)
+    expect(fleetStack(OTHER_FLEET, lists)).toBeUndefined()
+    expect(fleetStack(null, lists)).toBeUndefined()
+    expect(fleetStack(undefined, lists)).toBeUndefined()
+    expect(fleetStack(FLEET, { ...lists, stacks: [] })).toBeUndefined()
+  })
+})
+
 describe('a stored flight its definition no longer makes (FR-OPS-07)', () => {
   const choices: Choices = {
     waylines: [CORRIDOR],
@@ -674,6 +689,28 @@ describe('a stored flight its definition no longer makes (FR-OPS-07)', () => {
       ],
     }
     expect(flightOutdated(operation, assignment, judged)).toBe(true)
+  })
+
+  it('makes the flight the stored definition makes now, judged by the envelope the stack reads now', () => {
+    const tight = {
+      ...choices,
+      stacks: [
+        {
+          ...STACK,
+          envelope: { ...ENVELOPE_READ, envelope: { ...ENVELOPE_JSON, max_height_m: 20 } },
+        },
+      ],
+    }
+    const assignment = assignmentOf({ speedMs: 10, flight: made })
+    const now = currentFlight(operation, assignment, tight)
+    expect(now).not.toBeNull()
+    expect(flightFromJson(now ?? {}).violations.map(({ rule }) => rule)).toContain(
+      'height_above_max',
+    )
+    expect(currentFlight(operation, assignment, choices)).toEqual(made)
+    expect(currentFlight(operation, null, choices)).toBeNull()
+    const unreadable = { ...choices, stacks: [{ ...STACK, envelope: { nonsense: true } }] }
+    expect(currentFlight(operation, assignment, unreadable)).toBeNull()
   })
 
   it('is never outdated with nothing to compare: no assignment, no flight, or a flight it cannot make', () => {

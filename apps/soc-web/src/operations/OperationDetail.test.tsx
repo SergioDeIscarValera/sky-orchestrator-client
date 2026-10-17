@@ -64,6 +64,7 @@ const FLEET = {
 const PATH: Partial<Record<OperationState, readonly OperationState[]>> = {
   planned: ['planned'],
   simulating: ['planned', 'preparing', 'simulating'],
+  simulated: ['planned', 'preparing', 'simulating', 'simulated'],
   launching: ['planned', 'preparing', 'simulating', 'simulated', 'ready', 'launching'],
 }
 
@@ -76,12 +77,15 @@ async function farm({
   role = 'owner',
   envelope = ENVELOPE,
   stackEnvelope,
+  simulatorMode = null,
 }: {
   readonly state?: OperationState
   readonly role?: Role
   readonly envelope?: Record<string, unknown> | null
   /** What the stack holds instead of the read of `envelope`, as it is. */
   readonly stackEnvelope?: Record<string, unknown> | null
+  /** The mode the stack's status last said. */
+  readonly simulatorMode?: boolean | null
 } = {}) {
   const backend = new FakeBackend(NEIGHBOUR)
   const fleet = await backend.registerFleet(NORTH.id, FLEET)
@@ -93,6 +97,7 @@ async function farm({
       linkState: 'connected',
       envelope: stackEnvelope === undefined ? readOf(envelope) : stackEnvelope,
       envelopeReadAt: envelope === null ? null : '2026-10-11T10:00:00Z',
+      simulatorMode,
     },
   ])
   // A square of 1 km round the farm, its ceiling the envelope's: the corridor lies well inside it.
@@ -207,6 +212,49 @@ describe('an operation in the inspector (FR-OPS-01, FR-OPS-07)', () => {
       expect(within(inspector()).queryByText('Out of date')).toBeNull()
     })
   })
+
+  it('judges an out-of-date flight as its definition makes it now, not by what Save judged', async () => {
+    const { backend, fleet, wayline, operation } = await farm()
+    await backend.changeOperation(operation.id, { takeoffSecurityHeightM: 30 })
+    // Saved while the stack's ceiling was 20 m: the stored flight holds the problems of then.
+    const then = flightFor(30, 10, { ...ENVELOPE, max_height_m: 20 })
+    expect(then.violations.map(({ rule }) => rule)).toContain('height_above_max')
+    await backend.assign(operation.id, NORTH.id, {
+      waylineId: wayline.id,
+      fleetId: fleet.id,
+      speedMs: 10,
+      flight: flightToJson(then),
+    })
+    await openAt(backend, operation.id)
+    expect(await within(inspector()).findByText('Out of date')).toBeVisible()
+    // The ceiling is 120 m now: the flight the definition makes breaks nothing.
+    expect(within(inspector()).queryByRole('list', { name: 'Problems' })).toBeNull()
+    expect(within(inspector()).queryByText(/height_above_max/)).toBeNull()
+  })
+
+  it.each([
+    [true, true],
+    [false, false],
+    [null, false],
+  ] as const)(
+    "offers a simulated operation a launch by its fleet's stack's mode, %s: only in the simulator (FR-OPS-13)",
+    async (simulatorMode, offered) => {
+      const { backend, fleet, wayline, operation } = await farm({ simulatorMode })
+      await backend.changeOperation(operation.id, { takeoffSecurityHeightM: 30 })
+      await backend.assign(operation.id, NORTH.id, {
+        waylineId: wayline.id,
+        fleetId: fleet.id,
+        speedMs: 10,
+        flight: flightToJson(flightFor(30, 10)),
+      })
+      for (const step of PATH.simulated ?? []) backend.moveOperation(operation.id, step)
+      await openAt(backend, operation.id)
+      expect(
+        await within(inspector()).findByRole('button', { name: 'Cancel operation' }),
+      ).toBeVisible()
+      expect(within(inspector()).queryByRole('button', { name: 'Launch' }) !== null).toBe(offered)
+    },
+  )
 
   it("flies the stack's limit when no speed is typed, and stores no flight while the height is not set", async () => {
     const { backend, fleet, wayline, operation } = await farm()
