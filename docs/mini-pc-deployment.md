@@ -202,11 +202,12 @@ The two serials are chosen once and never change: they are the devices SOC regis
    ```
    A phone restart turns adb's TCP mode off: plug the phone in again and repeat.
 2. **The application.** Install the debug APK that SO built on the laptop from the v0.5.0 tag, on a clean tree. It must be a debug build, because session.sh and the clearance write through `run-as`. Its name carries the commit that clearance.py lists, `git -C "$SO_REPO" rev-parse --short=12 'v0.5.0^{commit}'`.
-   - On the laptop: `/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-<commit>-debug.apk`, with its `.sha256` beside it.
+   - On the laptop: `/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-45119e44a18b-debug.apk`, with its `.sha256` beside it.
+   - Its SHA-256 is `1588566c56483ad02fce18d245cae8218cb05762cb4cbe8c49363da8362f7426`, and its commit `45119e44a18b` is v0.5.0's.
    ```bash
-   scp <laptop>:/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-<commit>-debug.apk* .
-   sha256sum -c so-msdk-v4-v0.5.0-<commit>-debug.apk.sha256
-   adb -s <phone IP>:5555 install -r so-msdk-v4-v0.5.0-<commit>-debug.apk
+   scp <laptop>:/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-45119e44a18b-debug.apk* .
+   sha256sum -c so-msdk-v4-v0.5.0-45119e44a18b-debug.apk.sha256
+   adb -s <phone IP>:5555 install -r so-msdk-v4-v0.5.0-45119e44a18b-debug.apk
    ```
 3. **The site configuration**, from `$SO_REPO`:
    ```bash
