@@ -73,10 +73,9 @@ Check:
 - `pg_restore --list` prints the archive's table of contents;
 - both files are copied off the mini-PC, to the laptop. That is the only offsite copy there will be.
 
-0.3. **Packages and tools.** SO's and SOC's images are private on GHCR:
-- Create a classic GitHub token with `read:packages` only.
-- Log in once with `docker login ghcr.io -u SergioDeIscarValera`, the token as the password.
-- Cloning the two private repositories needs a second token: a fine-grained one with Contents read-only, limited to `sky-orchestrator` and `sky-orchestrator-client`. Type it as the password at `git clone`. Never put it in the remote URL.
+0.3. **Packages and tools.** SO's and SOC's repositories are public, so `git clone` needs no token. Their images are private on GHCR:
+- First try `docker pull ghcr.io/sergiodeiscarvalera/sky-orchestrator-client/soc-cloud:v0.5.1`. The login VO2's private images use may already cover them.
+- If it is denied, create a classic GitHub token with `read:packages` only and log in once with `docker login ghcr.io -u SergioDeIscarValera --password-stdin`, pasting the token. Never put it on the command line or in a file.
 - Install adb for SO's phone link: `sudo apt install android-tools-adb` (**sudo**).
 - git and python3 must be on the mini-PC.
 
@@ -191,7 +190,7 @@ Check:
 
 ```bash
 sudo mkdir -p /srv/sky-orchestrator-client && sudo chown "$USER": /srv/sky-orchestrator-client   # sudo
-git clone https://github.com/SergioDeIscarValera/sky-orchestrator-client.git /srv/sky-orchestrator-client   # the fine-grained token of 0.3
+git clone https://github.com/SergioDeIscarValera/sky-orchestrator-client.git /srv/sky-orchestrator-client
 git -C /srv/sky-orchestrator-client checkout v0.5.1
 cd /srv/sky-orchestrator-client/infra/compose
 ```
