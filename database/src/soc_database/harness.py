@@ -25,16 +25,43 @@ IMAGE = "supabase/postgres:17.6.1.136"
 READY_WITHIN_S = 120
 READY_QUERY = "select count(*) from pg_roles where rolname = 'authenticated'"
 DOCKER = shutil.which("docker") or "docker"
+# Longer than any pull, build or start the lanes make, shorter than CI's 30-minute job: a
+# docker command that hangs fails its test, naming the command, instead of the whole job.
+DOCKER_TIMEOUT_S = 600
 
 
 def docker(
-    *arguments: str, script: str | None = None, check: bool = True
+    *arguments: str,
+    script: str | None = None,
+    check: bool = True,
+    timeout_s: float = DOCKER_TIMEOUT_S,
 ) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        [DOCKER, *arguments], input=script, capture_output=True, text=True, check=check
-    )
+    try:
+        result = subprocess.run(
+            [DOCKER, *arguments],
+            input=script,
+            capture_output=True,
+            text=True,
+            check=check,
+            timeout=timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(
+            f"{command_name(arguments)} did not finish within {timeout_s:g} s"
+        ) from None
     result.stdout = result.stdout.strip()
     return result
+
+
+def command_name(arguments: tuple[str, ...]) -> str:
+    """docker and its subcommands, up to the first option: never the values that follow,
+    which can be passwords (exec -e PGPASSWORD=...)."""
+    words: list[str] = []
+    for argument in arguments:
+        if argument.startswith("-"):
+            break
+        words.append(argument)
+    return " ".join(["docker", *words])
 
 
 def service_passwords() -> dict[str, str]:
