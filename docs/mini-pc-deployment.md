@@ -216,8 +216,10 @@ settings = {
     "so-wayline.json": {
         "cloud_role": "external",
         "geofence_center": {"latitude_deg": float(lat), "longitude_deg": float(lon)},
-        "geofence_radius_m": 50,
-        "max_height_m": 30,
+        "geofence_radius_m": 500,
+        "max_home_distance_m": 500,
+        "max_height_m": 120,
+        "max_transit_m": 500,
         "max_horizontal_speed_ms": 3.0,
     },
     "so-bridge.json": {"simulator_mode": True},
@@ -232,7 +234,8 @@ PY
 stat -c '%U:%G %a %n' "$SO_STACK"/config/*.json                                          # each so-runner:so-runner 644
 ```
 
-- `simulator_mode` true: real mode is a change of `so-bridge.json`, only in 4.4 and at the site.
+- SO's envelope is the farm's outer net: its circle, home distance and height at SO's maxima, 120 m being the legal ceiling. The operation's geofence, drawn in SOC, is the real limit. The speed stays 3.0 m/s for the first sessions.
+- `simulator_mode` true: real mode is a change of `so-bridge.json`, only in 4.5 and at the site.
 - so-fleet refuses to start without its two identities, which the template cannot default.
 
 The two serials are chosen once and never change: they are the devices SOC registers in 3.1, and a new serial is a new device in every client's history (SO's IR-DEV-01).
@@ -275,14 +278,28 @@ In this order:
    ```
    - `install -r` keeps the application's data. **Never `adb uninstall`**: it wipes the cached DJI activation, the configuration, the secret and the flight records.
    - `INSTALL_FAILED_VERIFICATION_FAILURE` is ColorOS's "Verify apps over USB": turn it off in the phone's Developer options.
-3. **The site configuration**, from `$SO_REPO`:
+3. **The site configuration**, from `$SO_REPO`. The eight keys the phone shares with so-wayline are copied from `so-wayline.json`, so the two envelopes are equal by construction:
    ```bash
-   python3 tools/device_config.py template > so-config.json    # then add the same "geofence_center" as so-wayline.json (1.2)
+   python3 tools/device_config.py template > so-config.json
+   sudo python3 - "$SO_STACK/config/so-wayline.json" so-config.json <<'PY'   # sudo: the config folder is so-runner's
+   import json, sys
+   from pathlib import Path
+
+   SHARED = ("geofence_center", "geofence_radius_m", "max_height_m", "max_home_distance_m",
+             "max_horizontal_speed_ms", "max_leg_m", "max_transit_m", "max_waypoints")
+   wayline, phone = json.loads(Path(sys.argv[1]).read_text()), Path(sys.argv[2])
+   missing = [key for key in SHARED if key not in wayline]
+   if missing:
+       sys.exit(f"refused: so-wayline.json has no {', '.join(missing)}")
+   config = json.loads(phone.read_text()) | {key: wayline[key] for key in SHARED}
+   phone.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n")
+   print("so-config.json:", ", ".join(f"{key}={wayline[key]}" for key in SHARED[1:]))
+   PY
    adb -s <phone IP>:5555 push so-config.json /data/local/tmp/so-config.json
    adb -s <phone IP>:5555 shell run-as io.github.sergiodeiscarvalera.skyorchestrator.msdkv4 cp /data/local/tmp/so-config.json files/so-config.json
    adb -s <phone IP>:5555 shell rm /data/local/tmp/so-config.json
    ```
-   After 1.3.1 the phone is listed twice, by its USB serial and by its address, so every adb line names it with `-s`. The defaults are already 50 m, 30 m and 3.0 m/s. The file holds a location, so it never goes into git. It must be final before 4.2, because it sets the phone's `config_fingerprint`. Nothing compares it with `so-wayline.json`, so check both by eye.
+   After 1.3.1 the phone is listed twice, by its USB serial and by its address, so every adb line names it with `-s`. The file holds a location, so it never goes into git. It must be final before 4.2, because it sets the phone's `config_fingerprint`. A later change to `so-wayline.json`'s envelope is copied again the same way, then the application restarted, then 4.2 flown again.
 4. **The bridge secret**, from `$SO_REPO`:
    ```bash
    ADB_TARGET=<phone IP>:5555 apps/so-msdk-v4/scripts/bridge.sh secret
@@ -654,9 +671,9 @@ If the probe does not rejoin within a minute and Kong logs 502 on `/realtime`, K
 This phase is SO's `docs/first-real-flight.md` Part A, flown by SOC. A simulated completion counts only while this deployment's so-fleet holds it (SO's NFR-SAF-07), in its volume `so-fleet-data`. Do it in this order.
 
 4.1. **Define the operation in the console.**
-- A geofence inside SO's 50 m circle, its ceiling at most 30 m.
+- A geofence inside SO's 500 m circle round Origen's point, its ceiling at most 120 m.
 - A wayline inside the geofence.
-- The operation's height at most 30 m.
+- The operation's height under the geofence's ceiling.
 - Leave the speed blank: it takes the stack's 3 m/s.
 
 4.2. **Plan, Prepare, Simulate.**
@@ -665,12 +682,25 @@ This phase is SO's `docs/first-real-flight.md` Part A, flown by SOC. A simulated
    ```bash
    $S sim_start && $S arm
    ```
-3. Simulate. The simulated flight ends ok, and the operation waits in `simulated`.
-4. Stop the simulator: `$S sim_stop`.
+3. Simulate. The simulated flight ends ok, and the operation waits in `simulated`. Leave the simulator on for 4.3.
 
 **Do not change the definition afterwards.** The real flight must fly the same bytes (the KMZ's MD5), and any change makes a new file.
 
-4.3. **SO's clearance** (its A1), from `/srv/sky-orchestrator/repo`:
+4.3. **Rehearse from the console** (SOC v0.6.0, FR-OPS-13), propellers off. While the stack is in simulator mode, a simulated operation offers Launch: confirmed as "Launch in the simulator", it flies the same file in DJI's simulator with the flight console of a real flight. On the ground the operation is `simulated` again, so it can be launched as often as needed. A rehearsal never starts the operation's record, and every completed one counts for SO's clearance.
+1. Before each Launch: `$S arm` (it lasts 300 s) and the battery at 50 % or more. Each rehearsal starts at the geofence centre, so it first flies to the takeoff point.
+2. One rehearsal per test:
+
+   | Test | Do | Expected |
+   | --- | --- | --- |
+   | Pause and resume | Pause, then Resume, in the console | The aircraft holds, the operation shows `paused`, then flies on |
+   | Return home | Return home in the console | The task ends canceled, the aircraft flies home and lands; the operation is `simulated` |
+   | Stop | Stop in the console | Every flight is sent home; once landed the operation is `simulated`, its log saying `operator_stop` |
+   | Takeover | A stick pushed past 15 % of its travel for a quarter of a second, or the selector out of N | The task pauses with `pilot_takeover`; the console shows `paused`. Resume from the console, or Stop |
+   | Complete | Launch, and let it fly | The task ends ok and the aircraft lands; the operation is `simulated` |
+3. Never leave a task prepared or paused: end each rehearsal with Resume, Return home or Stop.
+4. Stop the simulator: `$S sim_stop`. Never close the application or unplug the phone while the simulator runs (diagnostic 8012).
+
+4.4. **SO's clearance** (its A1), from `/srv/sky-orchestrator/repo`:
 
 ```bash
 pkg=io.github.sergiodeiscarvalera.skyorchestrator.msdkv4
@@ -684,7 +714,7 @@ Check: `clearance.py` exits 0 and lists `git -C /srv/sky-orchestrator/repo rev-p
 
 Then restart the application. The simulator is already stopped, which is required: a restart with it running makes the aircraft demand a restart (diagnostic 8012). Check: `$S status` says `build_cleared=true`.
 
-4.4. **SO's refusals again (A2), propellers off.** SOC's Launch drives the execute rows. A refused launch returns the operation to `ready` with SO's meaning shown, and the pilot can launch again.
+4.5. **SO's refusals again (A2), propellers off.** SOC's Launch drives the execute rows. A refused launch returns the operation to `ready` with SO's meaning shown, and the pilot can launch again.
 
 Start, putting so-bridge in real mode. `dc` passes no environment to the stack, and compose sees the file's mount, not its contents, so the change needs a recreate:
 
@@ -713,12 +743,12 @@ dc up -d --force-recreate so-bridge
 
 Check that `/v1/status` says `simulator_mode` true. The operation returns to `simulated` and waits there. Never arm in real mode at the desk. A deploy keeps whatever the file says, so never leave it in real mode. A `grep -c` that prints 0 means the sed changed nothing: stop, and fix the file by hand as `so-runner`.
 
-4.5. **Part B is M5 itself.** Follow SO's `docs/first-real-flight.md` Part B in full: it is the authority for the flight. Its outline:
+4.6. **Part B is M5 itself.** Follow SO's `docs/first-real-flight.md` Part B in full: it is the authority for the flight. Its outline:
 - **Before leaving:** the weather, the batteries, and both envelopes checked.
 - **On the site:**
   1. A ping first.
   2. Propellers on, the aircraft at the geofence centre.
-  3. so-bridge into real mode as in 4.4, then check `/v1/status`.
+  3. so-bridge into real mode as in 4.5, then check `/v1/status`.
   4. Restart the application with the simulator off, after the controller is cabled.
   5. The operator confirms real flight on the phone.
   6. The arming, on the site, which sets the home point. The operation moves to `ready`.
@@ -754,7 +784,7 @@ Check that `/v1/status` says `simulator_mode` true. The operation returns to `si
 | Owner | Item | Why |
 | --- | --- | --- |
 | SO | v0.5.0 tagged: v0.4.4 plus the deploy on every release (ADR-0043), and its APK built at that tag | The mini-PC runs it; the clearance is per commit |
-| SOC | v0.5.2, released with:<br>• everything in v0.5.1: the shared migration lock, SO v0.4.4 re-vendored, the deploy command that refuses while a flight is unfinished (`FR-DEP-06`), the Broadcast measurement<br>• the deploy on every release through the mini-PC's runner (ADR-0026)<br>• the configuration examples and `set_env.py` | Phase 2's tag |
+| SOC | v0.5.2, released with:<br>• everything in v0.5.1: the shared migration lock, SO v0.4.4 re-vendored, the deploy command that refuses while a flight is unfinished (`FR-DEP-06`), the Broadcast measurement<br>• the deploy on every release through the mini-PC's runner (ADR-0026)<br>• the configuration examples and `set_env.py`<br>• from v0.6.0, the launch in the simulator that 4.3 rehearses with (FR-OPS-13) | Phase 2's tag |
 | VO2 | The shared lock in `apply-migrations.sh` | Until then, the rule in 2.7 |
 | VO2 | ADR 0059 and its gate test (`DEP-20`) | The contract SOC reads |
 | VO2 and Sergio | Automated backups:<br>• `pg_dumpall --globals-only`<br>• a full `pg_dump`<br>• `infra/supabase-local/volumes/storage`<br>with a tested restore | `RISK-08`; step 0.2 covers the first deploy only |
