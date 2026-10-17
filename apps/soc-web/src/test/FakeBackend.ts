@@ -197,7 +197,7 @@ function waylinePayload(
   }
 }
 
-/** The moves an operation makes: contracts/operations/lifecycle.json, as migration 0010 holds it. */
+/** The moves an operation makes: contracts/operations/lifecycle.json, as migrations 0010 and 0011 hold it. */
 const MOVES: ReadonlyArray<readonly [OperationState, OperationState]> = [
   ['draft', 'planned'],
   ['draft', 'cancelled'],
@@ -211,6 +211,7 @@ const MOVES: ReadonlyArray<readonly [OperationState, OperationState]> = [
   ['simulated', 'ready'],
   ['simulated', 'planned'],
   ['simulated', 'cancelled'],
+  ['simulated', 'launching'],
   ['ready', 'simulated'],
   ['ready', 'launching'],
   ['ready', 'planned'],
@@ -218,6 +219,7 @@ const MOVES: ReadonlyArray<readonly [OperationState, OperationState]> = [
   ['launching', 'in_flight'],
   ['launching', 'ready'],
   ['launching', 'failed'],
+  ['launching', 'simulated'],
   ['in_flight', 'paused'],
   ['in_flight', 'returning'],
   ['paused', 'in_flight'],
@@ -225,6 +227,7 @@ const MOVES: ReadonlyArray<readonly [OperationState, OperationState]> = [
   ['returning', 'completed'],
   ['returning', 'aborted'],
   ['returning', 'failed'],
+  ['returning', 'simulated'],
 ]
 
 const TERMINAL = new Set<OperationState>(['completed', 'aborted', 'failed', 'cancelled'])
@@ -1422,7 +1425,11 @@ export class FakeBackend implements Backend {
       state: to,
       endReason,
       endedAt: ends ? at : null,
-      startedAt: to === 'launching' ? (current.startedAt ?? at) : current.startedAt,
+      // A launch in the simulator neither starts nor closes the record (FR-OPS-13).
+      startedAt:
+        to === 'launching' && current.state === 'ready'
+          ? (current.startedAt ?? at)
+          : current.startedAt,
       updatedAt: at,
     }
     this.replaceIn(this.operationRows, current.organizationId, moved)

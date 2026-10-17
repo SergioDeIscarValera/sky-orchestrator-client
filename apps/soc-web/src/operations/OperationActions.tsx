@@ -9,7 +9,7 @@ import { checksShown, shownChecks, type ShownCheck } from './checks'
 import { useChecks, useOperation, useOperators, useRequests, useRequestTransition } from './data'
 import { Failure } from './Failure'
 import { asSentence, REQUEST_TONE, REQUEST_WORDS, TRANSITION_WORDS } from './format'
-import { holdingBack, nextMove, otherMoves } from './journey'
+import { holdingBack, launchesInSimulator, nextMove, otherMoves } from './journey'
 import { OperationPill } from './OperationPill'
 import { reasonsOf, undecided, withheldBy } from './moves'
 import { uuidV4 } from './uuid'
@@ -17,21 +17,37 @@ import { uuidV4 } from './uuid'
 /** The moves a member confirms before they are asked: what each does, and the button that asks it. */
 type Confirmed = 'simulate' | 'launch' | 'cancel'
 
-const CONFIRMATION: Readonly<
-  Record<Confirmed, { readonly prompt: string; readonly confirm: string; readonly style: string }>
-> = {
+interface Confirmation {
+  readonly prompt: string
+  readonly confirm: string
+  readonly style: string
+}
+
+const CONFIRMATION: Readonly<Record<Confirmed, Confirmation>> = {
   simulate: { prompt: 'Fly in the simulator', confirm: 'Simulate', style: PRIMARY_BUTTON },
   launch: { prompt: 'Fly for real', confirm: 'Launch', style: DANGER_BUTTON },
   cancel: { prompt: 'Cancel for good', confirm: 'Cancel operation', style: DANGER_BUTTON },
+}
+
+/** A launch from simulated flies in the simulator, and is confirmed as such (FR-OPS-13). */
+const IN_SIMULATOR: Confirmation = {
+  prompt: 'Launch in the simulator',
+  confirm: 'Launch',
+  style: PRIMARY_BUTTON,
 }
 
 function confirmed(transition: Transition): transition is Confirmed {
   return transition in CONFIRMATION
 }
 
-/** The next step's button: the launch in the danger fill, since it flies for real; the others primary. */
-function nextStyle(move: Transition): string {
-  return `${move === 'launch' ? DANGER_BUTTON : PRIMARY_BUTTON} ${UNAVAILABLE}`
+function confirmationOf(move: Confirmed, state: OperationState): Confirmation {
+  return move === 'launch' && launchesInSimulator(state) ? IN_SIMULATOR : CONFIRMATION[move]
+}
+
+/** The next step's button: a real launch in the danger fill; the others primary, the simulator's too. */
+function nextStyle(move: Transition, state: OperationState): string {
+  const real = move === 'launch' && !launchesInSimulator(state)
+  return `${real ? DANGER_BUTTON : PRIMARY_BUTTON} ${UNAVAILABLE}`
 }
 
 const OTHER = `${QUIET_BUTTON} ${UNAVAILABLE} disabled:cursor-wait disabled:opacity-70`
@@ -43,22 +59,35 @@ interface Asking {
 }
 
 /**
- * The operation's moves (FR-OPS-02, FR-OPS-09): the one that takes it to its next step as the main
- * button, held back by the blocking checks that do not pass and saying how many; beside it, going
- * back or cancelling. A move the member may not ask stays shown, disabled, with its reason. The
+ * The operation's moves (FR-OPS-02, FR-OPS-09, FR-OPS-13): the one that takes it to its next step as
+ * the main button, held back by the blocking checks that do not pass and saying how many; beside it,
+ * going back or cancelling. A move the member may not ask stays shown, disabled, with its reason. The
  * latest request shows with its outcome, and a refusal with its reasons.
  */
-export function OperationActions({ operationId }: { readonly operationId: string }) {
+export function OperationActions({
+  operationId,
+  simulatorMode,
+}: {
+  readonly operationId: string
+  /** The mode of the stack the operation flies on, as its status last said; null while not said. */
+  readonly simulatorMode: boolean | null
+}) {
   const operation = useOperation(operationId)
   if (operation.isPending) return <Waiting>Loading the actions…</Waiting>
   if (operation.isError) {
     return <Failure message={operation.error.message} onRetry={() => void operation.refetch()} />
   }
   if (operation.data === undefined) return null
-  return <Moves operation={operation.data} />
+  return <Moves operation={operation.data} simulatorMode={simulatorMode} />
 }
 
-function Moves({ operation }: { readonly operation: Operation }) {
+function Moves({
+  operation,
+  simulatorMode,
+}: {
+  readonly operation: Operation
+  readonly simulatorMode: boolean | null
+}) {
   const { organization } = useOrganization()
   const account = useAccount()
   const operators = useOperators(operation.id)
@@ -80,8 +109,8 @@ function Moves({ operation }: { readonly operation: Operation }) {
   const member = { role: organization.role, pilot }
   const latest = requests.data[0]
   const busy = ask.isPending || undecided(latest)
-  const next = nextMove(operation.state)
-  const others = otherMoves(operation.state)
+  const next = nextMove(operation.state, simulatorMode)
+  const others = otherMoves(operation.state, simulatorMode)
   const confirming =
     asking !== null &&
     asking.state === operation.state &&
@@ -89,6 +118,8 @@ function Moves({ operation }: { readonly operation: Operation }) {
       ? asking
       : null
   const reasons = reasonsOf(latest)
+  const confirmation =
+    confirming === null ? null : confirmationOf(confirming.move, confirming.state)
 
   const send = (transition: Transition) => {
     ask.mutate({ operationId: operation.id, transition, clientRequestId: uuidV4() })
@@ -100,25 +131,23 @@ function Moves({ operation }: { readonly operation: Operation }) {
 
   return (
     <div className="mt-4">
-      {confirming !== null ? (
+      {confirming !== null && confirmation !== null ? (
         <div
           role="group"
-          aria-label={CONFIRMATION[confirming.move].prompt}
+          aria-label={confirmation.prompt}
           className="flex flex-wrap items-center gap-2"
         >
-          <span className="text-heading text-sm font-semibold">
-            {CONFIRMATION[confirming.move].prompt}
-          </span>
+          <span className="text-heading text-sm font-semibold">{confirmation.prompt}</span>
           <button
             type="button"
-            className={CONFIRMATION[confirming.move].style}
+            className={confirmation.style}
             disabled={busy}
             onClick={() => {
               setAsking(null)
               send(confirming.move)
             }}
           >
-            {CONFIRMATION[confirming.move].confirm}
+            {confirmation.confirm}
           </button>
           {/* The safe answer takes the focus: the buttons it replaces would otherwise lose it. */}
           <button
@@ -221,7 +250,7 @@ function NextMove({
     <div className="flex flex-wrap items-center gap-3">
       <button
         type="button"
-        className={nextStyle(move)}
+        className={nextStyle(move, operation.state)}
         aria-disabled={blocked}
         aria-describedby={held.length > 0 ? `${operation.id}-held` : undefined}
         disabled={!blocked && (busy || gatedAndUnread)}

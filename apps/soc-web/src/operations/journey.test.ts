@@ -1,7 +1,15 @@
 // @vitest-environment node
 import type { OperationState } from '../backend/backend'
 import type { ShownCheck } from './checks'
-import { checkCount, holdingBack, nextMove, otherMoves, stepsOf, STEPS } from './journey'
+import {
+  checkCount,
+  holdingBack,
+  launchesInSimulator,
+  nextMove,
+  otherMoves,
+  stepsOf,
+  STEPS,
+} from './journey'
 import { OFFERED } from './moves'
 
 const STATES: readonly OperationState[] = [
@@ -88,13 +96,30 @@ describe('the move to the next step, and the others (FR-OPS-02)', () => {
   })
 
   it('is always one the lifecycle offers in that state, and so are the others, the stop aside', () => {
-    for (const state of STATES) {
-      const next = nextMove(state)
-      if (next !== null) expect(OFFERED[state]).toContain(next)
-      for (const move of otherMoves(state)) expect(OFFERED[state]).toContain(move)
-      expect(otherMoves(state)).not.toContain('stop')
-      expect(otherMoves(state)).not.toContain(next)
+    for (const mode of [true, false, null]) {
+      for (const state of STATES) {
+        const next = nextMove(state, mode)
+        if (next !== null) expect(OFFERED[state]).toContain(next)
+        for (const move of otherMoves(state, mode)) expect(OFFERED[state]).toContain(move)
+        expect(otherMoves(state, mode)).not.toContain('stop')
+        expect(otherMoves(state, mode)).not.toContain('launch')
+        expect(otherMoves(state, mode)).not.toContain(next)
+      }
     }
+  })
+
+  it('launches a simulated operation in the simulator only while its stack is in simulator mode (FR-OPS-13)', () => {
+    expect(nextMove('simulated', true)).toBe('launch')
+    expect(nextMove('simulated', false)).toBeNull()
+    expect(nextMove('simulated', null)).toBeNull()
+    for (const mode of [true, false, null])
+      expect(otherMoves('simulated', mode)).toEqual(['cancel'])
+    expect(launchesInSimulator('simulated')).toBe(true)
+    expect(launchesInSimulator('ready')).toBe(false)
+  })
+
+  it('launches a ready operation whatever the mode its stack last said', () => {
+    for (const mode of [true, false, null]) expect(nextMove('ready', mode)).toBe('launch')
   })
 
   it('leaves going back and cancelling beside the next move', () => {

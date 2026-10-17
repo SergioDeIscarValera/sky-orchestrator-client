@@ -404,7 +404,7 @@ export function draftFlight(
   choices: Choices,
 ): Record<string, unknown> | null {
   const fleet = choices.fleets.find(({ id }) => id === draft.fleetId)
-  const stack = choices.stacks.find(({ gatewaySn }) => gatewaySn === fleet?.gatewaySn)
+  const stack = fleetStack(draft.fleetId, choices)
   return flightFor({
     wayline: choices.waylines.find(({ id }) => id === draft.waylineId),
     fleet,
@@ -433,16 +433,15 @@ export function sameJson(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Whether the stored flight is no longer the one its operation's stored definition makes: its
- * wayline was edited, or the stack's envelope changed, since it was saved. False while either
- * cannot be made: nothing to compare.
+ * The flight the operation's stored definition makes now, from the lists as they are: its wayline
+ * and the stack's envelope as they stand, not as they stood at Save. Null while it cannot be made.
  */
-export function flightOutdated(
+export function currentFlight(
   operation: Operation,
   assignment: Assignment | null,
   choices: Choices,
-): boolean {
-  if (assignment === null || assignment.flight === null) return false
+): Record<string, unknown> | null {
+  if (assignment === null) return null
   // What is stored, as it is: the form's rules judge what is typed, not what was saved.
   const stored: DefinitionDraft = {
     name: operation.name,
@@ -453,9 +452,32 @@ export function flightOutdated(
     speedMs: assignment.speedMs,
   }
   try {
-    const current = draftFlight(stored, choices)
-    return current !== null && !sameJson(current, assignment.flight)
+    return draftFlight(stored, choices)
   } catch {
-    return false
+    return null
   }
+}
+
+/**
+ * Whether the stored flight is no longer the one its operation's stored definition makes: its
+ * wayline was edited, or the stack's envelope changed, since it was saved. False while either
+ * cannot be made: nothing to compare.
+ */
+export function flightOutdated(
+  operation: Operation,
+  assignment: Assignment | null,
+  choices: Choices,
+): boolean {
+  if (assignment === null || assignment.flight === null) return false
+  const current = currentFlight(operation, assignment, choices)
+  return current !== null && !sameJson(current, assignment.flight)
+}
+
+/** The stack the fleet flies on, as the lists hold it; undefined while either is not known. */
+export function fleetStack(
+  fleetId: string | null | undefined,
+  choices: Pick<Choices, 'fleets' | 'stacks'>,
+): StackView | undefined {
+  const fleet = choices.fleets.find(({ id }) => id === fleetId)
+  return choices.stacks.find(({ gatewaySn }) => gatewaySn === fleet?.gatewaySn)
 }

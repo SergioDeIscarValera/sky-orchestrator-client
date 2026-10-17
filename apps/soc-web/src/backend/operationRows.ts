@@ -210,6 +210,7 @@ export const STACK_ROW = z.object({
   link_state: LINK_STATE,
   envelope: z.nullable(JSON_OBJECT),
   envelope_read_at: z.nullable(z.string()),
+  status: z.nullable(JSON_OBJECT),
 })
 
 /** A stored numeric as the console's number, or null when it is not stored. */
@@ -361,7 +362,14 @@ export function stackOf(row: z.infer<typeof STACK_ROW>): StackView {
     linkState: row.link_state,
     envelope: row.envelope,
     envelopeReadAt: row.envelope_read_at,
+    simulatorMode: modeOf(row.status),
   }
+}
+
+/** The stack's mode as its status says it; anything but a boolean is not said. */
+function modeOf(status: Readonly<Record<string, unknown>> | null): boolean | null {
+  const mode = status?.simulator_mode
+  return typeof mode === 'boolean' ? mode : null
 }
 
 /**

@@ -537,11 +537,11 @@ export function operationOperations(client: SupabaseClient) {
       return commandOf(row)
     },
 
-    /** The organization's stacks, with the envelope each last reported (IR-STK). */
+    /** The organization's stacks, with the envelope and the mode each last reported (IR-STK). */
     async stacks(organizationId: string): Promise<StackView[]> {
       const { data, error } = await soc()
         .from('stacks')
-        .select('gateway_sn, name, link_state, envelope, envelope_read_at')
+        .select('gateway_sn, name, link_state, envelope, envelope_read_at, status')
         .eq('organization_id', organizationId)
         .order('name')
       if (error !== null) throw new BackendError(error.message, error.code)

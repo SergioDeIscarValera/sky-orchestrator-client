@@ -670,6 +670,20 @@ describe('the operations held in memory (IR-OPS, IR-ASG, IR-OPR, IR-TRQ, IR-CMD)
     expect(backend.moveOperation(operation.id, 'planned')).toMatchObject({ state: 'planned' })
   })
 
+  it('starts the record at a launch from ready, never at a launch in the simulator (FR-OPS-13)', async () => {
+    const { backend, operation } = await prepared()
+    for (const state of ['planned', 'preparing', 'simulating', 'simulated'] as const) {
+      backend.moveOperation(operation.id, state)
+    }
+    for (const state of ['launching', 'in_flight', 'returning', 'simulated'] as const) {
+      expect(backend.moveOperation(operation.id, state)).toMatchObject({ state, startedAt: null })
+    }
+    backend.moveOperation(operation.id, 'launching')
+    expect(backend.moveOperation(operation.id, 'simulated')).toMatchObject({ startedAt: null })
+    backend.moveOperation(operation.id, 'ready')
+    expect(backend.moveOperation(operation.id, 'launching').startedAt).not.toBeNull()
+  })
+
   it('replaces a check by its id, and announces it with the operation it judges', async () => {
     const { backend, operation } = await prepared()
     const seen: StateEvent[] = []
@@ -733,6 +747,7 @@ describe('the operations held in memory (IR-OPS, IR-ASG, IR-OPR, IR-TRQ, IR-CMD)
         linkState: 'connected',
         envelope: { max_height_m: 120 },
         envelopeReadAt: STAMP,
+        simulatorMode: true,
       },
     ])
     expect(await backend.stacks(NORTH.id)).toMatchObject([
