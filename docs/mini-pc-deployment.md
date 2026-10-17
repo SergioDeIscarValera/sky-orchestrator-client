@@ -343,7 +343,25 @@ Then run `docker restart realtime-dev.supabase-realtime`. Check: the console rec
 
 VO2's Realtime clients drop for a moment too. Its backend resubscribes within about 15 to 30 s, and its web reconnects on its own. If nothing reconnects within a minute and Kong logs 502 on `/realtime`, run `docker restart supabase-kong`: the Realtime container may have a new IP.
 
-3.3. **Broadcast latency on the mini-PC** (M1's open criterion, `DEP-23`): p95 ≤ 150 ms from soc-cloud to a member's browser. SOC's measurement for the mini-PC is listed under "Before the first deploy".
+3.3. **Broadcast latency on the mini-PC** (M1's open criterion, `DEP-23`): a member's samples arrive with p95 ≤ 150 ms, a non-member is refused, and both still hold after the Realtime container restarts. The probe runs in soc-cloud's image, so it reads soc-cloud's clock. Start the simulator as in 3.2 and wait until the aircraft is Live. Then, in `/srv/sky-orchestrator-client/infra/compose`, read the credentials at prompts, so they reach neither a file nor the shell's history:
+
+```bash
+export SOC_PROBE_ANON_KEY="$(sed -n 's/^SOC_WEB_SUPABASE_KEY=//p' soc-web.env)"
+read -rp 'Member email: ' SOC_PROBE_EMAIL; read -rsp 'Member password: ' SOC_PROBE_PASSWORD; echo
+read -rp 'Non-member email: ' SOC_PROBE_OUTSIDER_EMAIL; read -rsp 'Non-member password: ' SOC_PROBE_OUTSIDER_PASSWORD; echo
+export SOC_PROBE_EMAIL SOC_PROBE_PASSWORD SOC_PROBE_OUTSIDER_EMAIL SOC_PROBE_OUTSIDER_PASSWORD
+docker compose run --rm --no-deps -e SOC_PROBE_ANON_KEY -e SOC_PROBE_EMAIL -e SOC_PROBE_PASSWORD \
+  -e SOC_PROBE_OUTSIDER_EMAIL -e SOC_PROBE_OUTSIDER_PASSWORD \
+  --entrypoint soc-broadcast-probe soc-cloud \
+  --supabase-url http://kong:8000 --organization 70458d25-9fb9-4ae8-8b43-7adf7ba95ee2
+unset SOC_PROBE_ANON_KEY SOC_PROBE_EMAIL SOC_PROBE_PASSWORD SOC_PROBE_OUTSIDER_EMAIL SOC_PROBE_OUTSIDER_PASSWORD
+```
+
+The member belongs to Origen (2.2). The non-member is any VO2 user outside it, such as the owner of a personal "Finca de <name>" only. The run takes 10 minutes. Two minutes in, restart Realtime with `docker restart realtime-dev.supabase-realtime`. The probe needs no restart of its own: it reports the drop on stderr, joins again under backoff and carries on.
+
+Pass when the exit status is 0. Check the JSON line on stdout: `outsider_refused` is `true`, `reconnects` is at least 1, and `p95_ms` is at most 150. Write `longest_gap_ms` down with the other figures: it is the silence the restart caused. A run that exits 1 prints each reason on stderr as a `probe_failed` line.
+
+If the probe does not rejoin within a minute and Kong logs 502 on `/realtime`, Kong is holding the Realtime container's old address (see 3.2). Run `docker restart supabase-kong` and let the probe finish. That run may exit 0, but only with Kong's restart: report it as needing the restart. DEP-23 is met only by a run that rejoins without one.
 
 ## Phase 4: the first operation, in the simulator, on the mini-PC
 
