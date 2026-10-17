@@ -52,17 +52,31 @@ class Docker:
     """Records each command and answers from a script, so no docker command runs."""
 
     def __init__(
-        self, flights: str | list[str] = "", *, query_status: int = 0, failing: str = ""
+        self,
+        flights: str | list[str] = "",
+        *,
+        query_status: int = 0,
+        failing: str = "",
+        table: str | list[str] = "t\n",
+        table_status: int = 0,
     ) -> None:
-        # A list answers each read of the flights in turn, its last answer from then on.
+        # A list answers each read in turn, its last answer from then on.
         self.flights = flights
         self.query_status = query_status
         self.failing = failing
+        self.table = table
+        self.table_status = table_status
         self.calls: list[Call] = []
 
     def __call__(self, arguments: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         command = tuple(arguments)
         self.calls.append(Call(command, cwd))
+        if command[1] == "exec" and command[-1] == deploy.FLIGHTS_TABLE:
+            if isinstance(self.table, list):
+                present = self.table.pop(0) if len(self.table) > 1 else self.table[0]
+            else:
+                present = self.table
+            return subprocess.CompletedProcess(command, self.table_status, present, None)
         if command[1] == "exec":
             if isinstance(self.flights, list):
                 answer = self.flights.pop(0) if len(self.flights) > 1 else self.flights[0]
@@ -75,6 +89,20 @@ class Docker:
     @property
     def compose(self) -> list[tuple[str, ...]]:
         return [call.arguments for call in self.calls if call.arguments[1] == "compose"]
+
+    @property
+    def steps(self) -> list[Call]:
+        """Every call but the checks that soc.flights exists."""
+        return [call for call in self.calls if call.arguments[-1] != deploy.FLIGHTS_TABLE]
+
+    @property
+    def reads(self) -> list[Call]:
+        """The calls that read the flights themselves, not whether their table exists."""
+        return [
+            call
+            for call in self.calls
+            if call.arguments[1] == "exec" and call.arguments[-1] == deploy.UNFINISHED_FLIGHTS
+        ]
 
 
 class DeployCase(unittest.TestCase):
@@ -146,22 +174,9 @@ class Flights(DeployCase):
     def test_the_query_runs_in_the_named_container_as_postgres(self) -> None:
         docker = Docker()
         self.deploy(docker, "--db-container", "other-db")
-        self.assertEqual(
-            docker.calls[0].arguments,
-            (
-                "docker",
-                "exec",
-                "other-db",
-                "psql",
-                "-U",
-                "postgres",
-                "-At",
-                "-F",
-                "|",
-                "-c",
-                deploy.UNFINISHED_FLIGHTS,
-            ),
-        )
+        psql = ("docker", "exec", "other-db", "psql", "-U", "postgres", "-At", "-F", "|", "-c")
+        self.assertEqual(docker.calls[0].arguments, (*psql, deploy.FLIGHTS_TABLE))
+        self.assertEqual(docker.calls[1].arguments, (*psql, deploy.UNFINISHED_FLIGHTS))
 
     def test_the_query_reads_only_unended_flights_and_their_operations(self) -> None:
         self.assertIn("where f.ended_at is null", deploy.UNFINISHED_FLIGHTS)
@@ -230,7 +245,7 @@ class Environment(DeployCase):
         status, _, errors = self.deploy(docker)
         self.assertEqual(status, 0, errors)
         self.assertEqual(
-            [call.arguments[1] for call in docker.calls],
+            [call.arguments[1] for call in docker.steps],
             ["exec", "compose", "exec", "compose", "exec", "compose"],
         )
         self.assertEqual(docker.compose, [PULL, MIGRATE, UP])
@@ -330,7 +345,7 @@ class DryRun(DeployCase):
         self.assertEqual(status, 0)
         steps = [
             call.arguments[1] if call.arguments[1] == "exec" else call.arguments
-            for call in docker.calls
+            for call in docker.steps
         ]
         self.assertEqual(steps, ["exec", PULL, "exec", MIGRATE, "exec", UP])
 
@@ -365,7 +380,7 @@ class DryRun(DeployCase):
         def failing_second_read(
             arguments: Sequence[str], cwd: Path
         ) -> subprocess.CompletedProcess[str]:
-            if tuple(arguments)[1] == "exec":
+            if tuple(arguments)[-1] == deploy.UNFINISHED_FLIGHTS:
                 reads["count"] += 1
                 if reads["count"] == 2:
                     return subprocess.CompletedProcess(tuple(arguments), 2, "", None)
@@ -388,7 +403,7 @@ class DryRun(DeployCase):
         self.assertEqual(self.env.read_bytes(), ENV)
         self.assertEqual(stat.S_IMODE(self.env.stat().st_mode), 0o640)
         self.assertEqual(docker.compose, [])
-        self.assertEqual([call.arguments[1] for call in docker.calls], ["exec"])
+        self.assertEqual([call.arguments[1] for call in docker.steps], ["exec"])
         self.assertIn("would set SOC_VERSION=v0.5.0", output)
         self.assertIn("would run in", output)
         for command in ("docker compose pull", "docker compose run --rm soc-migrate"):
@@ -405,3 +420,45 @@ class DryRun(DeployCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FirstInstall(DeployCase):
+    def test_without_soc_flights_the_first_install_runs_every_step(self) -> None:
+        docker = Docker(table=["f\n", "f\n", "t\n"])
+        status, output, errors = self.deploy(docker)
+        self.assertEqual(status, 0, errors)
+        self.assertEqual(docker.compose, [PULL, MIGRATE, UP])
+        self.assertIn("no flight is unfinished", output)
+        # The flights themselves are read only once their table exists: before up.
+        self.assertEqual(len(docker.reads), 1)
+
+    def test_while_soc_flights_is_absent_the_flights_query_never_runs(self) -> None:
+        docker = Docker(row(FIRST), table="f\n")
+        status, _, errors = self.deploy(docker)
+        self.assertEqual(status, 0, errors)
+        self.assertEqual(docker.reads, [])
+
+    def test_a_failing_table_check_refuses_and_changes_nothing(self) -> None:
+        docker = Docker(table_status=2)
+        status, _, errors = self.deploy(docker)
+        self.assertEqual((status, docker.compose, docker.reads), (1, [], []))
+        self.assertEqual(self.env.read_bytes(), ENV)
+        self.assertIn("nothing proves that no aircraft is flying", errors)
+
+    def test_a_table_check_answer_that_is_neither_true_nor_false_refuses(self) -> None:
+        for answer in ("", "yes\n", "t\nf\n", "ERROR\n"):
+            with self.subTest(answer=answer):
+                docker = Docker(table=answer)
+                status, _, _ = self.deploy(docker)
+                self.assertEqual((status, docker.compose), (1, []))
+                self.assertEqual(self.env.read_bytes(), ENV)
+
+    def test_once_the_table_exists_an_unfinished_flight_still_refuses(self) -> None:
+        docker = Docker(row(FIRST), table="t\n")
+        status, _, errors = self.deploy(docker)
+        self.assertEqual((status, docker.compose), (1, []))
+        self.assertIn(FIRST, errors)
+
+    def test_the_table_check_names_the_table_the_migration_creates(self) -> None:
+        self.assertEqual(deploy.FLIGHTS_TABLE, "select to_regclass('soc.flights') is not null")
+        self.assertIn("create table soc.flights (", MIGRATION.read_text(encoding="utf-8"))

@@ -1,0 +1,7 @@
+{
+  "telemetry_stale_after_ms": 3000,
+  "telemetry_lost_after_ms": 10000,
+  "geofence_warning_band_m": 5,
+  "geofence_max_vertices": 32,
+  "max_arc_spacing_m": 10
+}

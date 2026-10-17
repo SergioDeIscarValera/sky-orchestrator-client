@@ -1,0 +1,4 @@
+# actionlint: the labels of this repository's self-hosted runner (ADR-0026).
+self-hosted-runner:
+  labels:
+    - minipc

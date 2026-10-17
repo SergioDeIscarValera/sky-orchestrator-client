@@ -2,13 +2,29 @@ name: Release
 
 # Tags and publishes a release when a release or hotfix pull request merges into
 # main. The version is the one the branch declared, verified again here before
-# the tag exists. Then it publishes the service images at that tag and opens the
-# back-merge into develop (FR-DEP-06). See docs/github-governance.md.
+# the tag exists. Then it publishes the service images at that tag, opens the
+# back-merge into develop and deploys the tag on the mini-PC (FR-DEP-06). See
+# docs/github-governance.md and ADR-0026.
+#
+# Run by hand (workflow_dispatch) with an existing tag, it only deploys that tag
+# on the mini-PC: a redeploy, the first install, or a rollback to an older tag.
+#
+# The deploy job runs only while the repository variable
+# SOC_MINIPC_DEPLOY_ENABLED is `true`. Without it the job is skipped, never
+# queued: a job for `[self-hosted, minipc]` waits up to 24 h when no such runner
+# exists, and timeout-minutes bounds the run, not the queue. Setting it up:
+# docs/mini-pc-deployment.md, "Deploying on every release".
 
 on:
   pull_request:
     types: [closed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "An existing tag to deploy on the mini-PC, such as v0.5.2"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -158,3 +174,131 @@ jobs:
             --head "$source" \
             --title "chore(repo): back-merge $VERSION into develop" \
             --body "Automatic back-merge so develop carries everything released in \`$VERSION\`, including its merge commit. Cut from main as a throwaway branch, deleted on merge. GitHub starts no workflow for a pull request a workflow opens: close and reopen this one to run its checks, then merge it with a merge commit (ADR-0003)."
+
+  deploy:
+    name: Deploy on the mini-PC
+    needs: [tag, images]
+    # Three conditions. The switch: no runner, no deploy (see the header). A
+    # release deploys only once its images are published. A dispatch deploys
+    # the tag it names, and the tag and images jobs are skipped for it.
+    if: >-
+      always() && !cancelled() &&
+      vars.SOC_MINIPC_DEPLOY_ENABLED == 'true' &&
+      ((github.event_name == 'pull_request' && needs.images.result == 'success') ||
+       github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, minipc]
+    # One deploy at a time, and never one cut short: an interrupted `up` leaves
+    # the farm's stack in an unknown state.
+    concurrency:
+      group: soc-minipc-deploy
+      cancel-in-progress: false
+    # Bounds the run (pull, migrate, up --wait), not the queue.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.tag.outputs.version }}
+      # The stack's stable folder, outside the runner's workspace: its env and
+      # configuration files are written once on the mini-PC and never by CI.
+      STACK_DIR: ${{ vars.SOC_STACK_DIR || '/srv/sky-orchestrator-client/stack' }}
+    steps:
+      - name: Refuse a version that is not a release tag
+        run: |
+          set -euo pipefail
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$VERSION' is not a release tag such as v0.5.2." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.VERSION }}
+
+      - name: Check the mini-PC
+        run: |
+          set -euo pipefail
+          docker version >/dev/null || { echo "::error::$(id -un) cannot reach Docker: is it in group docker?" >&2; exit 1; }
+          if [[ ! -d "$STACK_DIR" || ! -w "$STACK_DIR" ]]; then
+            echo "::error::$STACK_DIR is missing or not writable by $(id -un). Setting it up: docs/mini-pc-deployment.md, Phase 2." >&2
+            exit 1
+          fi
+          problems=()
+          # The secrets: the runner's own, and nobody else's to read. deploy.py
+          # rewrites SOC_VERSION in .env.
+          for file in .env migrate.env soc-cloud.env soc-operations.env soc-web.env; do
+            path="$STACK_DIR/$file"
+            if [[ ! -f "$path" ]]; then
+              problems+=("$file is missing")
+            elif [[ ! -O "$path" ]]; then
+              problems+=("$file is not owned by $(id -un)")
+            elif [[ "$(stat -c %a "$path")" != 600 ]]; then
+              problems+=("$file is mode $(stat -c %a "$path"), not 600: it holds secrets")
+            fi
+          done
+          # The configuration names its secrets and holds none; the services read
+          # it as uid 10001.
+          for file in soc-cloud.json soc-operations.json soc-web.json; do
+            path="$STACK_DIR/$file"
+            if [[ ! -f "$path" ]]; then
+              problems+=("$file is missing")
+            elif (( (8#$(stat -c %a "$path") & 4) == 0 )); then
+              problems+=("$file is not readable by others: the services run as uid 10001")
+            fi
+          done
+          if (( ${#problems[@]} )); then
+            for problem in "${problems[@]}"; do echo "::error::$STACK_DIR: $problem" >&2; done
+            echo "::error::Those files are written once on the mini-PC: docs/mini-pc-deployment.md, Phase 2." >&2
+            exit 1
+          fi
+
+      # The tag's versioned files go to the stable folder; its env and
+      # configuration files are never touched.
+      - name: Put this tag's compose file and deploy command in place
+        run: |
+          set -euo pipefail
+          install -m 0644 infra/compose/compose.yaml "$STACK_DIR/compose.yaml"
+          install -m 0755 infra/deploy/deploy.py "$STACK_DIR/deploy.py"
+          install -d -m 0755 "$STACK_DIR/site"
+
+      - name: Sign in to the registry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+
+      - name: Check the configuration files with this tag's soc-config
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${OWNER,,}/sky-orchestrator-client/soc-cloud:$VERSION"
+          for unit in soc-cloud soc-operations soc-web; do
+            docker run --rm -v "$STACK_DIR:/etc/soc:ro" --entrypoint soc-config "$image" \
+              check "$unit" "/etc/soc/$unit.json"
+          done
+
+      # Refuses, changing nothing, while a flight is unfinished (FR-DEP-06):
+      # the job fails, and a dispatch of the same tag deploys it once it ends.
+      - name: Deploy
+        run: |
+          set -uo pipefail
+          log="$RUNNER_TEMP/soc-deploy-$VERSION.log"
+          status=0
+          python3 "$STACK_DIR/deploy.py" "$VERSION" --compose-dir "$STACK_DIR" 2>&1 | tee "$log" || status=$?
+          {
+            echo "### SOC $VERSION on the mini-PC (exit $status)"
+            echo '```'
+            tail -n 40 "$log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: The stack after the deploy
+        if: always()
+        run: docker compose -f "$STACK_DIR/compose.yaml" --project-directory "$STACK_DIR" ps || true
+
+      # The runner lives on: no registry credential stays in its Docker config.
+      - name: Sign out of the registry
+        if: always()
+        run: docker logout ghcr.io || true

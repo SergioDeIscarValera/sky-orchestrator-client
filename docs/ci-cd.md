@@ -43,8 +43,9 @@ name and direction, version admissibility on release branches, title and commits
 linted, description present.
 
 `release.yml`: tag, release, the service images published to GHCR at the tag
-(`ghcr.io/<owner>/sky-orchestrator-client/<service>:vX.Y.Z`, never moved), and
-the back-merge, on a release or hotfix merged into `main` (`FR-DEP-06`).
+(`ghcr.io/<owner>/sky-orchestrator-client/<service>:vX.Y.Z`, never moved), the
+back-merge and the deploy on the mini-PC, on a release or hotfix merged into
+`main` (`FR-DEP-06`). Dispatched by hand with a tag, it only deploys that tag.
 
 Each unit adds its gate as a step of `Gate` when it arrives: `soc-web` (type
 check, lint, unit tests, bundle budget, secrets), each Python unit (type check and gate
@@ -95,9 +96,22 @@ Each unit adds its gate when it arrives.
 
 ## Deployment
 
-The target is the mini-PC (`CON-01`), beside Virtual Origen and Sky Orchestrator.
-From M1, each release publishes the services' and the web's images to GHCR from
-its tag. Deploying is a command run on the mini-PC that refuses while any flight
-is unfinished (`FR-DEP-06`). There is no automatic deployment: restarting the
-services that hold the link to an aircraft in flight is a hazard, not a
-convenience.
+The target is the mini-PC (`CON-01`), beside Virtual Origen and Sky Orchestrator,
+and SOC deploys there the way Virtual Origen does (ADR-0026). Each release
+publishes the services' and the web's images to GHCR from its tag, then its
+`deploy` job runs on the mini-PC's own runner (`[self-hosted, minipc]`, user
+`soc-runner`):
+
+- only while the repository variable `SOC_MINIPC_DEPLOY_ENABLED` is `true`;
+  otherwise it is skipped, never queued;
+- one at a time, never cancelled, with the job's own token reading packages only,
+  signed out of GHCR at the end;
+- through `infra/deploy/deploy.py`, which refuses, changing nothing, while any
+  flight is unfinished: restarting the services that hold the link to an aircraft
+  in flight is a hazard, not a convenience.
+
+A deploy refused for a flight is not retried by itself; a dispatch of
+`release.yml` with the tag deploys it once the flight ends, and a dispatch with an
+older tag is the rollback. `tools/tests/test_release_workflow.py` holds the job's
+shape, and runs its check of the stack's files against a fake folder. Setting up
+the runner and the stack: [the runbook](mini-pc-deployment.md), Phase 2.
