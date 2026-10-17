@@ -429,22 +429,29 @@ stat -c '%U:%G %a %n' *.json                                     # each soc-runn
 
 Every deploy checks the three files with its tag's `soc-config` before it changes anything, and a refusal names the field.
 
-2.5. **The farm's site model** (optional; without one the ground is flat). Fetching needs the internet, so run it on the laptop from SOC's repository, then copy the model over:
+2.5. **The farm's site model** (optional; without one the ground is flat and the console says "No site model"). Baked on the mini-PC, which has the internet, in a container that leaves nothing installed. The square is centred on Origen's location in VO2, and the code is the deployed version's:
 
 ```bash
-uv run soc-site fetch --latitude <lat> --longitude <lon> --half-size-m 1000 --sources site/sources
-uv run soc-site bake --sources site/sources --out site/model
-scp -r site/model <mini-PC>:site-model
+read -r lat lon < <(docker exec supabase-db psql -U postgres -At -F ' ' -c \
+  "select latitude, longitude from public.organizations where id = '70458d25-9fb9-4ae8-8b43-7adf7ba95ee2'")
+version=$(sudo -u soc-runner sed -n 's/^SOC_VERSION=//p' "$STACK/.env")                 # sudo
+W=$(mktemp -d)
+git clone -q --depth 1 --branch "$version" https://github.com/SergioDeIscarValera/sky-orchestrator-client "$W/src"
+docker run --rm -v "$W:/w" -w /w/src \
+  python:3.14.8-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 \
+  bash -c "pip install -q --root-user-action=ignore uv==0.12.23 && uv run -q --frozen --no-dev --package soc-site soc-site fetch --latitude $lat --longitude $lon --half-size-m 1000 --sources /w/sources && uv run -q --frozen --no-dev --package soc-site soc-site bake --sources /w/sources --out /w/model"
+D="$STACK/site/70458d25-9fb9-4ae8-8b43-7adf7ba95ee2"
+sudo install -d -o soc-runner -g soc-runner -m 0755 "$STACK/site" "$D"                  # sudo
+sudo chown soc-runner:soc-runner "$STACK/site" && sudo chmod 0755 "$STACK/site"         # sudo; docker may have made it as root
+sudo install -o soc-runner -g soc-runner -m 0644 "$W"/model/* "$D"/                     # sudo
+curl -s -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:8088/site/70458d25-9fb9-4ae8-8b43-7adf7ba95ee2/site.json"   # 200
 ```
 
-Then, on the mini-PC:
+Check:
+- the bake prints the heights' range: Origen's square spans 380 m to 451 m (baked from the laptop on 2026-10-17);
+- `curl` prints 200, and a reload of the console shows the farm's ground and imagery.
 
-```bash
-sudo -u soc-runner install -d -m 0755 "$STACK/site" "$STACK/site/70458d25-9fb9-4ae8-8b43-7adf7ba95ee2"   # sudo
-sudo install -o soc-runner -g soc-runner -m 0644 ~/site-model/* "$STACK/site/70458d25-9fb9-4ae8-8b43-7adf7ba95ee2/"   # sudo
-```
-
-The files must be world-readable: soc-web serves them as uid 10001.
+The files must be world-readable: soc-web serves them as uid 10001, from `site/` mounted read-only, so no restart is needed. The work folder is in `/tmp`, which a reboot empties. The fetch takes about 6 s and the bake about 5 s; the container's first run adds its image and uv's packages.
 
 2.6. **The runner.** It runs one job, `deploy` in release.yml, on `[self-hosted, minipc]`, as VO2's runner does for VO2.
 
