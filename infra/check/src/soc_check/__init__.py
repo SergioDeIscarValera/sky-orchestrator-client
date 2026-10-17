@@ -29,8 +29,33 @@ DOCKERFILES = {
 HEALTHY_WITHIN_S = 60
 
 
-def docker(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([DOCKER, *arguments], capture_output=True, text=True, check=check)
+# Longer than any build or run the stack check makes, shorter than CI's 30-minute job: a
+# docker command that hangs fails its test, naming the command, instead of the whole job.
+DOCKER_TIMEOUT_S = 600
+
+
+def docker(
+    *arguments: str, check: bool = True, timeout_s: float = DOCKER_TIMEOUT_S
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            [DOCKER, *arguments], capture_output=True, text=True, check=check, timeout=timeout_s
+        )
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(
+            f"{command_name(arguments)} did not finish within {timeout_s:g} s"
+        ) from None
+
+
+def command_name(arguments: tuple[str, ...]) -> str:
+    """docker and its subcommands, up to the first option: never the values that follow,
+    which can be secrets (run -e KEY=value)."""
+    words: list[str] = []
+    for argument in arguments:
+        if argument.startswith("-"):
+            break
+        words.append(argument)
+    return " ".join(["docker", *words])
 
 
 @dataclass(frozen=True)
