@@ -171,6 +171,7 @@ requirements.
 | The three systems on the mini-PC: Virtual Origen, Sky Orchestrator v0.4.4 and SOC, deployed together by [one runbook](mini-pc-deployment.md) agreed with both projects; the shared migration lock, SO v0.4.4 re-vendored, the deploy command (`FR-DEP-06`) and the Broadcast measurement on the box (`DEP-23`) first | `feature/repo/mini-pc-runbook` (#133), `feature/infra/shared-migration-lock` (#132), `feature/contracts/so-v0.4.4` (#134), `feature/infra/deploy-command` (#135), `feature/cloud/broadcast-probe` (#136), released in v0.5.1 |
 | Each release deploys itself on the mini-PC through a runner of SOC's own, as Virtual Origen's and Sky Orchestrator's do (ADR-0026) | `feature/infra/minipc-cd` (#143), `feature/repo/runbook-so-cd` (#144), released in v0.5.2 |
 | The field session runbook, with the phone's envelope compared to so-wayline's | `feature/repo/first-flight-runbook` |
+| A launch in the simulator: the flight rehearsed from SOC's console before the real one, and back to simulated on the ground (`FR-OPS-13`, ADR-0027) | `feature/operations/launch-in-simulator` |
 | Session one: the phone in DJI's simulator through SO, commanded from SOC | `feature/repo/simulator-session` |
 | Session two: the real aircraft, the operator on the controller | `feature/repo/first-real-flight` |
 | Fixes found in the sessions, each with its regression test | `bugfix/<scope>/<slug>` |

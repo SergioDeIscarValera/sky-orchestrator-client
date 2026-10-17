@@ -191,9 +191,12 @@ async def load(connection: asyncpg.Connection, operation_id: uuid.UUID) -> Loade
             " where gateway_sn = $1 and ended_at is null and operation_id <> $2)",
             first["gateway_sn"], operation_id,
         )  # fmt: skip
+    # A stop is its flight's: a launch in the simulator stopped says nothing of the next one.
     stopped = await connection.fetchval(
-        "select exists (select 1 from soc.transition_requests"
-        " where operation_id = $1 and transition = 'stop' and status = 'accepted')",
+        "select exists (select 1 from soc.transition_requests r"
+        " where r.operation_id = $1 and r.transition = 'stop' and r.status = 'accepted'"
+        " and r.decided_at >= (select max(f.prepared_at) from soc.flights f"
+        " where f.operation_id = $1))",
         operation_id,
     )
     snapshot = Snapshot(
