@@ -13,7 +13,7 @@ ends with what to check before the next one.
 | --- | --- | --- | --- | --- |
 | VO2 database (Supabase) | `supabase-local` | `/srv/virtual-origen/repo/infra/supabase-local` | 0.0.0.0: 5432, 8000, 8443, 1883 (VO2's broker) | `supabase-local_default` |
 | VO2 farm services | `virtual-origen` | `/srv/virtual-origen/stack` | 0.0.0.0: 8080 (vo-api), 8081 (vo-web, the farm's emergency web) | joins `supabase-local_default` |
-| SO | `sky-orchestrator` | `/srv/sky-orchestrator` (a checkout at its tag) | 127.0.0.1: 1884 (broker, desk tools only), 8091 (so-wayline) | `sky-orchestrator_default` |
+| SO | `sky-orchestrator` | `/srv/sky-orchestrator/stack`, deployed by each release (SO's ADR-0043) | 127.0.0.1: 1884 (broker, desk tools only), 8091 (so-wayline) | `sky-orchestrator_default` |
 | SOC | `sky-orchestrator-client` | `/srv/sky-orchestrator-client/stack`, deployed by each release (ADR-0026) | 0.0.0.0: 8088 (the console) | soc-cloud joins both networks; soc-operations joins VO2's; soc-web joins neither |
 
 The mini-PC's LAN address is `192.168.1.201`. The console is at
@@ -81,8 +81,7 @@ Check:
 - both files are copied off the mini-PC, to the laptop. That is the only offsite copy there will be.
 
 0.3. **Packages and tools.** SO's and SOC's images are private on GHCR:
-- VO2 and SOC leave no login behind. Each deploys as its runner's user (`vo-runner`, `soc-runner`) with its workflow's own token, scoped to its repository, and logs out when the job ends.
-- SO's Phase 1 pulls by hand: create a classic GitHub token with `read:packages` only, and log in once as the operator's user with `docker login ghcr.io -u SergioDeIscarValera --password-stdin`, pasting the token. Never put it on the command line or in a file. Log out (`docker logout ghcr.io`) once Phase 1 is up.
+- No GHCR login is needed, and none is left behind. VO2, SO and SOC each deploy as their runner's user (`vo-runner`, `so-runner`, `soc-runner`) with their workflow's own token, scoped to their repository, and log out when the job ends.
 - Cloning the two private repositories needs a second token: a fine-grained one with Contents read-only, limited to `sky-orchestrator` and `sky-orchestrator-client`. Type it as the password at `git clone`. Never put it in the remote URL.
 - Install adb for SO's phone link: `sudo apt install adb` (**sudo**); the package brings its udev rules.
 - git, curl, openssl and python3 must be on the mini-PC.
@@ -102,95 +101,162 @@ Check: the attributes are `Create role, Create DB, Replication, Bypass RLS`. `po
 
 0.6. **The tunnel publishes only VO2's API.** In Cloudflare Zero Trust, open Tunnels, then Public Hostnames. Check there is exactly one entry: `api.virtualorigen.dpdns.org` → `http://kong:8000`. Once Phase 2 exposes schema `soc`, SOC's tables are reachable through it, guarded by row-level security, as VO2's are.
 
-## Phase 1: Sky Orchestrator v0.4.4
+## Phase 1: Sky Orchestrator v0.5.0
 
-1.1. **The checkout at the tag, and a helper for its compose.**
+SO deploys itself on every release too, the same way (SO's ADR-0043, its `infra/deploy/README.md`). The mini-PC gets:
+- a user, `so-runner`, and the stack's folder `/srv/sky-orchestrator/stack`;
+- the stack's `.env` and configuration files, written by hand;
+- an Actions runner for SO's repository.
+
+The first `up` is a dispatch of SO's release workflow with `tag=v0.5.0`: never start SO by hand. SO's deploy refuses, changing nothing, while so-fleet names an unfinished task or cannot say.
+
+1.1. **The checkout, the runner's user and the folders.**
 
 ```bash
-sudo mkdir -p /srv/sky-orchestrator && sudo chown "$USER": /srv/sky-orchestrator   # sudo
-git clone https://github.com/SergioDeIscarValera/sky-orchestrator.git /srv/sky-orchestrator
-git -C /srv/sky-orchestrator checkout v0.4.4
-dc() { SO_VERSION=v0.4.4 docker compose -f /srv/sky-orchestrator/infra/compose/compose.yaml \
-  -f /srv/sky-orchestrator/infra/compose/compose.release.yaml "$@"; }
+sudo install -d -m 0755 /srv/sky-orchestrator                                             # sudo
+sudo install -d -o "$USER" -g "$USER" -m 0755 /srv/sky-orchestrator/repo                  # sudo
+git clone https://github.com/SergioDeIscarValera/sky-orchestrator.git /srv/sky-orchestrator/repo   # the fine-grained token of 0.3
+git -C /srv/sky-orchestrator/repo checkout v0.5.0
+sudo useradd --create-home --shell /bin/bash so-runner                                    # sudo
+sudo usermod -aG docker so-runner                                                         # sudo
+sudo -u so-runner docker version --format '{{.Server.Version}}'                          # sudo
+sudo install -d -o so-runner -g so-runner -m 0750 /srv/sky-orchestrator/stack            # sudo
+sudo -u so-runner install -d -m 0755 /srv/sky-orchestrator/stack/compose                 # sudo
+sudo -u so-runner install -d -m 0700 /srv/sky-orchestrator/stack/config                  # sudo
+SO_REPO=/srv/sky-orchestrator/repo SO_STACK=/srv/sky-orchestrator/stack
+dc() { sudo -u so-runner "$SO_STACK/deploy/deploy.py" compose "$@"; }                    # sudo
 ```
 
-Every SO compose command on the mini-PC goes through `dc`. It needs both files and the version: without the release file, compose tries to build `:local` images, and the mini-PC has none.
+- The checkout serves the desk tools only (`session.sh`, `bridge.sh`, `clearance.py`), at the tag of the APK on the phone. It belongs to the operator; the stack never reads it.
+- Every SO compose command on the mini-PC goes through `dc`. It runs as `so-runner`, on the deployed version and the stack's files, as project `sky-orchestrator`. It exists once the first deploy has put `deploy.py` in place (1.4).
 
-1.2. **Configuration.** Start from SO's examples:
-- `cp infra/compose/.env.example infra/compose/.env`;
-- fill each of the four `infra/config/*.json` with `python3 tools/device_config.py template --consumer <service>`;
-- copy so-fleet's real dock and aircraft identities from the laptop's `so-fleet.json`.
+1.2. **Configuration**, written as `so-runner`, never as root, and never by CI.
 
-Nothing secret comes from the laptop: its secrets were printed into a local research transcript on 2026-10-16, and the phone is set up again in 1.3. Generate every secret fresh, each 32 or more letters and digits (`openssl rand -hex 24`):
-- `SO_MQTT_PASSWORD_SO_GATEWAY`, `SO_MQTT_PASSWORD_SO_FLEET`, `SO_MQTT_PASSWORD_SO_WAYLINE`, `SO_MQTT_PASSWORD_SO_BRIDGE` and `SO_MQTT_PASSWORD_CLOUD_CLIENT`;
-- `SO_WAYLINE_API_TOKEN`.
+`.env` holds the secrets, mode 600. Every secret is new, generated inside the shell and never shown. Nothing secret comes from the laptop: its secrets were printed into a local research transcript on 2026-10-16.
 
-`SO_BRIDGE_SECRET` is set by 1.3.
+```bash
+E="$SO_STACK/compose/.env"
+sudo -u so-runner install -m 0600 "$SO_REPO/infra/compose/.env.example" "$E"            # sudo
+# so_set KEY: KEY's line in .env becomes the line read on stdin; prints the key only.
+so_set() { sudo -u so-runner python3 -c '
+import re, sys
+path, key = sys.argv[1:]
+value = sys.stdin.readline().strip()
+if not re.fullmatch(r"[A-Za-z0-9]{16,}", value):
+    sys.exit(f"{key}: refused, the value must be 16 or more letters and digits")
+text, count = re.subn(rf"(?m)^{key}=.*$", lambda _: f"{key}={value}", open(path).read())
+if count != 1:
+    sys.exit(f"{key}: refused, {count} lines")
+open(path, "w").write(text)
+print(key, "set")' "$E" "$1"; }                                                           # sudo
+for key in SO_MQTT_PASSWORD_SO_GATEWAY SO_MQTT_PASSWORD_SO_FLEET SO_MQTT_PASSWORD_SO_WAYLINE \
+           SO_MQTT_PASSWORD_SO_BRIDGE SO_MQTT_PASSWORD_CLOUD_CLIENT \
+           SO_S3_SECRET_KEY_SO_WAYLINE SO_WAYLINE_API_TOKEN SO_BRIDGE_SECRET; do
+  openssl rand -hex 24 | so_set "$key"
+done
+openssl rand -hex 8 | so_set SO_S3_ACCESS_KEY_SO_WAYLINE
+sudo -u so-runner sed -i \
+  -e 's/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=phone/' \
+  -e 's/^SO_BIND=.*/SO_BIND=127.0.0.1/' \
+  -e 's/^SO_MQTT_PORT=.*/SO_MQTT_PORT=1884/' \
+  -e 's/^SO_WAYLINE_PORT=.*/SO_WAYLINE_PORT=8091/' \
+  -e 's|^SO_BRIDGE_URL=.*|SO_BRIDGE_URL=http://phone-link:8765|' \
+  -e 's|^SO_PHONE_ADB_TARGET=.*|SO_PHONE_ADB_TARGET=<phone IP>:5555|' \
+  -e "s|^SO_PHONE_ADB_KEY_DIR=.*|SO_PHONE_ADB_KEY_DIR=$HOME/.android|" \
+  -e "s|^SO_PHONE_ADB_USER=.*|SO_PHONE_ADB_USER=$(id -u):$(id -g)|" "$E"                # sudo
+sudo -u so-runner grep -nE '=(replace-with.*)?$' "$E" | cut -d= -f1                     # sudo; only FAKE_BRIDGE_REPLAY
+stat -c '%U:%G %a' "$E"                                                                  # so-runner:so-runner 600
+```
+
+- Replace `<phone IP>` in the sed with the phone's reserved address before running it: SO's deploy does not catch it left as is.
+- The adb key is the operator's: the one the phone trusts after 1.3's first USB connection. `SO_PHONE_ADB_USER` is its owner.
+- `SO_BRIDGE_SECRET` gets its final value in 1.3, from `bridge.sh secret`.
+- The `SO_*_CONFIG` lines keep the example's `../config/<service>.json`: the stack's `config/` folder.
+- SO's deploy refuses a placeholder, the `fake-bridge` or `fake-cloud` profile, and an `.env` readable by others.
+
+The configuration files name no secret: mode 644, in a folder of mode 700, because each service reads its file as its own uid. Start each from SO's template:
+
+```bash
+for c in so-wayline so-bridge so-fleet so-gateway; do
+  python3 "$SO_REPO/tools/device_config.py" template --consumer "$c" | sudo -u so-runner tee "$SO_STACK/config/$c.json" >/dev/null   # sudo
+done
+sudo -u so-runner chmod 644 "$SO_STACK"/config/*.json                                     # sudo
+```
+
+Then set, as `so-runner`, keeping mode 644. The template names on stderr what it cannot default; the `tee` does not keep it.
 
 | File | Setting |
 | --- | --- |
-| `infra/compose/.env` | `COMPOSE_PROFILES=phone` (never `builtin-cloud`), `SO_BIND=127.0.0.1`, `SO_MQTT_PORT=1884`, `SO_WAYLINE_PORT=8091`, `SO_BRIDGE_URL=http://phone-link:8765`, `SO_PHONE_ADB_TARGET=<phone IP>:5555`, `SO_PHONE_ADB_KEY_DIR=/home/<user>/.android`, `SO_PHONE_ADB_USER=$(id -u):$(id -g)` of the operator |
 | `so-gateway.json`, `so-fleet.json`, `so-wayline.json` | `"cloud_role": "external"` |
 | `so-wayline.json` | the envelope: `geofence_center` at the site, `geofence_radius_m` 50, `max_height_m` 30, `max_horizontal_speed_ms` 3.0 |
-| `so-bridge.json` | `simulator_mode` true |
-| `so-bridge.real.json`, a copy of `so-bridge.json` | `simulator_mode` false: real mode, for A2 at the desk and for Part B at the site |
+| `so-fleet.json` | `"dock_identity": {"sn": "SODOCK000001", "domain": 3, "type": 2, "sub_type": 0, "firmware_version": "10.1.0"}` and `"aircraft_identity": {"sn": "SOUAV0000001", "domain": 0, "type": 91, "sub_type": 0, "firmware_version": "10.1.0"}`. The template has no default for them, and so-fleet refuses to start without them |
+| `so-bridge.json` | `simulator_mode` true. Real mode is a change of this file, only in 4.4 and at the site |
 
-Run `chmod 600 infra/compose/.env`. The checkout, `.env` and `infra/config/` belong to the operator's user.
+The two serials are chosen once and never change: they are the devices SOC registers in 3.1, and a new serial is a new device in every client's history (SO's IR-DEV-01).
 
-To rotate a secret later on a running stack, edit `.env`, then run `dc up -d`. Compose recreates mosquitto and every service whose environment changed. Then give soc-cloud its new values and recreate it.
-
-1.3. **The phone, in this order.** The phone and the mini-PC must be on the same Wi-Fi with client isolation off. Give the phone a DHCP reservation.
+1.3. **The phone, in this order.** The phone and the mini-PC must be on the same Wi-Fi with client isolation off. Give the phone a DHCP reservation. The phone must be set up before the first deploy: phone-link's first start mounts the adb key that `.env` names.
 
 1. **adb.** Plug the phone in by USB once and accept the mini-PC's key on its screen. Then:
    ```bash
    adb -s <usb serial> tcpip 5555 && adb connect <phone IP>:5555
    ```
    A phone restart turns adb's TCP mode off: plug the phone in again and repeat.
-2. **The application.** Install the debug APK that SO built on the laptop from the v0.4.4 tag, on a clean tree. It must be a debug build, because session.sh and the clearance write through `run-as`. Its BuildConfig names `fe6b57fb0388`, which is the commit clearance.py lists.
-   - On the laptop: `/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.4.4-fe6b57fb0388-debug.apk`, with its `.sha256` beside it.
-   - Its SHA-256 is `d9c1760a67300ea6b402773abb427e10377c34cf90cdaa9ee38f44633e4ec8ec`.
+2. **The application.** Install the debug APK that SO built on the laptop from the v0.5.0 tag, on a clean tree. It must be a debug build, because session.sh and the clearance write through `run-as`. Its name carries the commit that clearance.py lists, `git -C "$SO_REPO" rev-parse --short=12 'v0.5.0^{commit}'`.
+   - On the laptop: `/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-<commit>-debug.apk`, with its `.sha256` beside it.
    ```bash
-   scp <laptop>:/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.4.4-fe6b57fb0388-debug.apk* .
-   sha256sum -c so-msdk-v4-v0.4.4-fe6b57fb0388-debug.apk.sha256
-   adb -s <phone IP>:5555 install -r so-msdk-v4-v0.4.4-fe6b57fb0388-debug.apk
+   scp <laptop>:/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-<commit>-debug.apk* .
+   sha256sum -c so-msdk-v4-v0.5.0-<commit>-debug.apk.sha256
+   adb -s <phone IP>:5555 install -r so-msdk-v4-v0.5.0-<commit>-debug.apk
    ```
-   Alternatively, install it from the laptop while the phone is on the laptop's adb.
-3. **The site configuration**, from `/srv/sky-orchestrator`:
+3. **The site configuration**, from `$SO_REPO`:
    ```bash
    python3 tools/device_config.py template > so-config.json    # then add "geofence_center" at the site
-   adb push so-config.json /data/local/tmp/so-config.json
-   adb shell run-as io.github.sergiodeiscarvalera.skyorchestrator.msdkv4 cp /data/local/tmp/so-config.json files/so-config.json
-   adb shell rm /data/local/tmp/so-config.json
+   adb -s <phone IP>:5555 push so-config.json /data/local/tmp/so-config.json
+   adb -s <phone IP>:5555 shell run-as io.github.sergiodeiscarvalera.skyorchestrator.msdkv4 cp /data/local/tmp/so-config.json files/so-config.json
+   adb -s <phone IP>:5555 shell rm /data/local/tmp/so-config.json
    ```
-   The defaults are already 50 m, 30 m and 3.0 m/s. The file holds a location, so it never goes into git. It must be final before 4.2, because it sets the phone's `config_fingerprint`. Nothing compares it with `so-wayline.json`, so check both by eye.
-4. **The bridge secret:**
+   After 1.3.1 the phone is listed twice, by its USB serial and by its address, so every adb line names it with `-s`. The defaults are already 50 m, 30 m and 3.0 m/s. The file holds a location, so it never goes into git. It must be final before 4.2, because it sets the phone's `config_fingerprint`. Nothing compares it with `so-wayline.json`, so check both by eye.
+4. **The bridge secret**, from `$SO_REPO`:
    ```bash
    ADB_TARGET=<phone IP>:5555 apps/so-msdk-v4/scripts/bridge.sh secret
+   so_set SO_BRIDGE_SECRET < apps/so-msdk-v4/scripts/.bridge-secret
    ```
-   This puts a new secret on the phone and keeps it in `apps/so-msdk-v4/scripts/.bridge-secret`. Copy that value into `.env`'s `SO_BRIDGE_SECRET`.
+   This puts a new secret on the phone, keeps it in `.bridge-secret`, and copies it into `.env` without showing it.
 5. **Start the application only after the controller is cabled.** A running application does not see the product arrive.
 
-1.4. **Up.**
+1.4. **The runner, then the first deploy.** Download and register SO's runner as `so-runner`, exactly as 2.6 does for SOC, with SO's repository URL; its service is `actions.runner.SergioDeIscarValera-sky-orchestrator.minipc.service`. VO2's and SOC's runners are separate runners.
 
 ```bash
-dc up -d
+pgrep -u vo-runner -af '[R]unner\.Worker'           # must print nothing: no VO2 deploy job is running
+```
+
+From the laptop:
+
+```bash
+gh variable set SO_MINIPC_DEPLOY_ENABLED --body true --repo SergioDeIscarValera/sky-orchestrator
+gh workflow run release.yml --repo SergioDeIscarValera/sky-orchestrator --ref main -f tag=v0.5.0
+```
+
+The run's summary ends with `deployed v0.5.0`. Then, on the mini-PC:
+
+```bash
 dc ps
-TOKEN=$(grep '^SO_WAYLINE_API_TOKEN=' /srv/sky-orchestrator/infra/compose/.env | cut -d= -f2)
-curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8091/v1/status
-curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8091/v1/envelope
+TOKEN=$(sudo -u so-runner grep '^SO_WAYLINE_API_TOKEN=' "$E" | cut -d= -f2-)            # sudo
+printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -s -H @- http://127.0.0.1:8091/v1/status
+printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -s -H @- http://127.0.0.1:8091/v1/envelope
+unset TOKEN
 dc logs phone-link | tail -3        # "connected to"
 ```
 
 Check:
-- every service is healthy. phone-link is healthy only while the phone is connected, which is why 1.3 comes first;
+- every service is healthy. phone-link only has to run: "waiting for the phone" is a warning, not a failure;
 - `docker network ls` lists `sky-orchestrator_default`;
 - `/v1/status` says `simulator_mode` true and the link up, and `aircraft_online` true once the aircraft and controller are on;
 - `/v1/envelope` returns the four values of step 1.2.
 
-1.5. **What SOC needs from SO.** Note three values for Phase 2:
-- `SO_MQTT_PASSWORD_CLOUD_CLIENT` from SO's `.env`;
-- `SO_WAYLINE_API_TOKEN` from SO's `.env`;
-- the dock's identity from `so-fleet.json`.
+If SO's deploy is refused or fails, follow SO's `infra/deploy/README.md`, "When a deploy is refused or fails". Never `dc down -v`.
+
+1.5. **What SOC needs from SO.** soc-cloud reads two of SO's secrets in 2.3, `SO_MQTT_PASSWORD_CLOUD_CLIENT` and `SO_WAYLINE_API_TOKEN`, from `$SO_STACK/compose/.env` as `so-runner`, and the dock's identity comes from SO's fleet (3.1).
 
 ## Phase 2: SOC
 
@@ -228,7 +294,7 @@ docker exec supabase-db psql -U postgres -Atc \
 
 2.3. **Environment files.** They hold the secrets: mode 600, owned by `soc-runner`. The deploy job refuses any other owner or mode.
 
-Every value goes through `set_env.py`, which reads it on stdin, so it is never on a command line or a screen. VO2's values come from its `.env`, which belongs to `vo-runner`, mode 600, and are read as that user. SO's come from the `.env` of step 1.2.
+Every value goes through `set_env.py`, which reads it on stdin, so it is never on a command line or a screen. VO2's values come from its `.env`, which belongs to `vo-runner`, mode 600, and are read as that user. SO's come from SO's `.env` (1.2), which belongs to `so-runner`, mode 600, and are read as that user.
 
 ```bash
 cd "$STACK"
@@ -237,7 +303,7 @@ for f in .env migrate.env soc-cloud.env soc-operations.env soc-web.env; do
 done
 set_env() { sudo -u soc-runner python3 "$REPO/infra/deploy/set_env.py" "$@"; }                   # sudo
 vo() { sudo -u vo-runner grep "^$1=" /srv/virtual-origen/repo/infra/supabase-local/.env | cut -d= -f2-; }   # sudo
-so() { grep "^$1=" /srv/sky-orchestrator/infra/compose/.env | cut -d= -f2-; }
+so() { sudo -u so-runner grep "^$1=" /srv/sky-orchestrator/stack/compose/.env | cut -d= -f2-; }   # sudo
 
 printf '%s\n' v0.5.2 | set_env .env SOC_VERSION
 
@@ -461,10 +527,10 @@ docker restart supabase-kong          # otherwise /auth/v1 answers 502 and every
 
 ## Phase 3: checks on the mini-PC
 
-SO's session commands run from `/srv/sky-orchestrator`, with `S` defined once:
+SO's session commands run from SO's checkout at v0.5.0, with `S` defined once:
 
 ```bash
-cd /srv/sky-orchestrator
+cd /srv/sky-orchestrator/repo
 export ADB_TARGET=<phone IP>:5555
 S=apps/so-msdk-v4/scripts/session.sh
 ```
@@ -523,7 +589,7 @@ This phase is SO's `docs/first-real-flight.md` Part A, flown by SOC. A simulated
 
 **Do not change the definition afterwards.** The real flight must fly the same bytes (the KMZ's MD5), and any change makes a new file.
 
-4.3. **SO's clearance** (its A1), from `/srv/sky-orchestrator`:
+4.3. **SO's clearance** (its A1), from `/srv/sky-orchestrator/repo`:
 
 ```bash
 pkg=io.github.sergiodeiscarvalera.skyorchestrator.msdkv4
@@ -533,13 +599,21 @@ python3 tools/clearance.py records/*.jsonl > so-clearance.json
 adb -s $ADB_TARGET shell "run-as $pkg sh -c 'cat > files/so-clearance.json.tmp && mv files/so-clearance.json.tmp files/so-clearance.json'" < so-clearance.json
 ```
 
-Check: `clearance.py` exits 0 and lists the commit of `git -C /srv/sky-orchestrator rev-parse 'v0.4.4^{commit}'`.
+Check: `clearance.py` exits 0 and lists `git -C /srv/sky-orchestrator/repo rev-parse --short=12 'v0.5.0^{commit}'`, the commit in the APK's name.
 
 Then restart the application. The simulator is already stopped, which is required: a restart with it running makes the aircraft demand a restart (diagnostic 8012). Check: `$S status` says `build_cleared=true`.
 
 4.4. **SO's refusals again (A2), propellers off.** SOC's Launch drives the execute rows. A refused launch returns the operation to `ready` with SO's meaning shown, and the pilot can launch again.
 
-Start: `SO_BRIDGE_CONFIG=../config/so-bridge.real.json dc up -d so-bridge`. Then check that `/v1/status` says `simulator_mode` false.
+Start, putting so-bridge in real mode. `dc` passes no environment to the stack, and compose sees the file's mount, not its contents, so the change needs a recreate:
+
+```bash
+sudo -u so-runner sed -i 's/"simulator_mode": true/"simulator_mode": false/' /srv/sky-orchestrator/stack/config/so-bridge.json   # sudo
+sudo -u so-runner grep -c '"simulator_mode": false' /srv/sky-orchestrator/stack/config/so-bridge.json   # sudo; must print 1
+dc up -d --force-recreate so-bridge
+```
+
+Then check that `/v1/status` says `simulator_mode` false.
 
 | Row | First | Expected |
 | --- | --- | --- |
@@ -548,14 +622,22 @@ Start: `SO_BRIDGE_CONFIG=../config/so-bridge.real.json dc up -d so-bridge`. Then
 | `$S takeoff` | | `refused: console flying is for the simulator only` |
 | The key | | Tap Enable REAL flight… on the phone and confirm. `$S status` says `real_flight=confirmed build_cleared=true`. Restart the application: `$S status` says `real_flight=off`. |
 
-End: run `dc up -d so-bridge`, which puts so-bridge back in simulator mode. The operation returns to `simulated` and waits there. Never arm in real mode at the desk.
+End, putting so-bridge back in simulator mode:
+
+```bash
+sudo -u so-runner sed -i 's/"simulator_mode": false/"simulator_mode": true/' /srv/sky-orchestrator/stack/config/so-bridge.json   # sudo
+sudo -u so-runner grep -c '"simulator_mode": true' /srv/sky-orchestrator/stack/config/so-bridge.json    # sudo; must print 1
+dc up -d --force-recreate so-bridge
+```
+
+Check that `/v1/status` says `simulator_mode` true. The operation returns to `simulated` and waits there. Never arm in real mode at the desk. A deploy keeps whatever the file says, so never leave it in real mode. A `grep -c` that prints 0 means the sed changed nothing: stop, and fix the file by hand as `so-runner`.
 
 4.5. **Part B is M5 itself.** Follow SO's `docs/first-real-flight.md` Part B in full: it is the authority for the flight. Its outline:
 - **Before leaving:** the weather, the batteries, and both envelopes checked.
 - **On the site:**
   1. A ping first.
   2. Propellers on, the aircraft at the geofence centre.
-  3. `SO_BRIDGE_CONFIG=../config/so-bridge.real.json dc up -d so-bridge`, then check `/v1/status`.
+  3. so-bridge into real mode as in 4.4, then check `/v1/status`.
   4. Restart the application with the simulator off, after the controller is cabled.
   5. The operator confirms real flight on the phone.
   6. The arming, on the site, which sets the home point. The operation moves to `ready`.
@@ -571,8 +653,9 @@ End: run `dc up -d so-bridge`, which puts so-bridge back in simulator mode. The 
   - Until VO2's migrations take the shared lock, merge no SOC release while VO2's runner is busy (`pgrep -u vo-runner -af '[R]unner\.Worker'`), and the other way round.
   - The stack's files are `soc-runner`'s: edit them as that user, through `set_env.py` for a secret. A file left owned by root, or a secret readable by others, stops the next deploy before it changes anything.
 - **While the repository is public** (RISK-17), approve no workflow run from a fork: it could run on the mini-PC's runner.
+- **Upgrading SO** is a release too: it deploys on its own and refuses while so-fleet names an unfinished task (SO's ADR-0043). A refused deploy is dispatched again with the same tag once the task has ended. Every manual SO compose command goes through `dc` (1.1).
 - **Never during a flight:**
-  - deploy, restart or update SO or SOC;
+  - deploy, restart or update SO or SOC, or merge a release of either: each deploys itself and refuses during a flight, but nothing should depend on that;
   - migrate either database;
   - run `docker compose down` on any of the three;
   - merge into VO2's main, push a VO2 `v*` tag or run a VO2 workflow by hand. A release deploys on its own through the mini-PC's runner, and `sync-stack.sh` may restart Kong and recreate Supabase services, cutting the console's REST, sign-in and Realtime.
@@ -589,7 +672,7 @@ End: run `dc up -d so-bridge`, which puts so-bridge back in simulator mode. The 
 
 | Owner | Item | Why |
 | --- | --- | --- |
-| SO | v0.4.4 tagged: v0.4.3 with the waypoint index fixed (#135), its APK and its runbook | The mini-PC runs it |
+| SO | v0.5.0 tagged: v0.4.4 plus the deploy on every release (ADR-0043), and its APK built at that tag | The mini-PC runs it; the clearance is per commit |
 | SOC | v0.5.2, released with:<br>• everything in v0.5.1: the shared migration lock, SO v0.4.4 re-vendored, the deploy command that refuses while a flight is unfinished (`FR-DEP-06`), the Broadcast measurement<br>• the deploy on every release through the mini-PC's runner (ADR-0026)<br>• the configuration examples and `set_env.py` | Phase 2's tag |
 | VO2 | The shared lock in `apply-migrations.sh` | Until then, the rule in 2.7 |
 | VO2 | ADR 0059 and its gate test (`DEP-20`) | The contract SOC reads |
