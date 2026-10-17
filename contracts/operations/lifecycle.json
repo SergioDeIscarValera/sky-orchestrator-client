@@ -1,6 +1,6 @@
 {
-  "description": "An operation's states and the only moves between them (FR-OPS-02). The database refuses every other move (database/migrations/0010-operations.sql) and soc-operations plans only these; a gate test holds both to this file. A move is made by a transition request a member asks for (IR-TRQ), or by soc-operations on what the stack reports, each recorded with its cause and author in the operation's log (IR-OPS-01). returning covers the time between the end of the flight task and the aircraft standing on the ground. The four terminal states close the record (FR-OPS-10).",
-  "x-version": "1.0.0",
+  "description": "An operation's states and the only moves between them (FR-OPS-02). The database refuses every other move (database/migrations/0010-operations.sql, 0011-launch-in-the-simulator.sql) and soc-operations plans only these; a gate test holds both to this file. A move is made by a transition request a member asks for (IR-TRQ), or by soc-operations on what the stack reports, each recorded with its cause and author in the operation's log (IR-OPS-01). returning covers the time between the end of the flight task and the aircraft standing on the ground. A launch from simulated flies in the simulator and comes back to simulated, never closing the record (FR-OPS-13). The four terminal states close the record (FR-OPS-10).",
+  "x-version": "1.1.0",
   "states": [
     "draft",
     "planned",
@@ -31,6 +31,7 @@
     { "from": "simulated", "to": "ready", "why": "real mode, the same configuration fingerprint, every blocking check passing (FR-OPS-07)" },
     { "from": "simulated", "to": "planned", "why": "its definition, wayline, geofence or fleet changed: a new file" },
     { "from": "simulated", "to": "cancelled", "why": "cancel" },
+    { "from": "simulated", "to": "launching", "why": "launch in the simulator, confirmed by a pilot: the stack in simulator mode, every blocking check passing (FR-OPS-13)" },
     { "from": "ready", "to": "simulated", "why": "a condition of ready no longer holds" },
     { "from": "ready", "to": "launching", "why": "launch, confirmed by a pilot (FR-OPS-09)" },
     { "from": "ready", "to": "planned", "why": "its definition, wayline, geofence or fleet changed: a new file" },
@@ -38,12 +39,14 @@
     { "from": "launching", "to": "in_flight", "why": "the flight task is executing" },
     { "from": "launching", "to": "ready", "why": "Sky Orchestrator refused the prepare or the execute, its meaning shown (FR-OPS-09)" },
     { "from": "launching", "to": "failed", "why": "the launch cannot be settled" },
+    { "from": "launching", "to": "simulated", "why": "a launch in the simulator was refused, or ended before take-off (FR-OPS-13)" },
     { "from": "in_flight", "to": "paused", "why": "the flight task is paused" },
     { "from": "in_flight", "to": "returning", "why": "the flight task ended, or the operation was stopped (FR-CMD-04)" },
     { "from": "paused", "to": "in_flight", "why": "the flight task resumed" },
     { "from": "paused", "to": "returning", "why": "the flight task ended, or the operation was stopped (FR-CMD-04)" },
     { "from": "returning", "to": "completed", "why": "the aircraft is on the ground after a task that ended ok (FR-OPS-10)" },
     { "from": "returning", "to": "aborted", "why": "the aircraft is on the ground after a return or a stop (FR-OPS-10)" },
-    { "from": "returning", "to": "failed", "why": "the aircraft is on the ground after a task that failed (FR-OPS-10)" }
+    { "from": "returning", "to": "failed", "why": "the aircraft is on the ground after a task that failed (FR-OPS-10)" },
+    { "from": "returning", "to": "simulated", "why": "the simulated aircraft is on the ground after a launch in the simulator, however it ended (FR-OPS-13)" }
   ]
 }

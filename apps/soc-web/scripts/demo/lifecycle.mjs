@@ -31,8 +31,9 @@ import { DatabaseError, TERMINAL } from './operation-tables.mjs'
  * sent and then answered, commandStepMs apart. A task runs from 0 to 100 percent in taskMs, its
  * progress written every progressTickMs, and the aircraft flies its route over the same time. The
  * aircraft sends a sample every telemetryTickMs. A flight's aircraft lands landMs after its task ends,
- * or returnHomeMs after a return home, simulated or real. A real flight's take-off is takeOffMs after
- * its execute. A simulated operation becomes ready readyMs after its simulation.
+ * or returnHomeMs after a return home, simulated or real. A launch takes off takeOffMs after its
+ * execute, real or in the simulator; a simulated pass never takes off. A simulated operation becomes ready readyMs after its simulation: until then its stack
+ * stays in simulator mode, and the operation may launch in the simulator (FR-OPS-13).
  */
 export const TIMINGS = Object.freeze({
   claimMs: 200,
@@ -44,7 +45,7 @@ export const TIMINGS = Object.freeze({
   takeOffMs: 1_000,
   landMs: 20_000,
   returnHomeMs: 20_000,
-  readyMs: 2_000,
+  readyMs: 15_000,
 })
 
 /**
@@ -81,16 +82,19 @@ export const MOVES = Object.freeze([
   ['simulating', 'preparing'],
   ['simulated', 'ready'],
   ['simulated', 'cancelled'],
+  ['simulated', 'launching'],
   ['ready', 'launching'],
   ['ready', 'cancelled'],
   ['launching', 'in_flight'],
   ['launching', 'ready'],
+  ['launching', 'simulated'],
   ['in_flight', 'paused'],
   ['in_flight', 'returning'],
   ['paused', 'in_flight'],
   ['paused', 'returning'],
   ['returning', 'completed'],
   ['returning', 'aborted'],
+  ['returning', 'simulated'],
 ])
 
 /**
@@ -395,8 +399,34 @@ function onSimulate(snapshot, checks) {
   )
 }
 
+/**
+ * FR-OPS-13: from simulated, in simulator mode, the file flown again in the simulator as a launch
+ * (soc-operations' _launch_in_simulator).
+ */
+function onLaunchInSimulator(snapshot, checks) {
+  const reasons = blockingReasons(checks)
+  if (snapshot.stack.simulatorMode !== true) {
+    reasons.push(
+      snapshot.stack.simulatorMode === false
+        ? 'the stack is in real mode: the operation becomes ready on its own'
+        : "the stack's mode is not known",
+    )
+  }
+  if (simulationOf(snapshot) === null) reasons.push('this file has not completed a simulation')
+  if (snapshot.takeoffSecurityHeightM === null || snapshot.assignments.length === 0) {
+    reasons.push('the operation has no height or no assignment')
+  }
+  if (reasons.length > 0) return refuse(...reasons)
+  return accept(
+    logged('checks_at_launch', { checks: summaries(checks), mode: 'simulated' }),
+    prepared(snapshot, 'simulated'),
+    move('launching', 'launch in the simulator'),
+  )
+}
+
 /** FR-OPS-09: from ready, the same file prepared for real, once every condition of ready holds. */
 function onLaunch(snapshot, checks) {
+  if (snapshot.state === 'simulated') return onLaunchInSimulator(snapshot, checks)
   if (snapshot.state !== 'ready') return refuse(`the operation is ${snapshot.state}, not ready`)
   const reasons = readyProblems(snapshot, checks)
   if (snapshot.takeoffSecurityHeightM === null || snapshot.assignments.length === 0) {
@@ -482,8 +512,9 @@ export function onProgress(snapshot, flightId) {
   if (flight === undefined || flight.status === null) return accept()
   const { status } = flight
   let { state } = snapshot
-  if (flight.mode === 'simulated') {
-    if (state !== 'simulating' || !TERMINAL_STATUSES.has(status) || flight.ended) return accept()
+  // The simulated pass (FR-OPS-06); a launch in the simulator moves as a real one does (FR-OPS-13).
+  if (state === 'simulating') {
+    if (!TERMINAL_STATUSES.has(status) || flight.ended) return accept()
     if (status === 'ok')
       return accept(end(flightId, 'completed'), move('simulated', 'simulation ok'))
     const reason = flight.endReason ?? 'aircraft_fault'
@@ -499,7 +530,10 @@ export function onProgress(snapshot, flightId) {
     const reason = endReasonOf(snapshot, flight)
     return accept(
       end(flightId, reason),
-      move('ready', `the launch ended ${status} before take-off: ${reason}`),
+      move(
+        flight.mode === 'simulated' ? 'simulated' : 'ready',
+        `the launch ended ${status} before take-off: ${reason}`,
+      ),
     )
   }
   const actions = []
@@ -515,7 +549,17 @@ export function onProgress(snapshot, flightId) {
     const reason = endReasonOf(snapshot, flight)
     actions.push(
       end(flightId, reason),
-      move(CLOSING[reason] ?? 'failed', `on the ground after the flight ended ${status}`, reason),
+      // FR-OPS-13: a launch in the simulator never closes the operation.
+      flight.mode === 'simulated'
+        ? move(
+            'simulated',
+            `on the ground in the simulator after the flight ended ${status}: ${reason}`,
+          )
+        : move(
+            CLOSING[reason] ?? 'failed',
+            `on the ground after the flight ended ${status}`,
+            reason,
+          ),
     )
   }
   return accept(...actions)
@@ -560,6 +604,8 @@ export function createLifecycle({
   const routes = new Map()
   /** Each flight's task: whether it runs, and the timers that drive it. */
   const tasks = new Map()
+  /** The flights a launch prepared, real or in the simulator: they take off and land (FR-OPS-13). */
+  const launched = new Set()
   /** The aircraft's motion: what it stands on, flies or returns along. Starts on the ground at home. */
   let motion = groundMotion(aircraft?.home ?? [0, 0])
   /** The flight the aircraft last started flying: its samples are stored while it is unended. */
@@ -626,6 +672,10 @@ export function createLifecycle({
           row.role === 'pilot' &&
           roles.canEdit(operation.organization_id, row.profile_id),
       ).length
+    const newest = db
+      .rows('flights')
+      .filter((row) => row.operation_id === operationId)
+      .at(-1)
     // Newest first, as soc-operations reads them.
     const flights = db
       .rows('flights')
@@ -662,13 +712,16 @@ export function createLifecycle({
       pilots,
       flights,
       file: files.get(operationId) ?? null,
+      // A stop is its flight's: a launch in the simulator stopped says nothing of the next one.
       stopped: db
         .rows('transition_requests')
         .some(
           (row) =>
             row.operation_id === operationId &&
             row.transition === 'stop' &&
-            row.status === 'accepted',
+            row.status === 'accepted' &&
+            newest !== undefined &&
+            Date.parse(row.decided_at) >= Date.parse(newest.prepared_at),
         ),
       stack: stackOf(),
     }
@@ -806,6 +859,8 @@ export function createLifecycle({
       : 0
     waypointCounts.set(flight.id, count)
     routes.set(flight.id, routeOf(assignment.flight.waypoints))
+    // A simulated pass is prepared from preparing; a launch from ready, or from simulated in the simulator.
+    if (snapshot.state !== 'preparing') launched.add(flight.id)
     db.log(
       snapshot.operationId,
       'flight_prepared',
@@ -874,7 +929,6 @@ export function createLifecycle({
   }
 
   function startTask(flightId) {
-    const flight = flightRow(flightId)
     flyRoute(flightId)
     const task = { running: true, stopped: false, elapsedMs: 0, timer: null }
     tasks.set(flightId, task)
@@ -884,7 +938,7 @@ export function createLifecycle({
       result: null,
     })
     task.timer = schedule(timings.progressTickMs, () => tick(flightId))
-    if (flight.mode === 'real') schedule(timings.takeOffMs, () => takeOff(flightId))
+    if (launched.has(flightId)) schedule(timings.takeOffMs, () => takeOff(flightId))
   }
 
   function tick(flightId) {
@@ -915,7 +969,7 @@ export function createLifecycle({
       endReason: 'completed',
     })
     aircraftReturns(timings.landMs)
-    if (flightRow(flightId).mode === 'real') schedule(timings.landMs, () => land(flightId))
+    if (launched.has(flightId)) schedule(timings.landMs, () => land(flightId))
   }
 
   function takeOff(flightId) {
@@ -968,7 +1022,7 @@ export function createLifecycle({
       endReason: 'operator_return',
     })
     aircraftReturns(timings.returnHomeMs)
-    if (flight.mode === 'real') schedule(timings.returnHomeMs, () => land(flightId))
+    if (launched.has(flight.id)) schedule(timings.returnHomeMs, () => land(flightId))
   }
 
   function undoTask(flightId) {

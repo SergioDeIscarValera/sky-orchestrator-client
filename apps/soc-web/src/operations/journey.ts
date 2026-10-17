@@ -69,7 +69,9 @@ export function stepsOf(state: OperationState): readonly { step: Step; state: St
 /**
  * The move that takes an operation to its next step, if a member asks one in this state: planning
  * a draft, preparing a plan, simulating a prepared one, launching a ready one. None while a step
- * runs on its own, while a simulated operation waits for ready, or once it has closed.
+ * runs on its own, or once it has closed. A simulated operation launches in the simulator while its
+ * stack is in simulator mode (FR-OPS-13); in real mode, or while the mode is not known, it waits
+ * for ready.
  */
 const NEXT: Readonly<Partial<Record<OperationState, Transition>>> = {
   draft: 'plan',
@@ -78,17 +80,30 @@ const NEXT: Readonly<Partial<Record<OperationState, Transition>>> = {
   ready: 'launch',
 }
 
-export function nextMove(state: OperationState): Transition | null {
+export function nextMove(
+  state: OperationState,
+  simulatorMode: boolean | null = null,
+): Transition | null {
+  if (state === 'simulated') return simulatorMode === true ? 'launch' : null
   return NEXT[state] ?? null
+}
+
+/** Whether a launch from this state flies in the simulator: one from simulated does (FR-OPS-13). */
+export function launchesInSimulator(state: OperationState): boolean {
+  return state === 'simulated'
 }
 
 /**
  * The other moves a member may ask in this state, beside the next one: going back, or cancelling
- * the operation. A stop is the flight console's, beside the aircraft it brings home.
+ * the operation. A stop is the flight console's, beside the aircraft it brings home; a launch is
+ * only ever the next move.
  */
-export function otherMoves(state: OperationState): readonly Transition[] {
-  const next = nextMove(state)
-  return OFFERED[state].filter((move) => move !== next && move !== 'stop')
+export function otherMoves(
+  state: OperationState,
+  simulatorMode: boolean | null = null,
+): readonly Transition[] {
+  const next = nextMove(state, simulatorMode)
+  return OFFERED[state].filter((move) => move !== next && move !== 'stop' && move !== 'launch')
 }
 
 /** The moves whose request the checks decide: soc-operations refuses them while a blocking one does not pass. */

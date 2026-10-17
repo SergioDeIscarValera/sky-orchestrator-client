@@ -264,16 +264,25 @@ const endedPayloadOf = (s: Scenario, flight: Row): unknown =>
     (event) => event.kind === 'flight_ended' && event.flight_id === flight.id,
   )?.payload
 
-/** Runs plan, prepare and simulate to the end of the simulation, and then ready. */
-function simulateToReady(s: Scenario): void {
+/** Runs plan, prepare and simulate to the end of the simulation: simulated, the stack still in its simulator. */
+function simulateToSimulated(s: Scenario): void {
   makeFlyable(s)
   ask(s, 'plan')
   advance(TIMINGS.decideMs)
   ask(s, 'prepare')
   advance(TIMINGS.decideMs)
   ask(s, 'simulate')
-  advance(TIMINGS.decideMs + 2 * TIMINGS.commandStepMs * 2 + TIMINGS.taskMs + TIMINGS.readyMs)
+  advance(TIMINGS.decideMs + 2 * TIMINGS.commandStepMs * 2 + TIMINGS.taskMs)
 }
+
+/** Runs plan, prepare and simulate to the end of the simulation, and then ready. */
+function simulateToReady(s: Scenario): void {
+  simulateToSimulated(s)
+  advance(TIMINGS.readyMs)
+}
+
+/** The newest flight the run prepared. */
+const newestFlight = (s: Scenario): Row => flightsOf(s).at(-1) ?? {}
 
 /** Runs plan, prepare and launch to the moment the aircraft is in flight. */
 function launchToFlight(s: Scenario): void {
@@ -624,6 +633,93 @@ describe('the flight of a launch', () => {
       result: 0,
       end_reason: 'cancelled',
     })
+  })
+})
+
+describe('a launch in the simulator (FR-OPS-13)', () => {
+  it('flies as a launch, paused, resumed and stopped, and lands back simulated with its record unstarted', () => {
+    const s = scenario()
+    simulateToSimulated(s)
+    expect(stateOf(s)).toBe('simulated')
+    ask(s, 'launch')
+    advance(TIMINGS.decideMs + 2 * TIMINGS.commandStepMs * 2 + TIMINGS.takeOffMs)
+    expect(stateOf(s)).toBe('in_flight')
+    expect(newestFlight(s)).toMatchObject({ mode: 'simulated' })
+    expect(newestFlight(s).took_off_at).not.toBeNull()
+    const prepare = (s.tables.command_intents ?? []).filter((intent) => intent.verb === 'prepare')
+    expect(prepare.at(-1)?.payload).toMatchObject({ simulate_mission: { is_enable: 1 } })
+    askCommand(s, 'pause')
+    advance(2 * TIMINGS.commandStepMs)
+    expect(stateOf(s)).toBe('paused')
+    askCommand(s, 'recovery')
+    advance(2 * TIMINGS.commandStepMs)
+    expect(stateOf(s)).toBe('in_flight')
+    expect(ask(s, 'stop').status).toBe('pending')
+    advance(TIMINGS.decideMs + 2 * TIMINGS.commandStepMs + TIMINGS.returnHomeMs)
+    expect(stateOf(s)).toBe('simulated')
+    expect(operationOf(s)).toMatchObject({ started_at: null, ended_at: null, end_reason: null })
+    expect(newestFlight(s)).toMatchObject({ mode: 'simulated', end_reason: 'operator_stop' })
+    expect(newestFlight(s).landed_at).not.toBeNull()
+    expect(movesOf(s).at(-1)).toEqual([
+      'returning',
+      'simulated',
+      'on the ground in the simulator after the flight ended canceled: operator_stop',
+    ])
+
+    // The operator turns the phone to real mode: ready, and the real flight is not the rehearsal's stop.
+    advance(TIMINGS.readyMs)
+    expect(stateOf(s)).toBe('ready')
+    ask(s, 'launch')
+    advance(
+      TIMINGS.decideMs +
+        2 * TIMINGS.commandStepMs * 2 +
+        TIMINGS.takeOffMs +
+        TIMINGS.taskMs +
+        TIMINGS.landMs,
+    )
+    expect(stateOf(s)).toBe('completed')
+    expect(operationOf(s)).toMatchObject({ end_reason: 'completed' })
+    expect(operationOf(s).started_at).not.toBeNull()
+    expect(flightsOf(s).map((flight) => [flight.mode, flight.end_reason])).toEqual([
+      ['simulated', 'completed'],
+      ['simulated', 'operator_stop'],
+      ['real', 'completed'],
+    ])
+    for (const [from, to] of movesOf(s)) {
+      expect(OPERATION_MOVES.has(`${from}>${to}`), `${from} to ${to}`).toBe(true)
+      expect(MOVES).toContainEqual([from, to])
+    }
+    expect(s.errors).toEqual([])
+  })
+
+  it('logs the launch in the simulator with its checks and its mode, under the contract', () => {
+    const s = scenario()
+    simulateToSimulated(s)
+    ask(s, 'launch')
+    advance(TIMINGS.decideMs)
+    const logged = (s.tables.operation_events ?? []).filter(
+      (event) => event.kind === 'checks_at_launch',
+    )
+    expect(logged.at(-1)?.payload).toMatchObject({ mode: 'simulated' })
+    expectLogHoldsTheContract(s.tables.operation_events ?? [])
+  })
+
+  it('completes its task in the simulator, lands back simulated, and is ready once the phone is real', () => {
+    const s = scenario()
+    simulateToSimulated(s)
+    ask(s, 'launch')
+    advance(
+      TIMINGS.decideMs +
+        2 * TIMINGS.commandStepMs * 2 +
+        TIMINGS.takeOffMs +
+        TIMINGS.taskMs +
+        TIMINGS.landMs,
+    )
+    expect(stateOf(s)).toBe('simulated')
+    expect(newestFlight(s)).toMatchObject({ mode: 'simulated', end_reason: 'completed' })
+    advance(TIMINGS.readyMs)
+    expect(stateOf(s)).toBe('ready')
+    expect(operationOf(s).started_at).toBeNull()
   })
 })
 

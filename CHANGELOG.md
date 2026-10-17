@@ -10,6 +10,69 @@ requests it merged.
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-10-17
+
+A launch in the simulator: from the console, a simulated operation flies again
+in Sky Orchestrator's simulator with the commands of a real flight, and on the
+ground it is simulated again. The pilot can rehearse the whole flight before the
+propellers go on (`FR-OPS-13`, ADR-0027). M5's exit criteria wait for the field
+sessions, and v0.6.0 is kept for its close.
+
+### Added
+
+- The launch in the simulator (`FR-OPS-13`, ADR-0027,
+  `contracts/operations/lifecycle.json` 1.1.0):
+  - migration 0011:
+    - three moves: `simulated` to `launching`, and `launching` and `returning` back to `simulated`;
+    - `started_at` is set by a launch from `ready` only;
+    - the wayline, geofence and fleet of a launch in the simulator cannot change until it lands (#152);
+  - soc-operations launches a simulated operation in the simulator while its stack is in simulator mode and every blocking check passes, naming each reason when it cannot. On the ground the operation is `simulated` again, however its flight ended (#152);
+  - the console offers Launch from `simulated` while the fleet's stack is in simulator mode. It confirms it as "Launch in the simulator", in the primary fill, and flies it in the flight console. The demo plays it as well (#153).
+- The runbook's step 4.3: a rehearsal from the console, with one test per launch (#154).
+
+### Changed
+
+- A stop belongs to the flight it stopped: a stopped rehearsal no longer marks
+  the next flight `operator_stop` (#152).
+- The console reads each stack's mode from its status (#153).
+- The demo's phone stays in simulator mode for 15 s after a simulation, not 2 s,
+  so there is time to launch it in the simulator (#153).
+- The runbook:
+  - SO's envelope opened to its maxima as the farm's outer net (500 m, 120 m),
+    and the phone's `so-config.json` copied from the eight keys it shares with
+    `so-wayline.json` (#154);
+  - the phone reached without its cable, the field session's steps, and the
+    site model baked on the mini-PC (#148, #149, #150, #151).
+
+### Fixed
+
+- A drone card kept the problems stored at Save after the stack's envelope
+  changed. Once the stored flight is out of date, the card shows the problems of
+  the flight its definition makes now (#153).
+
+### Deploy
+
+- One migration, 0011, so the ledger holds 11. It adds moves and replaces two
+  functions, and changes no table. A rollback to v0.5.2 keeps 0011, which v0.5.2
+  never exercises.
+- The release deploys itself on the mini-PC once it merges (ADR-0026), and
+  `deploy.py` refuses while a flight is unfinished.
+
+### Known limitations
+
+- M5's exit criteria are open: they wait for session one in DJI's simulator and
+  session two with the real aircraft.
+- DJI's simulator always starts at Sky Orchestrator's geofence centre, so each
+  rehearsal first flies from Origen's point to the takeoff. Asked of Sky
+  Orchestrator.
+- Virtual Origen does not take the shared migration lock yet: until it does,
+  never migrate while a Virtual Origen release runs (the runbook's step 2.7).
+- The repository is public for now (RISK-17): approve no workflow run from a
+  fork.
+- Broadcast latency on the box (`DEP-23`) is measured by the runbook's step
+  3.3, not yet run there.
+- Nothing backs up the mini-PC's database on its own yet (`RISK-08`).
+
 ## [0.5.2] — 2026-10-17
 
 The mini-PC deploys SOC on every release, as it deploys Virtual Origen and,

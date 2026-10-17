@@ -10,6 +10,9 @@ database, the wire or the clock, so the whole lifecycle is tested without them.
   refusal sends the operation back with Sky Orchestrator's meaning (FR-OPS-06, FR-OPS-09).
 - A flight's progress moves the operation: simulated when its simulation ends ok, in
   flight, paused, returning, and closed once the aircraft has landed (FR-OPS-10).
+- A launch from simulated, the stack in simulator mode, flies the same file in the
+  simulator as a real launch flies, commanded the same way; once its aircraft is on the
+  ground the operation is simulated again, never closed (FR-OPS-13, ADR-0027).
 - The checks, judged continuously, move a simulated operation to ready and back
   (FR-OPS-07).
 - An execute whose outcome Sky Orchestrator could not learn waits for the flight's
@@ -109,7 +112,7 @@ class Snapshot:
     file: File | None
     #: The operation's flights, the newest first.
     flights: Sequence[Flight]
-    #: Whether a pilot's stop of this operation was accepted (FR-CMD-04).
+    #: Whether a pilot's stop of its newest flight was accepted (FR-CMD-04).
     stopped: bool
 
     @property
@@ -293,6 +296,8 @@ def ready_problems(snapshot: Snapshot, checks: Sequence[Check]) -> list[str]:
 
 def _launch(snapshot: Snapshot, checks: Sequence[Check]) -> Decision:
     """FR-OPS-09: from ready, confirmed by a pilot, the same file prepared for real."""
+    if snapshot.state == "simulated":
+        return _launch_in_simulator(snapshot, checks)
     if snapshot.state != "ready":
         return refused(f"the operation is {snapshot.state}, not ready")
     reasons = ready_problems(snapshot, checks)
@@ -307,6 +312,40 @@ def _launch(snapshot: Snapshot, checks: Sequence[Check]) -> Decision:
         PrepareFlight("real", prepare),
         Move("launching", "launch"),
     )
+
+
+def _launch_in_simulator(snapshot: Snapshot, checks: Sequence[Check]) -> Decision:
+    """FR-OPS-13: from simulated, the stack in simulator mode, every blocking check passing:
+    the file the simulation flew, prepared in the simulator again and flown as a launch."""
+    reasons = _blocking(checks)
+    mode = None if snapshot.status is None else snapshot.status.get("simulator_mode")
+    if mode is not True:
+        reasons.append(
+            "the stack is in real mode: the operation becomes ready on its own"
+            if mode is False
+            else "the stack's mode is not known"
+        )
+    if snapshot.simulation() is None:
+        reasons.append("this file has not completed a simulation")
+    prepare = _prepare_payload(snapshot, simulated=True)
+    if isinstance(prepare, str):
+        reasons.append(prepare)
+    if reasons:
+        return refused(*reasons)
+    assert not isinstance(prepare, str)
+    return accepted(
+        Log("checks_at_launch", {"checks": _checks(checks), "mode": "simulated"}),
+        PrepareFlight("simulated", prepare),
+        Move("launching", "launch in the simulator"),
+    )
+
+
+def _back(snapshot: Snapshot, flight: Flight) -> str:
+    """Where a flight that never flew sends its operation: a simulated pass back to preparing,
+    a launch in the simulator back to simulated, a real launch back to ready."""
+    if snapshot.state == "simulating":
+        return "preparing"
+    return "simulated" if flight.mode == "simulated" else "ready"
 
 
 def _stop(snapshot: Snapshot) -> Decision:
@@ -390,7 +429,7 @@ def on_outcome(snapshot: Snapshot, outcome: Outcome) -> Decision:
         # settles it, or its absence does (on_tick, DEP-27). The database logged the outcome.
         return accepted()
     told = _told(outcome, snapshot)
-    back = "preparing" if snapshot.state == "simulating" else "ready"
+    back = _back(snapshot, flight)
     actions: list[Action] = [EndFlight(flight.id, "cancelled")]
     if outcome.verb == "execute":
         # A task left prepared would hold the stack: undo it (FR-CMD-05).
@@ -411,7 +450,7 @@ def on_tick(snapshot: Snapshot, now: datetime) -> Decision:
         if (now - since).total_seconds() < OUTCOME_SETTLES_WITHIN_S:
             continue
         why = "the execute's outcome stayed unknown and the flight reported no progress"
-        back = "preparing" if snapshot.state == "simulating" else "ready"
+        back = _back(snapshot, flight)
         return Decision(
             True,
             (why,),
@@ -455,8 +494,9 @@ def on_progress(snapshot: Snapshot, flight_id: uuid.UUID) -> Decision:
     if flight is None or flight.state is None:
         return accepted()
     status, state = flight.state.status, snapshot.state
-    if flight.mode == "simulated":
-        if state != "simulating" or status not in TERMINAL or flight.ended:
+    if state == "simulating":
+        # The simulated pass (FR-OPS-06); a launch in the simulator moves as a real one does.
+        if status not in TERMINAL or flight.ended:
             return accepted()
         if status == "ok":
             return accepted(EndFlight(flight.id, "completed"), Move("simulated", "simulation ok"))
@@ -477,7 +517,7 @@ def on_progress(snapshot: Snapshot, flight_id: uuid.UUID) -> Decision:
         reason = _end_reason(snapshot, flight)
         return accepted(
             EndFlight(flight.id, reason),
-            Move("ready", f"the launch ended {status} before take-off: {reason}"),
+            Move(_back(snapshot, flight), f"the launch ended {status} before take-off: {reason}"),
         )
     actions: list[Action] = []
     if state == "launching":
@@ -491,14 +531,23 @@ def on_progress(snapshot: Snapshot, flight_id: uuid.UUID) -> Decision:
     # Closed once the aircraft stands on the ground: landed, or it never took off.
     if _on_ground(flight):
         reason = _end_reason(snapshot, flight)
-        actions += [
-            EndFlight(flight.id, reason),
-            Move(
-                CLOSING.get(reason, "failed"),
-                f"on the ground after the flight ended {status}",
-                reason,
-            ),
-        ]
+        actions.append(EndFlight(flight.id, reason))
+        if flight.mode == "simulated":
+            # FR-OPS-13: a launch in the simulator never closes the operation.
+            actions.append(
+                Move(
+                    "simulated",
+                    f"on the ground in the simulator after the flight ended {status}: {reason}",
+                )
+            )
+        else:
+            actions.append(
+                Move(
+                    CLOSING.get(reason, "failed"),
+                    f"on the ground after the flight ended {status}",
+                    reason,
+                )
+            )
     return accepted(*actions)
 
 

@@ -33,7 +33,7 @@ const TABLE: Readonly<Record<OperationState, readonly Transition[]>> = {
   planned: ['prepare', 'cancel'],
   preparing: ['simulate', 'unprepare', 'cancel'],
   simulating: [],
-  simulated: ['cancel'],
+  simulated: ['launch', 'cancel'],
   ready: ['launch', 'cancel'],
   launching: [],
   in_flight: ['stop'],

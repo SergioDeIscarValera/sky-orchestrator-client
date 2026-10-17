@@ -420,6 +420,8 @@ export interface StackView {
   /** Sky Orchestrator's envelope, or null while it has not been read: an unknown stays unknown. */
   readonly envelope: Readonly<Record<string, unknown>> | null
   readonly envelopeReadAt: string | null
+  /** The mode its status last said: true in the simulator, false for real, null while not said. */
+  readonly simulatorMode: boolean | null
 }
 
 /** Any field a write can name: a fleet's, a geofence's, a wayline's or an operation's. */

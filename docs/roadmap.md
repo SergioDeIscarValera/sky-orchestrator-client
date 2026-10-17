@@ -17,14 +17,14 @@ criteria named in the changelog's Known limitations, and closes once they are.
 The MVP is M5: **a first real flight commanded from SOC**
 ([ADR-0013](architecture/decisions/0013-narrow-vertical-slice-for-the-mvp.md)).
 
-| Milestone | Release | Outcome | State on 2026-10-16 |
+| Milestone | Release | Outcome | State on 2026-10-17 |
 | --- | --- | --- | --- |
 | M0 Foundations | v0.1.0 | Repository, conventions, pipelines, requirements, decisions | Closed, released |
 | M1 Platform and viability | v0.2.0 | Every unit runs, measured where the design could break | Released with 4 of 7 criteria demonstrated; 3 wait on the mini-PC's box steps and read access to SO's packages |
 | M2 Live fleet | v0.3.0, v0.3.1 | A registered aircraft's live telemetry in 3D, on the farm's terrain | Closed, released: 5 of 5 criteria, in the console end to end; v0.3.1 met the rest of its requirements the mini-PC does not wait on |
 | M3 Mission design | v0.4.0 | Geofences and waylines drawn, baked, validated, turned into files SO accepts | Closed, released: 4 of 4 criteria; Sky Orchestrator's own ingest accepts every reference file and refuses as SOC predicts |
 | M4 Operations | v0.5.0 | A whole operation flown from the web against SO's fake bridge | Closed, released: 5 of 5 criteria, against Sky Orchestrator v0.4.3 and its fake bridge, in the console end to end |
-| M5 First real flight | v0.6.0 | **MVP**: the same, with the real aircraft | Next |
+| M5 First real flight | v0.6.0 | **MVP**: the same, with the real aircraft | In progress: v0.5.1 to v0.5.3 put the three systems on the mini-PC, deploy each release there and rehearse in DJI's simulator from the console; 0 of 4 criteria, which wait for the field sessions |
 
 ---
 
@@ -170,7 +170,8 @@ requirements.
 | --- | --- |
 | The three systems on the mini-PC: Virtual Origen, Sky Orchestrator v0.4.4 and SOC, deployed together by [one runbook](mini-pc-deployment.md) agreed with both projects; the shared migration lock, SO v0.4.4 re-vendored, the deploy command (`FR-DEP-06`) and the Broadcast measurement on the box (`DEP-23`) first | `feature/repo/mini-pc-runbook` (#133), `feature/infra/shared-migration-lock` (#132), `feature/contracts/so-v0.4.4` (#134), `feature/infra/deploy-command` (#135), `feature/cloud/broadcast-probe` (#136), released in v0.5.1 |
 | Each release deploys itself on the mini-PC through a runner of SOC's own, as Virtual Origen's and Sky Orchestrator's do (ADR-0026) | `feature/infra/minipc-cd` (#143), `feature/repo/runbook-so-cd` (#144), released in v0.5.2 |
-| The field session runbook, with the phone's envelope compared to so-wayline's | `feature/repo/first-flight-runbook` |
+| The field session runbook, with the phone's envelope copied from so-wayline's | `feature/repo/runbook-deploy-only` (#148), `feature/repo/site-model-on-mini-pc` (#149), `feature/repo/phone-session-steps` (#150), `feature/repo/phone-without-cable` (#151), `feature/repo/rehearsal-runbook` (#154), released in v0.5.3 |
+| A launch in the simulator: the flight rehearsed from SOC's console before the real one, and back to simulated on the ground (`FR-OPS-13`, ADR-0027) | `feature/operations/launch-in-simulator` (#152), `feature/web/launch-in-simulator` (#153), released in v0.5.3 |
 | Session one: the phone in DJI's simulator through SO, commanded from SOC | `feature/repo/simulator-session` |
 | Session two: the real aircraft, the operator on the controller | `feature/repo/first-real-flight` |
 | Fixes found in the sessions, each with its regression test | `bugfix/<scope>/<slug>` |
