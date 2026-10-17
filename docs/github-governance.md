@@ -83,6 +83,7 @@ commit forever.
 | Version tagged on release | `release.yml`, from the branch name |
 | GitHub release with notes | `release.yml`, notes grouped by label |
 | Back-merge pull request opened | `release.yml`, from a throwaway `backmerge/vX.Y.Z`; needs workflows allowed to open pull requests, set by `tools/setup_github.sh` |
+| Release deployed on the mini-PC | `release.yml`, on the mini-PC's runner, behind `SOC_MINIPC_DEPLOY_ENABLED` (ADR-0026) |
 | Changelog label from the title | `pr-policy.yml`, advisory |
 
 ### The back-merge's checks

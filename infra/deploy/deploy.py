@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Deploy one version of SOC on the mini-PC, refusing while any flight is unfinished (FR-DEP-06).
 
-Usage, from the repository checkout on the mini-PC:
-    python3 infra/deploy/deploy.py v0.5.0
-    python3 infra/deploy/deploy.py v0.5.0 --dry-run
-    python3 infra/deploy/deploy.py v0.5.0 --ignore-flight <uuid>
+Each release runs it on the mini-PC from the stack's folder, where its job puts it (ADR-0026):
+    python3 /srv/sky-orchestrator-client/stack/deploy.py v0.5.2 --compose-dir <that folder>
+
+By hand, as the stack's owner:
+    python3 deploy.py v0.5.2 --compose-dir <stack> --dry-run
+    python3 deploy.py v0.5.2 --compose-dir <stack> --ignore-flight <uuid>
 
 The steps run in this order. The first one that fails stops the deploy and says why on
 stderr; exit status 0 means every step succeeded:
@@ -58,6 +60,8 @@ left join soc.operations o on o.id = f.operation_id
 where f.ended_at is null
 order by f.prepared_at
 """
+# Before SOC's first migration there is no soc.flights, so no flight can be unfinished.
+FLIGHTS_TABLE = "select to_regclass('soc.flights') is not null"
 
 Runner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
 
@@ -115,21 +119,23 @@ def ignored_flights(texts: Sequence[str]) -> frozenset[str]:
     return frozenset(identifiers)
 
 
+def psql(container: str, query: str) -> tuple[str, ...]:
+    return ("docker", "exec", container, "psql", "-U", "postgres", "-At", "-F", "|", "-c", query)
+
+
 def unfinished_flights(runner: Runner, container: str, compose_dir: Path) -> list[Flight]:
-    command = (
-        "docker",
-        "exec",
-        container,
-        "psql",
-        "-U",
-        "postgres",
-        "-At",
-        "-F",
-        "|",
-        "-c",
-        UNFINISHED_FLIGHTS,
-    )
-    result = runner(command, compose_dir)
+    """The unfinished flights. None while the database has no soc.flights yet, the first
+    install: SOC never ran there, so nothing of SOC's is flying. Any read that fails refuses."""
+    table = runner(psql(container, FLIGHTS_TABLE), compose_dir)
+    if table.returncode != 0 or table.stdout.strip() not in ("t", "f"):
+        raise DeployError(
+            "refused: nothing was changed. The flights could not be read from "
+            f"{container} (exit {table.returncode}), and nothing proves that no aircraft "
+            "is flying."
+        )
+    if table.stdout.strip() == "f":
+        return []
+    result = runner(psql(container, UNFINISHED_FLIGHTS), compose_dir)
     if result.returncode != 0:
         raise DeployError(
             "refused: nothing was changed. The flights could not be read from "

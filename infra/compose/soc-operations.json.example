@@ -1,0 +1,14 @@
+{
+  "served_organizations": null,
+  "telemetry_stale_after_ms": 3000,
+  "telemetry_lost_after_ms": 10000,
+  "command_intent_ttl_s": 10,
+  "geofence_max_vertices": 32,
+  "min_satellites": 12,
+  "min_gps_quality": 4,
+  "min_battery_start_pct": 50,
+  "takeoff_tolerance_m": 10,
+  "min_arming_left_s": 120,
+  "max_arc_spacing_m": 10,
+  "stack_envelope_poll_s": 30
+}

@@ -8,7 +8,7 @@ Orchestrator ([ADR-0015](../docs/architecture/decisions/0015-lan-first-deploymen
 | [`compose/`](compose/compose.yaml) | The `sky-orchestrator-client` compose project: `soc-migrate`, `soc-cloud`, `soc-operations` and `soc-web`, each read-only, unprivileged, with memory and CPU limits; the services joined to `supabase-local_default` and `sky-orchestrator_default`; only the console publishes a port, 8088 | M1, here |
 | `migrate/` | SOC's migration runner and its ledger | M1 |
 | [`check/`](check/README.md) | The images built and run as the mini-PC runs them; the stack check, everything up from nothing, healthy within 60 s, tested, removed | M1, the images here |
-| [`deploy/`](deploy/deploy.py) | The deploy command, which refuses while a flight is unfinished (`FR-DEP-06`); [upgrading](#upgrading-on-the-mini-pc) | M1, here |
+| [`deploy/`](deploy/deploy.py) | The deploy command, which refuses while a flight is unfinished (`FR-DEP-06`), run by each release on the mini-PC (ADR-0026); `set_env.py`, which sets an env file's secret from stdin; [upgrading](#upgrading-on-the-mini-pc) | M1, here |
 | [`site/`](site/README.md) | The site model baking tool, `soc-site` | M2, here |
 | [`e2e/`](e2e/README.md) | The console end to end: Virtual Origen's platform behind Kong, `soc-cloud`, a dock on the wire and the console's image, worked in Chrome; M2's exit criteria measured | M2, here |
 
@@ -82,23 +82,26 @@ soc-web-check` names every problem of a file it refused.
 
 ## Upgrading on the mini-PC
 
-Each upgrade goes through the deploy command, run from the checkout at the new tag:
+Each release deploys itself: merging its pull request into main runs the `deploy` job of `release.yml` on the mini-PC's runner once the images are published (ADR-0026). The job puts the tag's `compose.yaml` and `deploy.py` in the stack's folder, `/srv/sky-orchestrator-client/stack`, beside the env and configuration files written there once, then runs:
 
 ```bash
-cd /srv/sky-orchestrator-client
-git fetch --tags && git checkout v0.5.0
-python3 infra/deploy/deploy.py v0.5.0
+python3 /srv/sky-orchestrator-client/stack/deploy.py v0.5.2 --compose-dir /srv/sky-orchestrator-client/stack
 ```
 
-It runs the steps in this order and stops at the first failure, with the reason on stderr and exit status 1: it refuses while a flight is unfinished, writes `SOC_VERSION` into `infra/compose/.env`, pulls the version's images, runs `soc-migrate`, and starts the stack with `docker compose up -d --wait`. On success it says what it deployed. The first install is Phase 2 of the [runbook](../docs/mini-pc-deployment.md), which stays as written.
+A dispatch of `release.yml` with a tag runs only that job, for that tag: a redeploy, a retry after a refusal, or a rollback. Setting up the runner and the stack is Phase 2 of the [runbook](../docs/mini-pc-deployment.md).
+
+The command runs the steps in this order and stops at the first failure, with the reason on stderr and exit status 1: it refuses while a flight is unfinished, writes `SOC_VERSION` into the stack's `.env`, pulls the version's images, runs `soc-migrate`, and starts the stack with `docker compose up -d --wait`. On success it says what it deployed. Before SOC's first migration there is no `soc.flights`, so no flight can be unfinished, and the first install goes through it too.
 
 It refuses, changing nothing, while any flight is unfinished: any row of `soc.flights` whose `ended_at` is null, read through `docker exec supabase-db psql`. It lists each one with its id, mode, operation and state. When that read fails it refuses too, since nothing then proves that no aircraft is flying.
 
 A flight that a fault left unended can be overridden, but only after the operator has checked on the ground that its aircraft is not flying:
 
 ```bash
-python3 infra/deploy/deploy.py v0.5.0 --ignore-flight <flight-uuid>
+sudo -u soc-runner python3 /srv/sky-orchestrator-client/stack/deploy.py v0.5.2 \
+  --compose-dir /srv/sky-orchestrator-client/stack --ignore-flight <flight-uuid>
 ```
+
+The release job never overrides: an override is run by hand, as `soc-runner`, on the mini-PC.
 
 Repeat `--ignore-flight` for each unfinished flight. The override names every unfinished flight or none: naming some of them refuses, and so does an id that is not an unfinished flight. `--dry-run` runs the same checks and prints the commands it would run, writing and starting nothing.
 

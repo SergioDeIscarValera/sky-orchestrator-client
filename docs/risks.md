@@ -274,3 +274,24 @@ depends on.
 (`DEP-20`); SOC's test harness pinned to the box's versions, updated together.
 
 **Trigger**: a Virtual Origen release changing a Supabase image.
+
+---
+
+## RISK-17 · S2 · A stranger's workflow runs on the farm's machine
+
+**What**: the deploy runs on a self-hosted runner on the mini-PC, with access to
+Docker (ADR-0026). While the repository is public, anyone can open a pull request
+whose workflow names that runner, and run code beside VO2's and SO's stacks.
+
+**Likelihood**: Low: it needs someone who finds the repository and an approval
+that is never given. It lasts while the repository is public, since 2026-10-17,
+when the private CI minutes ran out (RISK-13).
+
+**Mitigation**: every workflow run from a fork waits for approval
+(`all_external_contributors`), and none is approved; the runner's user has no
+sudo; the deploy job reads packages and contents only and signs out of the
+registry; the secrets live outside the runner's workspace. Making the repository
+private again ends the risk.
+
+**Trigger**: a pull request from a fork, or a run waiting for approval in Actions;
+the repository still public after M5.
