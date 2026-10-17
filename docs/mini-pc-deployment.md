@@ -111,14 +111,14 @@ Check: the attributes are `Create role, Create DB, Replication, Bypass RLS`. `po
 
 0.6. **The tunnel publishes only VO2's API.** In Cloudflare Zero Trust, open Tunnels, then Public Hostnames. Check there is exactly one entry: `api.virtualorigen.dpdns.org` → `http://kong:8000`. Once Phase 2 exposes schema `soc`, SOC's tables are reachable through it, guarded by row-level security, as VO2's are.
 
-## Phase 1: Sky Orchestrator v0.5.0
+## Phase 1: Sky Orchestrator
 
 SO deploys itself on every release too, the same way (SO's ADR-0043, its `infra/deploy/README.md`). The mini-PC gets:
 - a user, `so-runner`, and the stack's folder `/srv/sky-orchestrator/stack`;
 - the stack's `.env` and configuration files, written by hand;
 - an Actions runner for SO's repository.
 
-The first `up` is a dispatch of SO's release workflow with `tag=v0.5.0`: never start SO by hand. SO's deploy refuses, changing nothing, while so-fleet names an unfinished task or cannot say.
+The first `up` is a dispatch of SO's release workflow with its current tag (v0.6.0 since 2026-10-17; the box was installed with v0.5.0): never start SO by hand. SO's deploy refuses, changing nothing, while so-fleet names an unfinished task or cannot say.
 
 1.1. **The checkout, the runner's user and the folders.**
 
@@ -126,7 +126,7 @@ The first `up` is a dispatch of SO's release workflow with `tag=v0.5.0`: never s
 sudo install -d -m 0755 /srv/sky-orchestrator                                             # sudo
 sudo install -d -o "$USER" -g "$USER" -m 0755 /srv/sky-orchestrator/repo                  # sudo
 git clone https://github.com/SergioDeIscarValera/sky-orchestrator.git /srv/sky-orchestrator/repo   # the fine-grained token of 0.3
-git -C /srv/sky-orchestrator/repo checkout v0.5.0
+git -C /srv/sky-orchestrator/repo checkout v0.6.0
 sudo useradd --create-home --shell /bin/bash so-runner                                    # sudo
 sudo usermod -aG docker so-runner                                                         # sudo
 sudo -u so-runner docker version --format '{{.Server.Version}}'                          # sudo
@@ -262,22 +262,23 @@ In this order:
      Then unplug it from the mini-PC: the phone's only USB port belongs to the controller during the session.
 
    A phone restart turns adb's TCP mode off: repeat this step, then cable the phone to the controller and restart the application. Turning Wi-Fi off and on does not. Wireless debugging's "Pair with code" also avoids the cable, but it is untested on this phone and its port changes each time: not for these sessions.
-2. **The application.** Install the debug APK that SO built on the laptop from the v0.5.0 tag, on a clean tree. It must be a debug build, because session.sh and the clearance write through `run-as`. Its name carries the commit that clearance.py lists, `git -C "$SO_REPO" rev-parse --short=12 'v0.5.0^{commit}'`.
-   - On the laptop: `/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-45119e44a18b-debug.apk`, with its `.sha256` beside it.
-   - Its SHA-256 is `1588566c56483ad02fce18d245cae8218cb05762cb4cbe8c49363da8362f7426`, and its commit `45119e44a18b` is v0.5.0's.
+2. **The application.** Install the debug APK that SO built on the laptop from the v0.6.0 tag, on a clean tree. It must be a debug build, because session.sh and the clearance write through `run-as`. Its name carries the commit that clearance.py lists, `git -C "$SO_REPO" rev-parse --short=12 'v0.6.0^{commit}'`.
+   - On the laptop: `/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.6.0-9a90cef44049-debug.apk`, with its `.sha256` beside it.
+   - Its SHA-256 is `9cf466a1b9da6f758153f8062e180cb09d19d4691bfa7f675542449a64bd4f16`, and its commit `9a90cef44049` is v0.6.0's. It is signed with v0.5.0's certificate, so `install -r` upgrades a v0.5.0 phone and keeps its data.
    The laptop runs no SSH server, so it serves that one file to the LAN for the copy, then stops. On the laptop:
    ```bash
-   mkdir -p ~/apk-serve && ln -sf /home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-45119e44a18b-debug.apk ~/apk-serve/
+   mkdir -p ~/apk-serve && ln -sf /home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.6.0-9a90cef44049-debug.apk ~/apk-serve/
    python3 -m http.server 8766 --bind <laptop IP> --directory ~/apk-serve      # Ctrl-C once copied
    ```
    On the mini-PC. The SHA-256 is written here, so a wrong file is refused:
    ```bash
-   curl -sSfO http://<laptop IP>:8766/so-msdk-v4-v0.5.0-45119e44a18b-debug.apk
-   echo "1588566c56483ad02fce18d245cae8218cb05762cb4cbe8c49363da8362f7426  so-msdk-v4-v0.5.0-45119e44a18b-debug.apk" | sha256sum -c
-   adb -s <phone IP>:5555 install -r so-msdk-v4-v0.5.0-45119e44a18b-debug.apk
+   curl -sSfO http://<laptop IP>:8766/so-msdk-v4-v0.6.0-9a90cef44049-debug.apk
+   echo "9cf466a1b9da6f758153f8062e180cb09d19d4691bfa7f675542449a64bd4f16  so-msdk-v4-v0.6.0-9a90cef44049-debug.apk" | sha256sum -c
+   adb -s <phone IP>:5555 install -r so-msdk-v4-v0.6.0-9a90cef44049-debug.apk
    ```
    - `install -r` keeps the application's data. **Never `adb uninstall`**: it wipes the cached DJI activation, the configuration, the secret and the flight records.
    - `INSTALL_FAILED_VERIFICATION_FAILURE` is ColorOS's "Verify apps over USB": turn it off in the phone's Developer options.
+   - **Upgrading a phone already set up** is this step, then step 6. The configuration and the bridge secret stay. Move the checkout of 1.1 to the APK's tag first, since the desk tools follow the build: `git -C "$SO_REPO" fetch --tags && git -C "$SO_REPO" checkout v0.6.0`. The new build needs its own clearance (4.4).
 3. **The site configuration**, from `$SO_REPO`. The eight keys the phone shares with so-wayline are copied from `so-wayline.json`, so the two envelopes are equal by construction:
    ```bash
    python3 tools/device_config.py template > so-config.json
@@ -312,7 +313,7 @@ In this order:
    dc up -d phone-link so-bridge
    dc logs phone-link | tail -3        # "connected to"
    ```
-6. **Start the application only after the controller is cabled**, then power on the controller and the aircraft. A running application does not see the product arrive: close it and open it again. Its screen shows build `45119e44a18b` and the bridge server listening.
+6. **Start the application only after the controller is cabled**, then power on the controller and the aircraft. A running application does not see the product arrive: close it and open it again. Its screen shows build `9a90cef44049` and the bridge server listening.
 
 1.4. **The runner, then the first deploy.** Download and register SO's runner as `so-runner`, exactly as 2.6 does for SOC, with SO's repository URL and a registration token for `sky-orchestrator`; its service is `actions.runner.SergioDeIscarValera-sky-orchestrator.minipc.service`. VO2's and SOC's runners are separate runners.
 
@@ -324,10 +325,10 @@ From the laptop:
 
 ```bash
 gh variable set SO_MINIPC_DEPLOY_ENABLED --body true --repo SergioDeIscarValera/sky-orchestrator
-gh workflow run release.yml --repo SergioDeIscarValera/sky-orchestrator --ref main -f tag=v0.5.0
+gh workflow run release.yml --repo SergioDeIscarValera/sky-orchestrator --ref main -f tag=v0.6.0
 ```
 
-The run's summary ends with `deployed v0.5.0`. Then, on the mini-PC:
+The run's summary ends with `deployed v0.6.0`. Then, on the mini-PC:
 
 ```bash
 dc ps
@@ -625,7 +626,7 @@ docker restart supabase-kong          # otherwise /auth/v1 answers 502 and every
 
 ## Phase 3: checks on the mini-PC
 
-Before the first session, with the phone set up (1.3). SO's session commands run from SO's checkout at v0.5.0, with `S` defined once:
+Before the first session, with the phone set up (1.3). SO's session commands run from SO's checkout at the APK's tag (v0.6.0), with `S` defined once:
 
 ```bash
 cd /srv/sky-orchestrator/repo
@@ -678,16 +679,23 @@ This phase is SO's `docs/first-real-flight.md` Part A, flown by SOC. A simulated
 
 4.2. **Plan, Prepare, Simulate.**
 1. Plan, then Prepare. The 16 checks pass.
-2. Start the simulator and arm, just before simulating: the arming has a time limit. The simulator starts at the geofence centre.
+2. Start the simulator at the operation's takeoff, then arm, just before simulating: the arming has a time limit and sets the home point where the aircraft stands. The takeoff is read from SOC's database, `[longitude, latitude]`, and `sim_start` takes the latitude first (SO v0.6.0):
    ```bash
-   $S sim_start && $S arm
+   takeoffs=$(docker exec supabase-db psql -U postgres -At -F ' ' -c \
+     "select w.takeoff ->> 1, w.takeoff ->> 0, o.name from soc.operations o
+        join soc.assignments a on a.operation_id = o.id join soc.waylines w on w.id = a.wayline_id
+       where o.organization_id = '70458d25-9fb9-4ae8-8b43-7adf7ba95ee2' and o.state in ('preparing', 'simulated')")
+   if [ "$(grep -c . <<<"$takeoffs")" -eq 1 ]; then read -r lat lon name <<<"$takeoffs"; echo "$name: $lat $lon"
+   else lat=; echo "refused: not exactly one operation to fly:"; printf '%s\n' "$takeoffs"; fi
+   [ -n "$lat" ] && $S sim_start "$lat" "$lon" && $S arm
    ```
+   `sim_start` says how far north and east of the geofence centre it starts, and refuses a start outside SO's circle or with the simulator already running. Plain `$S sim_start` starts at the centre.
 3. Simulate. The simulated flight ends ok, and the operation waits in `simulated`. Leave the simulator on for 4.3.
 
 **Do not change the definition afterwards.** The real flight must fly the same bytes (the KMZ's MD5), and any change makes a new file.
 
 4.3. **Rehearse from the console** (SOC v0.6.0, FR-OPS-13), propellers off. While the stack is in simulator mode, a simulated operation offers Launch: confirmed as "Launch in the simulator", it flies the same file in DJI's simulator with the flight console of a real flight. On the ground the operation is `simulated` again, so it can be launched as often as needed. A rehearsal never starts the operation's record, and every completed one counts for SO's clearance.
-1. Before each Launch: `$S arm` (it lasts 300 s) and the battery at 50 % or more. Each rehearsal starts at the geofence centre, so it first flies to the takeoff point.
+1. Before each Launch: `$S arm` (it lasts 300 s) and the battery at 50 % or more. The simulator stays where 4.2 started it, at the takeoff, and every return home lands there. A battery swap needs `$S sim_stop` first, then 4.2's `sim_start` again.
 2. One rehearsal per test:
 
    | Test | Do | Expected |
@@ -706,11 +714,16 @@ This phase is SO's `docs/first-real-flight.md` Part A, flown by SOC. A simulated
 pkg=io.github.sergiodeiscarvalera.skyorchestrator.msdkv4
 mkdir -p records && for f in $(adb -s $ADB_TARGET shell "run-as $pkg ls files/flight-records/" | tr -d '\r'); do
   adb -s $ADB_TARGET shell "run-as $pkg cat files/flight-records/$f" > records/$f; done
-python3 tools/clearance.py records/*.jsonl > so-clearance.json
+existing=()
+if adb -s $ADB_TARGET shell "run-as $pkg test -f files/so-clearance.json"; then
+  adb -s $ADB_TARGET shell "run-as $pkg cat files/so-clearance.json" > so-clearance.old.json
+  existing=(--existing so-clearance.old.json)
+fi
+python3 tools/clearance.py records/*.jsonl "${existing[@]}" > so-clearance.json
 adb -s $ADB_TARGET shell "run-as $pkg sh -c 'cat > files/so-clearance.json.tmp && mv files/so-clearance.json.tmp files/so-clearance.json'" < so-clearance.json
 ```
 
-Check: `clearance.py` exits 0 and lists `git -C /srv/sky-orchestrator/repo rev-parse --short=12 'v0.5.0^{commit}'`, the commit in the APK's name.
+Check: `clearance.py` exits 0 and lists `git -C /srv/sky-orchestrator/repo rev-parse --short=12 'v0.6.0^{commit}'`, the commit in the APK's name, beside any build the phone's earlier clearance held (`--existing` keeps them).
 
 Then restart the application. The simulator is already stopped, which is required: a restart with it running makes the aircraft demand a restart (diagnostic 8012). Check: `$S status` says `build_cleared=true`.
 
@@ -783,7 +796,7 @@ Check that `/v1/status` says `simulator_mode` true. The operation returns to `si
 
 | Owner | Item | Why |
 | --- | --- | --- |
-| SO | v0.5.0 tagged: v0.4.4 plus the deploy on every release (ADR-0043), and its APK built at that tag | The mini-PC runs it; the clearance is per commit |
+| SO | v0.6.0 tagged: v0.5.0's deploy on every release (ADR-0043) plus `sim_start <lat> <lon>`, and its APK built at that tag | The mini-PC runs it since 2026-10-17; the clearance is per commit, so v0.6.0's APK needs its own simulated pass |
 | SOC | v0.5.2, released with:<br>• everything in v0.5.1: the shared migration lock, SO v0.4.4 re-vendored, the deploy command that refuses while a flight is unfinished (`FR-DEP-06`), the Broadcast measurement<br>• the deploy on every release through the mini-PC's runner (ADR-0026)<br>• the configuration examples and `set_env.py`<br>• from v0.6.0, the launch in the simulator that 4.3 rehearses with (FR-OPS-13) | Phase 2's tag |
 | VO2 | The shared lock in `apply-migrations.sh` | Until then, the rule in 2.7 |
 | VO2 | ADR 0059 and its gate test (`DEP-20`) | The contract SOC reads |
