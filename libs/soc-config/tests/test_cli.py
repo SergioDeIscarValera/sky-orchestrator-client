@@ -50,3 +50,16 @@ def test_a_missing_file_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture
 def test_an_unknown_consumer_is_a_usage_error() -> None:
     with pytest.raises(SystemExit):
         main(["example", "soc-nothing"], CONTRACT)
+
+
+EXAMPLES = Path(__file__).resolve().parents[3] / "infra" / "compose"
+
+
+@pytest.mark.parametrize("consumer", ["soc-cloud", "soc-operations", "soc-web"])
+def test_the_compose_folders_example_is_the_example_this_contract_prints(
+    consumer: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The mini-PC starts its files from these, before it can pull an image (ADR-0026).
+    assert main(["example", consumer], CONTRACT) == 0
+    printed = capsys.readouterr().out
+    assert (EXAMPLES / f"{consumer}.json.example").read_text(encoding="utf-8") == printed

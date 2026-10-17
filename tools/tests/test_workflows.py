@@ -16,6 +16,8 @@ RULESETS = WORKFLOWS.parent / "rulesets"
 REPOSITORY = WORKFLOWS.parents[1]
 # GitHub's image by version: ubuntu-latest moves to a new release on GitHub's date.
 RUNNER = "ubuntu-24.04"
+# The one job that runs on the farm's own machine (ADR-0026; test_release_workflow.py holds it).
+MINI_PC_RUNNER = "[self-hosted, minipc]"
 LANE_STEP = "- name: Container lane against Postgres, Realtime and Mosquitto"
 LANE_ONLY_UNITS = ("database",)
 #: A unit whose lane tests run in more than one step: the selections, which together are its
@@ -156,10 +158,11 @@ class EveryWorkflow(unittest.TestCase):
     def test_every_job_runs_on_a_pinned_runner_image(self) -> None:
         for workflow in sorted(WORKFLOWS.glob("*.yml")):
             text = workflow.read_text(encoding="utf-8")
-            runners = re.findall(r"runs-on: (\S+)", text)
+            runners = re.findall(r"runs-on: (.+)", text)
             with self.subTest(workflow=workflow.name):
                 self.assertEqual(len(runners), len(child_keys(block(text, "jobs"), 2)))
-                self.assertEqual(set(runners), {RUNNER})
+                hosted = [runner for runner in runners if runner != MINI_PC_RUNNER]
+                self.assertEqual(set(hosted), {RUNNER})
 
     def test_every_action_is_pinned_to_a_released_version(self) -> None:
         for workflow in sorted(WORKFLOWS.glob("*.yml")):

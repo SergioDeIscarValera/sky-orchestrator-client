@@ -1,0 +1,14 @@
+{
+  "served_organizations": null,
+  "stacks": null,
+  "telemetry_stale_after_ms": 3000,
+  "telemetry_lost_after_ms": 10000,
+  "telemetry_batch_s": 5,
+  "command_reply_timeout_s": 10,
+  "command_intent_ttl_s": 10,
+  "geofence_warning_band_m": 5,
+  "flight_file_grace_s": 600,
+  "broadcast_max_rate_hz": 25,
+  "stack_status_poll_ms": 1000,
+  "stack_envelope_poll_s": 30
+}

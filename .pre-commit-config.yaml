@@ -126,7 +126,7 @@ repos:
         entry: bash -c 'uv run --frozen mypy libs/soc-config && uv run --frozen pytest libs/soc-config/tests'
         language: system
         pass_filenames: false
-        files: ^(libs/soc-config/|contracts/config/|pyproject\.toml$|uv\.lock$)
+        files: ^(libs/soc-config/|contracts/config/|infra/compose/.*\.json\.example$|pyproject\.toml$|uv\.lock$)
 
       - id: soc-log-gate
         name: soc-log gate
