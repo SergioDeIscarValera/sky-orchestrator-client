@@ -179,8 +179,8 @@ stat -c '%U:%G %a' "$E"                                                         
 ```
 
 - Until the phone is set up (1.3), `SO_PHONE_ADB_TARGET` is `127.0.0.1:5555`: nothing listens there, phone-link waits, and SO's deploy goes green with a warning. 1.3 sets the phone's address.
-- The adb key is the operator's, the one the phone will trust in 1.3. It must exist before the first deploy, because phone-link's mount does not create a missing folder: `adb start-server && adb kill-server` creates `$HOME/.android/adbkey`. `SO_PHONE_ADB_USER` is its owner.
-- Run the sed as the operator, `origin-master`, not as root: `$HOME` and `id` name the key's owner, and phone-link runs as that uid.
+- The adb key is the one the host's adb server, on port 5037, uses: the phone trusts it in 1.3, and phone-link mounts it. It must exist before the first deploy, because phone-link's mount does not create a missing folder: `adb start-server && adb kill-server` creates `$HOME/.android/adbkey`. `SO_PHONE_ADB_USER` is its owner.
+- One user runs this sed, adb, `bridge.sh`, `session.sh` and `clearance.py`, so the phone trusts one key. `$HOME` and `id` name it. On this box it is root, since the agent runs as root: `/root/.android` and `0:0`, accepted by SO on 2026-10-17. phone-link then runs as uid 0, still read-only and publishing nothing; an unprivileged key owner is a follow-up.
 - `SO_BRIDGE_SECRET` gets its final value in 1.3, from `bridge.sh secret`.
 - The `SO_*_CONFIG` lines keep the example's `../config/<service>.json`: the stack's `config/` folder.
 - SO's deploy refuses a placeholder, the `fake-bridge` or `fake-cloud` profile, and an `.env` readable by others.
@@ -237,21 +237,36 @@ stat -c '%U:%G %a %n' "$SO_STACK"/config/*.json                                 
 
 The two serials are chosen once and never change: they are the devices SOC registers in 3.1, and a new serial is a new device in every client's history (SO's IR-DEV-01).
 
-1.3. **The phone, before the first session.** Not part of the deploy: SO deploys and runs without it, and this step comes after 1.4, on the day of the session. The phone and the mini-PC must be on the same Wi-Fi with client isolation off. Give the phone a DHCP reservation. In this order:
+1.3. **The phone, before the first session.** Not part of the deploy: SO deploys and runs without it, and this step comes after 1.4, on the day of the session. The phone and the mini-PC must be on the same Wi-Fi with client isolation off. Give the phone a DHCP reservation.
 
-1. **adb**, as the key's owner, `SO_PHONE_ADB_USER`. Plug the phone in by USB once and accept the mini-PC's key on its screen. Then:
+Before it:
+- the aircraft above 50 % (`min_battery_start_pct`), with a spare battery; the controller and the phone charged; propellers off;
+- no updates. Never Android (SO's CON-07: Android 15 cannot run MSDK V4), with automatic system updates off. Never the aircraft's or the controller's firmware: decline DJI Fly's prompts. SO verified firmware 01.01.1600; if it has changed, tell SO before Part B;
+- DJI's activation is cached on the phone and works offline.
+
+In this order:
+
+1. **adb**, as the key's owner (1.2). Plug the phone into the mini-PC by USB. On "Allow USB debugging", tap Allow and tick "Always allow from this computer". Then:
    ```bash
    adb -s <usb serial> tcpip 5555 && adb connect <phone IP>:5555
    ```
-   A phone restart turns adb's TCP mode off: plug the phone in again and repeat.
+   Then unplug it from the mini-PC: the phone's only USB port belongs to the controller during the session. A phone restart turns adb's TCP mode off: plug it into the mini-PC again, repeat this step, then cable it to the controller and restart the application. Turning Wi-Fi off and on does not.
 2. **The application.** Install the debug APK that SO built on the laptop from the v0.5.0 tag, on a clean tree. It must be a debug build, because session.sh and the clearance write through `run-as`. Its name carries the commit that clearance.py lists, `git -C "$SO_REPO" rev-parse --short=12 'v0.5.0^{commit}'`.
    - On the laptop: `/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-45119e44a18b-debug.apk`, with its `.sha256` beside it.
    - Its SHA-256 is `1588566c56483ad02fce18d245cae8218cb05762cb4cbe8c49363da8362f7426`, and its commit `45119e44a18b` is v0.5.0's.
+   The laptop runs no SSH server, so it serves that one file to the LAN for the copy, then stops. On the laptop:
    ```bash
-   scp <laptop>:/home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-45119e44a18b-debug.apk* .
-   sha256sum -c so-msdk-v4-v0.5.0-45119e44a18b-debug.apk.sha256
+   mkdir -p ~/apk-serve && ln -sf /home/sergio/Documents/sky-orchestrator-apk/so-msdk-v4-v0.5.0-45119e44a18b-debug.apk ~/apk-serve/
+   python3 -m http.server 8766 --bind <laptop IP> --directory ~/apk-serve      # Ctrl-C once copied
+   ```
+   On the mini-PC. The SHA-256 is written here, so a wrong file is refused:
+   ```bash
+   curl -sSfO http://<laptop IP>:8766/so-msdk-v4-v0.5.0-45119e44a18b-debug.apk
+   echo "1588566c56483ad02fce18d245cae8218cb05762cb4cbe8c49363da8362f7426  so-msdk-v4-v0.5.0-45119e44a18b-debug.apk" | sha256sum -c
    adb -s <phone IP>:5555 install -r so-msdk-v4-v0.5.0-45119e44a18b-debug.apk
    ```
+   - `install -r` keeps the application's data. **Never `adb uninstall`**: it wipes the cached DJI activation, the configuration, the secret and the flight records.
+   - `INSTALL_FAILED_VERIFICATION_FAILURE` is ColorOS's "Verify apps over USB": turn it off in the phone's Developer options.
 3. **The site configuration**, from `$SO_REPO`:
    ```bash
    python3 tools/device_config.py template > so-config.json    # then add the same "geofence_center" as so-wayline.json (1.2)
@@ -272,7 +287,7 @@ The two serials are chosen once and never change: they are the devices SOC regis
    dc up -d phone-link so-bridge
    dc logs phone-link | tail -3        # "connected to"
    ```
-6. **Start the application only after the controller is cabled.** A running application does not see the product arrive.
+6. **Start the application only after the controller is cabled**, then power on the controller and the aircraft. A running application does not see the product arrive: close it and open it again. Its screen shows build `45119e44a18b` and the bridge server listening.
 
 1.4. **The runner, then the first deploy.** Download and register SO's runner as `so-runner`, exactly as 2.6 does for SOC, with SO's repository URL and a registration token for `sky-orchestrator`; its service is `actions.runner.SergioDeIscarValera-sky-orchestrator.minipc.service`. VO2's and SOC's runners are separate runners.
 
