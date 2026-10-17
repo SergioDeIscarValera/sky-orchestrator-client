@@ -694,7 +694,7 @@ This phase is SO's `docs/first-real-flight.md` Part A, flown by SOC. A simulated
 
 **Do not change the definition afterwards.** The real flight must fly the same bytes (the KMZ's MD5), and any change makes a new file.
 
-4.3. **Rehearse from the console** (SOC v0.6.0, FR-OPS-13), propellers off. While the stack is in simulator mode, a simulated operation offers Launch: confirmed as "Launch in the simulator", it flies the same file in DJI's simulator with the flight console of a real flight. On the ground the operation is `simulated` again, so it can be launched as often as needed. A rehearsal never starts the operation's record, and every completed one counts for SO's clearance.
+4.3. **Rehearse from the console** (SOC v0.5.3, FR-OPS-13), propellers off. While the stack is in simulator mode, a simulated operation offers Launch: confirmed as "Launch in the simulator", it flies the same file in DJI's simulator with the flight console of a real flight. On the ground the operation is `simulated` again, so it can be launched as often as needed. A rehearsal never starts the operation's record, and every completed one counts for SO's clearance.
 1. Before each Launch: `$S arm` (it lasts 300 s) and the battery at 50 % or more. The simulator stays where 4.2 started it, at the takeoff, and every return home lands there. A battery swap needs `$S sim_stop` first, then 4.2's `sim_start` again.
 2. One rehearsal per test:
 
@@ -797,7 +797,7 @@ Check that `/v1/status` says `simulator_mode` true. The operation returns to `si
 | Owner | Item | Why |
 | --- | --- | --- |
 | SO | v0.6.0 tagged: v0.5.0's deploy on every release (ADR-0043) plus `sim_start <lat> <lon>`, and its APK built at that tag | The mini-PC runs it since 2026-10-17; the clearance is per commit, so v0.6.0's APK needs its own simulated pass |
-| SOC | v0.5.2, released with:<br>• everything in v0.5.1: the shared migration lock, SO v0.4.4 re-vendored, the deploy command that refuses while a flight is unfinished (`FR-DEP-06`), the Broadcast measurement<br>• the deploy on every release through the mini-PC's runner (ADR-0026)<br>• the configuration examples and `set_env.py`<br>• from v0.6.0, the launch in the simulator that 4.3 rehearses with (FR-OPS-13) | Phase 2's tag |
+| SOC | v0.5.2, released with:<br>• everything in v0.5.1: the shared migration lock, SO v0.4.4 re-vendored, the deploy command that refuses while a flight is unfinished (`FR-DEP-06`), the Broadcast measurement<br>• the deploy on every release through the mini-PC's runner (ADR-0026)<br>• the configuration examples and `set_env.py`<br>• from v0.5.3, the launch in the simulator that 4.3 rehearses with (FR-OPS-13) | Phase 2's tag |
 | VO2 | The shared lock in `apply-migrations.sh` | Until then, the rule in 2.7 |
 | VO2 | ADR 0059 and its gate test (`DEP-20`) | The contract SOC reads |
 | VO2 and Sergio | Automated backups:<br>• `pg_dumpall --globals-only`<br>• a full `pg_dump`<br>• `infra/supabase-local/volumes/storage`<br>with a tested restore | `RISK-08`; step 0.2 covers the first deploy only |
