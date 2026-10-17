@@ -295,13 +295,14 @@ sudo -u vo-runner grep '^PGRST_DB_SCHEMAS=' "$D/.env"       # sudo; expect publi
 sudo -u vo-runner sed -i 's/^PGRST_DB_SCHEMAS=public,graphql_public$/PGRST_DB_SCHEMAS=public,graphql_public,soc/' "$D/.env"   # sudo
 sudo -u vo-runner grep '^PGRST_DB_SCHEMAS=' "$D/.env"       # sudo; expect public,graphql_public,soc
 stat -c '%U:%G %a' "$D/.env"                                # expect vo-runner:vo-runner 600
-sudo -u vo-runner docker compose --project-directory "$D" up -d --dry-run --no-deps rest studio   # sudo
-sudo -u vo-runner docker compose --project-directory "$D" up -d --no-deps rest studio             # sudo
+sudo -u vo-runner bash -c 'cd "$1" && docker compose up -d --dry-run --no-deps rest studio' _ "$D"   # sudo
+sudo -u vo-runner bash -c 'cd "$1" && docker compose up -d --no-deps rest studio' _ "$D"             # sudo
 docker restart supabase-kong          # otherwise Kong answers 502 to the old rest
 docker inspect -f '{{.State.Health.Status}}' supabase-kong  # wait for healthy
 ```
 
 - If the first grep shows anything else, stop: the sed is anchored to that exact value and would change nothing.
+- Compose runs from VO2's directory, entered as `vo-runner`, so it loads VO2's compose file and never SOC's from the operator's current directory.
 - The dry run must recreate only `supabase-rest` and `supabase-studio`. Anything else, above all `supabase-db`, means stop. `--no-deps` keeps compose from recreating a dependency whose configuration drifted; `db` drifted once.
 - Never edit the file as root (`sudo nano`, `sudo sed`). A `.env` left owned by root makes VO2's next release fail in `sync-stack.sh`.
 - Never run project `supabase-local` from another directory. Postgres's data is a bind mount at `./volumes/db/data`, so the same project elsewhere recreates `supabase-db` on an empty data directory.
