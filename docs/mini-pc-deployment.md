@@ -56,7 +56,7 @@ The console's URL and the browser's Supabase address both name `192.168.1.201`, 
 0.2. **A backup of the database.** No automated backup exists for VO2 or SOC (SOC's RISK-08, VO2's ADR 0052). Take one before SOC's migrations change the database.
 
 The dump takes only shared locks, so the farm keeps reading and writing. Before starting it, check two things:
-- no VO2 deploy is running: `pgrep -af Runner.Worker` prints nothing (step 2.6);
+- no VO2 deploy is running: `pgrep -af '[R]unner\.Worker'` prints nothing (step 2.6);
 - VO2's retention is not about to drop partitions. A purge queued behind the dump would hold up new samples until the dump ends. `retention: purga ejecutada` is logged after the drop, so look at the cycle instead:
   ```bash
   docker logs -t vo-retention --since 30h 2>&1 | grep -E 'retention: (inicio de ciclo|ciclo completado)' | tail -1
@@ -279,7 +279,7 @@ The files must be world-readable. Create the folder before `docker compose up`, 
 VO2 deploys through a GitHub Actions self-hosted runner on the mini-PC (systemd unit `actions.runner.*`, user `vo-runner`). At VO2 v0.0.41 a release starts on a `v*` tag push or a manual dispatch. From VO2's next release on, merging a release pull request into main starts one too (VO2's ADR 0057). Until Phase 2 is over, merge nothing into VO2's main, push no `v*` tag and run no VO2 workflow by hand.
 
 ```bash
-pgrep -af Runner.Worker                       # must print nothing: no VO2 deploy job is running
+pgrep -af '[R]unner\.Worker'                       # must print nothing: no VO2 deploy job is running
 docker compose run --rm soc-migrate
 docker exec supabase-db psql -U postgres -Atc "select count(*) from soc_migrations.applied"
 ```
@@ -290,7 +290,7 @@ Check: the count equals the number of files in `database/migrations` at the tag 
 
 ```bash
 D=/srv/virtual-origen/repo/infra/supabase-local
-pgrep -af Runner.Worker                                     # must print nothing
+pgrep -af '[R]unner\.Worker'                                     # must print nothing
 sudo -u vo-runner grep '^PGRST_DB_SCHEMAS=' "$D/.env"       # sudo; expect public,graphql_public
 sudo -u vo-runner sed -i 's/^PGRST_DB_SCHEMAS=public,graphql_public$/PGRST_DB_SCHEMAS=public,graphql_public,soc/' "$D/.env"   # sudo
 sudo -u vo-runner grep '^PGRST_DB_SCHEMAS=' "$D/.env"       # sudo; expect public,graphql_public,soc
